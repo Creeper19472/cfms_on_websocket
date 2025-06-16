@@ -1,0 +1,22 @@
+debug = false
+
+[server]
+host = "127.0.0.1"
+port = 5104
+
+[database]
+type = "sqlite"
+
+# 如果使用 SQLite 数据库，指定数据库文件名
+file = "app.db"
+
+# 如果使用 MySQL 数据库，指定连接信息
+host = "localhost"
+port = 3306
+username = ""
+password = ""
+# 如果使用 MySQL 数据库，指定数据库名称
+db_name = "app_db"
+# 如果使用 MySQL 数据库，指定字符集
+charset = "utf8mb4"
+options = "" # Not implemented yet
