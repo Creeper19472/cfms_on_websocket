@@ -43,3 +43,6 @@ coverage.xml
 
 init
 app.db
+admin_password.txt
+
+content/ssl/

@@ -1,4 +1,6 @@
 import os, tomllib
+import secrets
+from tomlkit import parse, dumps
 
 __all__ = ["global_config"]
 
@@ -18,3 +20,13 @@ if not os.path.exists("config.toml"):
 
 with open("config.toml", "rb") as f:
     global_config = tomllib.load(f)
+
+if not os.path.exists("init"):
+    with open("config.toml", "r", encoding="utf-8") as f:
+        toml_doc = parse(f.read())
+
+    secret_key = secrets.token_hex(32)
+    toml_doc["server"]["secret_key"] = secret_key # type: ignore
+
+    with open("config.toml", "w", encoding="utf-8") as f:
+        f.write(dumps(toml_doc))

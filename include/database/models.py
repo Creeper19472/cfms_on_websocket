@@ -1,5 +1,6 @@
 from sqlalchemy import VARCHAR, ForeignKey, Table, Column, Integer, Text
 from include.database.handler import Base, Session
+from include.conf_loader import global_config
 from typing import List
 from typing import Optional
 from sqlalchemy.orm import Mapped
@@ -10,6 +11,9 @@ from sqlalchemy import event
 import time
 from sqlalchemy.orm.session import object_session
 from sqlalchemy import JSON
+import jwt
+import hashlib
+import os
 
 
 class User(Base):
@@ -36,38 +40,85 @@ class User(Base):
             f"created_time={self.created_time!r})"
         )
     
+    def authenticate_and_create_token(self, plain_password: str) -> Optional[str]:
+        salted = plain_password + self.salt
+        password_hash = hashlib.sha256(salted.encode("utf-8")).hexdigest()
+        if password_hash == self.pass_hash:
+            payload = {
+                "user_id": self.id,
+                "username": self.username,
+                "exp": int(time.time()) + 3600
+            }
+            token = jwt.encode(payload, global_config["server"]["secret_key"], algorithm="HS256")
+            return token
+        return
+    
+    def set_password(self, plain_password: str):
+        """
+        修改用户密码，自动生成新盐并保存哈希，写入数据库。
+        """
+        self.salt = os.urandom(16).hex()
+        salted = plain_password + self.salt
+        self.pass_hash = hashlib.sha256(salted.encode("utf-8")).hexdigest()
+        # 写入数据库
+        session = object_session(self)
+        if session is not None:
+            session.add(self)
+            session.commit()
+    
+
+
     @property
     def all_permissions(self):
-        now = int(time.time())
+        now = time.time()
         # 用户自身有效权限
         user_perms = {
             perm.permission
             for perm in self.rights
             if perm.granted and (perm.end_time is None or perm.end_time >= now)
         }
-        # 用户组有效权限
-        group_perms = set()
-        now = int(time.time())
+        # 用户组有效权限与剥夺权限
+        group_granted_perms = set()
+        group_revoked_perms = set()
         for membership in getattr(self, "groups", []):
+            membership: UserMembership
             # 检查用户组的起止时间
             if membership.start_time is not None and membership.start_time > now:
                 continue  # 尚未生效
             if membership.end_time is not None and membership.end_time < now:
                 continue  # 已过期
+
             # 查找组权限
             if hasattr(membership, "group_name"):
                 with Session() as session:
-                    group = session.query(UserGroup).filter_by(group_name=membership.group_name).first()
+                    group = session.get(UserGroup, membership.group_name)
                     if group and group.permissions:
-                        group_perms.update(group.permissions.keys())
+                        for perm, info in group.permissions.items():
+                            if info.get("start_time", 0) > now:
+                                continue
+                            if (
+                                info.get("end_time") is not None
+                                and info["end_time"] < now
+                            ):
+                                continue
+                            (
+                                group_granted_perms
+                                if info.get("granted", True)
+                                else group_revoked_perms
+                            ).add(perm)
+            else:
+                raise ValueError(
+                    f"UserMembership {membership.id} does not have a valid group_name attribute."
+                )
         # 合并
-        all_perms = user_perms | group_perms
-        # 再减去被剥夺的权限
+        all_perms = user_perms | group_granted_perms
+        # 再减去被剥夺的权限（包括用户自身和用户组）
         revoked_perms = {
             perm.permission
             for perm in self.rights
             if not perm.granted and (perm.end_time is None or perm.end_time >= now)
         }
+        revoked_perms |= group_revoked_perms
         return all_perms - revoked_perms
 
 
@@ -99,7 +150,7 @@ class UserPermission(Base):
 # 监听权限添加事件，若权限被剥夺或已过期则不添加
 @event.listens_for(User.rights, "append", retval=True)
 def filter_revoked_or_expired_permission(user, permission, initiator):
-    now = int(time.time())
+    now = time.time()
     if not permission.granted:
         return None  # 不添加被剥夺的权限
     if permission.end_time is not None and permission.end_time < now:
@@ -109,7 +160,7 @@ def filter_revoked_or_expired_permission(user, permission, initiator):
 
 @event.listens_for(User, "load")
 def filter_permissions_on_load(target, context):
-    now = int(time.time())
+    now = time.time()
     # 只保留granted=True且未过期的权限
     valid_permissions = []
     session = object_session(target)
@@ -134,7 +185,7 @@ class UserMembership(Base):
     __tablename__ = "user_memberships"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    group_name: Mapped[str] = mapped_column(VARCHAR(255))
+    group_name: Mapped[str] = mapped_column(ForeignKey("user_groups.group_name"))
     start_time: Mapped[Optional[int]] = mapped_column(
         BigInteger, nullable=False
     )  # 加入组的时间戳
@@ -153,7 +204,7 @@ class UserMembership(Base):
 
 @event.listens_for(User.groups, "append", retval=True)
 def filter_expired_group(user, group, initiator):
-    now = int(time.time())
+    now = time.time()
     if group.end_time is not None and group.end_time < now:
         return None  # 不添加
     return group
@@ -167,11 +218,20 @@ def set_user_id_on_group(user, group, initiator):
 
 class UserGroup(Base):
     __tablename__ = "user_groups"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    group_name: Mapped[str] = mapped_column(VARCHAR(255), unique=True, nullable=False)
+    group_name: Mapped[str] = mapped_column(
+        VARCHAR(255), primary_key=True, unique=True, nullable=False
+    )
     # permissions字段存储为JSON字符串，内容为权限字典
 
-    permissions: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")
+    permissions: Mapped[dict] = mapped_column(
+        JSON, nullable=False, default=dict, server_default="{}"
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"UserGroup(group_name={self.group_name!r}, "
+            f"permissions={self.permissions!r})"
+        )
 
 
 # class UserMeta(Base):

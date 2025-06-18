@@ -36,13 +36,13 @@ def create_user(**kwargs) -> None:
         user.rights.append(permission)
 
     for k in kwargs.get("groups", []):
-        group = UserMembership(
+        membership = UserMembership(
             user=user,
-            group_name=k["group"],
+            group_name=k["group_name"],
             start_time=k.get("start_time", time.time()),
             end_time=k.get("end_time", None)
         )
-        user.groups.append(group)
+        user.groups.append(membership)
 
     with Session() as session:
         session.add(user)
