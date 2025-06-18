@@ -3,7 +3,7 @@ debug = false
 [server]
 host = "127.0.0.1"
 port = 5104
-secret_key = "8d2d02d096f7020a1634bdcaf3ccbc94534b7477f37b3c5f0c00558b68d1d8bf"
+secret_key = ""
 ssl_keyfile = "./content/ssl/key.pem"
 ssl_certfile = "./content/ssl/cert.pem"
 
