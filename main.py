@@ -29,6 +29,7 @@ from include.classes.version import Version
 from include.database.models import User, UserGroup
 from websockets.sync.server import serve
 from include.connection_handler import handle_connection
+from include.function.log import getCustomLogger
 
 CORE_VERSION = Version("0.0.1.250618_alpha")
 
@@ -78,9 +79,6 @@ def server_init():
         pwd_file.write(f"admin 用户的初始密码: {password}\n")
 
     os.makedirs("./content", exist_ok=True)
-    secret_key = secrets.token_urlsafe(32)
-    with open("./content/SECRET_KEY", "w", encoding="utf-8") as key_file:
-        key_file.write(secret_key + "\n")
 
     from cryptography import x509
     from cryptography.x509.oid import NameOID
@@ -138,9 +136,14 @@ def server_init():
 
 
 def main():
+    logger = getCustomLogger("CFMS", filepath="./content/logs/core.log")
+
     if not os.path.exists("./init"):
+        logger.info("Database not initialized, initializing now...")
         server_init()
 
+    logger.info("Initializating CFMS WebSocket server...")
+    logger.info(f"CFMS Core Version: {CORE_VERSION}")
     ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ssl_context.load_cert_chain(
         certfile=global_config["server"]["ssl_certfile"],
@@ -153,6 +156,9 @@ def main():
         global_config["server"]["port"],
         ssl=ssl_context,
     ) as server:
+        logger.info(
+            f"CFMS WebSocket server started at wss://{global_config['server']['host']}:{global_config['server']['port']}"
+        )
         server.serve_forever()
 
 

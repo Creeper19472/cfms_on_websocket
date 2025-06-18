@@ -44,5 +44,7 @@ coverage.xml
 init
 app.db
 admin_password.txt
+config.toml
 
 content/ssl/
+content/logs/*

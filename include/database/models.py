@@ -1,4 +1,4 @@
-from sqlalchemy import VARCHAR, ForeignKey, Table, Column, Integer, Text
+from sqlalchemy import VARCHAR, Float, ForeignKey, Table, Column, Integer, Text
 from include.database.handler import Base, Session
 from include.conf_loader import global_config
 from typing import List
@@ -18,13 +18,13 @@ import os
 
 class User(Base):
     __tablename__ = "users"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    username: Mapped[str] = mapped_column(VARCHAR(255), unique=True, nullable=False)
+    # id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(VARCHAR(255), primary_key=True)
     pass_hash: Mapped[str] = mapped_column(Text)
     salt: Mapped[str] = mapped_column(Text)
     nickname: Mapped[Optional[str]] = mapped_column(VARCHAR(255), nullable=True)
-    last_login: Mapped[Optional[int]] = mapped_column(Integer)
-    created_time: Mapped[Optional[int]] = mapped_column(Integer, nullable=False)
+    last_login: Mapped[Optional[float]] = mapped_column(Float)
+    created_time: Mapped[Optional[float]] = mapped_column(Float, nullable=False)
 
     groups: Mapped[List["UserMembership"]] = relationship(
         "UserMembership", back_populates="user"
@@ -35,7 +35,7 @@ class User(Base):
 
     def __repr__(self) -> str:
         return (
-            f"User(id={self.id!r}, username={self.username!r}, "
+            f"User(username={self.username!r}, "
             f"nickname={self.nickname!r}, last_login={self.last_login!r}, "
             f"created_time={self.created_time!r})"
         )
@@ -45,13 +45,39 @@ class User(Base):
         password_hash = hashlib.sha256(salted.encode("utf-8")).hexdigest()
         if password_hash == self.pass_hash:
             payload = {
-                "user_id": self.id,
                 "username": self.username,
-                "exp": int(time.time()) + 3600
+                "exp": time.time() + 3600
             }
             token = jwt.encode(payload, global_config["server"]["secret_key"], algorithm="HS256")
             return token
+        session = object_session(self)
+        if session is not None:
+            self.last_login = time.time()
+            session.add(self)
+            session.commit()
         return
+    
+    def is_token_valid(self, token: str) -> bool:
+        """
+        验证JWT令牌的有效性。
+        如果令牌有效且未过期，返回True；否则返回False。
+        """
+        try:
+            payload = jwt.decode(token, global_config["server"]["secret_key"], algorithms=["HS256"])
+            return payload.get("username") == self.username
+        except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+            return False
+    
+    def renew_token(self) -> Optional[str]:
+        """
+        重新生成用户的JWT令牌。
+        """
+        payload = {
+            "username": self.username,
+            "exp": time.time() + 3600  # 令牌有效期为1小时
+        }
+        token = jwt.encode(payload, global_config["server"]["secret_key"], algorithm="HS256")
+        return token
     
     def set_password(self, plain_password: str):
         """
@@ -126,22 +152,22 @@ class User(Base):
 class UserPermission(Base):
     __tablename__ = "user_permissions"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    username: Mapped[str] = mapped_column(ForeignKey("users.username"))
     permission: Mapped[str] = mapped_column(VARCHAR(255))
     granted: Mapped[bool] = mapped_column(
         Boolean, default=True
     )  # True: 给予, False: 剥夺
-    start_time: Mapped[Optional[int]] = mapped_column(
-        BigInteger, nullable=False
+    start_time: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=False
     )  # 权限生效时间（时间戳）
-    end_time: Mapped[Optional[int]] = mapped_column(
-        BigInteger, nullable=True
+    end_time: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True
     )  # 权限失效时间（时间戳）
     user: Mapped["User"] = relationship("User", back_populates="rights")
 
     def __repr__(self) -> str:
         return (
-            f"UserPermission(id={self.id!r}, user_id={self.user_id!r}, "
+            f"UserPermission(id={self.id!r}, username={self.username!r}, "
             f"permission={self.permission!r}, granted={self.granted!r}, "
             f"start_time={self.start_time!r}, end_time={self.end_time!r})"
         )
@@ -175,28 +201,28 @@ def filter_permissions_on_load(target, context):
 
 
 @event.listens_for(User.rights, "append")
-def set_user_id_on_permission(user, permission, initiator):
-    if permission.user_id is None:
-        permission.user_id = user.id
+def set_username_on_permission(user, permission, initiator):
+    if getattr(permission, "username", None) is None:
+        permission.username = user.username
 
 
 # 用户所属组，包括在此用户组中的持续时间
 class UserMembership(Base):
     __tablename__ = "user_memberships"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    username: Mapped[int] = mapped_column(ForeignKey("users.username"))
     group_name: Mapped[str] = mapped_column(ForeignKey("user_groups.group_name"))
-    start_time: Mapped[Optional[int]] = mapped_column(
-        BigInteger, nullable=False
+    start_time: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=False
     )  # 加入组的时间戳
-    end_time: Mapped[Optional[int]] = mapped_column(
-        BigInteger, nullable=True
+    end_time: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True
     )  # 离开组的时间戳
     user: Mapped["User"] = relationship("User", back_populates="groups")
 
     def __repr__(self) -> str:
         return (
-            f"UserMembership(id={self.id!r}, user_id={self.user_id!r}, "
+            f"UserMembership(id={self.id!r}, username={self.username!r}, "
             f"group_name={self.group_name!r}, start_time={self.start_time!r}, "
             f"end_time={self.end_time!r})"
         )
@@ -208,12 +234,6 @@ def filter_expired_group(user, group, initiator):
     if group.end_time is not None and group.end_time < now:
         return None  # 不添加
     return group
-
-
-@event.listens_for(User.groups, "append")
-def set_user_id_on_group(user, group, initiator):
-    if group.user_id is None:
-        group.user_id = user.id
 
 
 class UserGroup(Base):
