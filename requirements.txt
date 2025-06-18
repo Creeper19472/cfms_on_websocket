@@ -2,3 +2,4 @@ PyJwt
 sqlalchemy
 tomlkit
 websockets
+pycryptodome

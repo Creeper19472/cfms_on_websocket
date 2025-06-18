@@ -26,7 +26,7 @@ from include.conf_loader import global_config
 from include.database.handler import engine, Base
 from include.database.handler import Session
 from include.classes.version import Version
-from include.database.models import User, UserGroup
+from include.database.models import User, UserGroup, File, Document, DocumentRevision
 from websockets.sync.server import serve
 from include.connection_handler import handle_connection
 from include.function.log import getCustomLogger
@@ -51,6 +51,15 @@ def server_init():
             "shutdown": {"granted": True, "start_time": 0, "end_time": None},
         }
         session.add(sysop_group)
+
+        init_file = File(id="init", path="./content/hello")
+        session.add(init_file)
+
+        init_document = Document(id="hello", title="Hello World")
+        init_document_revision = DocumentRevision(file_id=init_file.id)
+        init_document.revisions.append(init_document_revision)
+        session.add(init_document)
+        session.add(init_document_revision)
         session.commit()
 
     from include.function.user import create_user
@@ -76,7 +85,7 @@ def server_init():
 
     # 将密码输出到运行目录下的 admin_password.txt 文件
     with open("admin_password.txt", "w", encoding="utf-8") as pwd_file:
-        pwd_file.write(f"admin 用户的初始密码: {password}\n")
+        pwd_file.write(f"{password}\n")
 
     os.makedirs("./content", exist_ok=True)
 

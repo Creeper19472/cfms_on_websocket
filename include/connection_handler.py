@@ -1,10 +1,18 @@
+import os
+import threading
 import websockets
 import websockets.sync.server
 from websockets.typing import Data
 from include.conf_loader import global_config
 from include.classes.connection import ConnectionHandler
+from include.database.handler import Session
+from include.database.models import User
 from include.handlers.auth import handle_login, handle_refresh_token
-from include.handlers.document import handle_get_document
+from include.handlers.document import (
+    handle_get_document,
+    handle_download_file,
+    handle_upload_file,
+)
 from include.function.log import getCustomLogger
 
 logger = getCustomLogger(
@@ -46,22 +54,43 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         message: The data/message received from the client.
     """
     this_handler = ConnectionHandler(websocket, message)
+    action = this_handler.action
 
-    if this_handler.action is None:
+    if action is None:
         this_handler.conclude_request(400, {}, "No action specified in request")
         return
 
-    if this_handler.action == "echo":
+    if action == "echo":
         # Echo the message back to the client
         this_handler.conclude_request(
             200, {"message": this_handler.data.get("message", "")}, "Echo response"
         )
-    elif this_handler.action == "login":
+    elif action == "login":
         handle_login(this_handler)
-    elif this_handler.action == "refresh_token":
+    elif action == "refresh_token":
         handle_refresh_token(this_handler)
-    elif this_handler.action == "get_document":
+    elif action == "get_document":
         handle_get_document(this_handler)
+    elif action == "download_file":
+        handle_download_file(this_handler)
+    elif action == "upload_file":
+        handle_upload_file(this_handler)
+    elif action == "shutdown":
+        with Session() as session:
+            this_user = session.get(User, this_handler.username)
+            if not this_user or not this_user.is_token_valid(this_handler.token):
+                this_handler.conclude_request(403, {}, "Invalid user or token")
+                return
+
+            if "shutdown" not in this_user.all_permissions:
+                this_handler.conclude_request(403, {}, "Permission denied")
+                return
+
+        # Shutdown the server
+        this_handler.conclude_request(200, {}, "Server is shutting down")
+        logger.info("Server is shutting down")
+        threading.Thread(target=os._exit(0), daemon=True).start()
+
     else:
         # Handle unknown actions
         this_handler.conclude_request(400, {}, f"Unknown action: {this_handler.action}")

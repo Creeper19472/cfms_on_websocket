@@ -22,12 +22,36 @@ def hello():
         message = websocket.recv()
         print(message)
 
+        with open("admin_password.txt", "r", encoding="utf-8") as f:
+            password = f.read().strip()
+
         request = {
             "action": "login",
             "data": {
                 "username": "admin",
-                "password": "[uM:[xA440[90kv,"
+                "password": password,
             }
+        }
+        websocket.send(json.dumps(request, ensure_ascii=False))
+        message = websocket.recv()
+        data = json.loads(message).get("data", {})
+
+        request = {
+            "action": "get_document",
+            "data": {
+                "document_id": "hello"
+            },
+            "username": "admin",
+            "token": data.get("token", "")
+        }
+        websocket.send(json.dumps(request, ensure_ascii=False))
+        message = websocket.recv()
+        print(message)
+
+        request = {
+            "action": "shutdown",
+            "username": "admin",
+            "token": data.get("token", "")
         }
         websocket.send(json.dumps(request, ensure_ascii=False))
         message = websocket.recv()
