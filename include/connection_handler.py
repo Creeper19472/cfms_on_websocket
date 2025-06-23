@@ -9,8 +9,10 @@ from include.database.handler import Session
 from include.database.models import User
 from include.handlers.auth import handle_login, handle_refresh_token
 from include.handlers.document import (
+    handle_create_document,
     handle_get_document,
     handle_download_file,
+    handle_upload_document,
     handle_upload_file,
 )
 from include.function.log import getCustomLogger
@@ -60,21 +62,21 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         this_handler.conclude_request(400, {}, "No action specified in request")
         return
 
+    available_functions = {
+        "login": handle_login,
+        "refresh_token": handle_refresh_token,
+        "get_document": handle_get_document,
+        "create_document": handle_create_document,
+        "upload_document": handle_upload_document,
+        "download_file": handle_download_file,
+        "upload_file": handle_upload_file,
+    }
+
     if action == "echo":
         # Echo the message back to the client
         this_handler.conclude_request(
             200, {"message": this_handler.data.get("message", "")}, "Echo response"
         )
-    elif action == "login":
-        handle_login(this_handler)
-    elif action == "refresh_token":
-        handle_refresh_token(this_handler)
-    elif action == "get_document":
-        handle_get_document(this_handler)
-    elif action == "download_file":
-        handle_download_file(this_handler)
-    elif action == "upload_file":
-        handle_upload_file(this_handler)
     elif action == "shutdown":
         with Session() as session:
             this_user = session.get(User, this_handler.username)
@@ -90,7 +92,8 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         this_handler.conclude_request(200, {}, "Server is shutting down")
         logger.info("Server is shutting down")
         threading.Thread(target=os._exit(0), daemon=True).start()
-
+    elif action in available_functions:
+        available_functions[action](this_handler)
     else:
         # Handle unknown actions
         this_handler.conclude_request(400, {}, f"Unknown action: {this_handler.action}")

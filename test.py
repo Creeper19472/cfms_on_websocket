@@ -12,6 +12,7 @@ def hello():
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
     with connect("wss://localhost:5104", ssl=ssl_context) as websocket:
+        # echo
         request = {
             "action": "echo",
             "data": {
@@ -25,6 +26,7 @@ def hello():
         with open("admin_password.txt", "r", encoding="utf-8") as f:
             password = f.read().strip()
 
+        # login
         request = {
             "action": "login",
             "data": {
@@ -36,6 +38,7 @@ def hello():
         message = websocket.recv()
         data = json.loads(message).get("data", {})
 
+        # get_document
         request = {
             "action": "get_document",
             "data": {
@@ -48,6 +51,20 @@ def hello():
         message = websocket.recv()
         print(message)
 
+        # create_document
+        request = {
+            "action": "create_document",
+            "data": {
+                "title": "Hello World"
+            },
+            "username": "admin",
+            "token": data.get("token", "")
+        }
+        websocket.send(json.dumps(request, ensure_ascii=False))
+        message = websocket.recv()
+        print(message)
+
+        # shutdown
         request = {
             "action": "shutdown",
             "username": "admin",

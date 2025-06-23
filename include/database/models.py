@@ -189,15 +189,15 @@ class UserPermission(Base):
         )
 
 
-# 监听权限添加事件，若权限被剥夺或已过期则不添加
-@event.listens_for(User.rights, "append", retval=True)
-def filter_revoked_or_expired_permission(user, permission, initiator):
-    now = time.time()
-    if not permission.granted:
-        return None  # 不添加被剥夺的权限
-    if permission.end_time is not None and permission.end_time < now:
-        return None  # 不添加已过期的权限
-    return permission
+# # 监听权限添加事件，若权限被剥夺或已过期则不添加
+# @event.listens_for(User.rights, "append", retval=True)
+# def filter_revoked_or_expired_permission(user, permission, initiator):
+#     now = time.time()
+#     if not permission.granted:
+#         return None  # 不添加被剥夺的权限
+#     if permission.end_time is not None and permission.end_time < now:
+#         return None  # 不添加已过期的权限
+#     return permission
 
 
 @event.listens_for(User, "load")
@@ -216,10 +216,10 @@ def filter_permissions_on_load(target, context):
     target.rights = valid_permissions
 
 
-@event.listens_for(User.rights, "append")
-def set_username_on_permission(user, permission, initiator):
-    if getattr(permission, "username", None) is None:
-        permission.username = user.username
+# @event.listens_for(User.rights, "append")
+# def set_username_on_permission(user, permission, initiator):
+#     if getattr(permission, "username", None) is None:
+#         permission.username = user.username
 
 
 # 用户所属组，包括在此用户组中的持续时间
@@ -254,9 +254,7 @@ def filter_expired_group(user, group, initiator):
 
 class UserGroup(Base):
     __tablename__ = "user_groups"
-    group_name: Mapped[str] = mapped_column(
-        VARCHAR(255), primary_key=True
-    )
+    group_name: Mapped[str] = mapped_column(VARCHAR(255), primary_key=True)
     # permissions字段存储为JSON字符串，内容为权限字典
 
     permissions: Mapped[dict] = mapped_column(
@@ -270,35 +268,10 @@ class UserGroup(Base):
         )
 
 
-class Document(Base):
-    __tablename__ = "documents"
-    id: Mapped[str] = mapped_column(VARCHAR(255), primary_key=True, default=lambda: secrets.token_hex(32))
-    title: Mapped[Optional[str]] = mapped_column(
-        VARCHAR(255), nullable=False, default="Untitled Document"
-    )  # 文档名称
-    created_time: Mapped[float] = mapped_column(
-        Float, nullable=False, default=lambda: time.time()
-    )
+class BaseObject(Base):
+    __abstract__ = True
 
-    # 每个文档有多个访问规则（AccessRule对象），以JSON格式存储规则数据
-    access_rules: Mapped[List["AccessRule"]] = relationship(
-        "AccessRule", back_populates="document", cascade="all, delete-orphan"
-    )
-
-    # 每个文档有多个修订版本
-    revisions: Mapped[List["DocumentRevision"]] = relationship(
-        "DocumentRevision",
-        back_populates="document",
-        order_by="DocumentRevision.created_time",
-    )
-
-    def get_latest_revision(self):
-        """
-        获取最新的修订版本（按created_time降序排列的第一个）。
-        """
-        if not self.revisions:
-            return None
-        return max(self.revisions, key=lambda rev: rev.created_time)
+    access_rules: Mapped[List]
 
     def check_access_requirements(self, user: User, access_type=0) -> bool:
         """
@@ -316,7 +289,7 @@ class Document(Base):
             - Rules are grouped and evaluated according to their match modes and requirements.
             - If no access rules are defined, access is granted by default.
         """
-        
+
         def match_rights(sub_rights_group):
             if not sub_rights_group:
                 return True
@@ -403,13 +376,79 @@ class Document(Base):
         for each_rule in self.access_rules:
             if not each_rule:
                 continue
-            if each_rule.access_type != access_type:
-                continue
+
+            if access_type == 0:  # 如果要检查的是读权限
+                if each_rule.access_type != 0:
+                    continue
+            elif access_type == 1:  # 如果要检查写权限
+                if each_rule.access_type not in [0, 1]:
+                    continue
 
             if not match_primary_sub_group(each_rule.rule_data):
                 return False
 
         return True
+
+
+class Folder(BaseObject):  # 文档文件夹
+    __tablename__ = "folders"
+    id: Mapped[str] = mapped_column(
+        VARCHAR(255), primary_key=True, default=lambda: secrets.token_hex(32)
+    )
+    name: Mapped[str] = mapped_column(VARCHAR(255), nullable=False)  # 文件夹名称
+    last_modified: Mapped[float] = mapped_column(
+        Float, nullable=False, default=lambda: time.time()
+    )
+    parent_id: Mapped[Optional[str]] = mapped_column(
+        VARCHAR(255), ForeignKey("folders.id")
+    )  # 父文件夹ID
+    parent: Mapped["Folder"] = relationship(
+        "Folder", back_populates="children", remote_side=[id]
+    )
+    children: Mapped[List["Folder"]] = relationship("Folder", back_populates="parent")
+    access_rules: Mapped[List["FolderAccessRule"]] = relationship(
+        "FolderAccessRule", back_populates="folder", cascade="all, delete-orphan"
+    )
+    documents: Mapped[List["Document"]] = relationship(
+        "Document", back_populates="folder"
+    )
+
+
+class Document(BaseObject):
+    __tablename__ = "documents"
+    id: Mapped[str] = mapped_column(
+        VARCHAR(255), primary_key=True, default=lambda: secrets.token_hex(32)
+    )
+    title: Mapped[Optional[str]] = mapped_column(
+        VARCHAR(255), nullable=False, default="Untitled Document"
+    )  # 文档名称
+    created_time: Mapped[float] = mapped_column(
+        Float, nullable=False, default=lambda: time.time()
+    )
+    folder_id: Mapped[Optional[str]] = mapped_column(
+        VARCHAR(255), ForeignKey("folders.id"), nullable=True
+    )  # 文档所属文件夹ID
+    folder: Mapped["Folder"] = relationship("Folder", back_populates="documents")
+
+    # 每个文档有多个访问规则（AccessRule对象），以JSON格式存储规则数据
+    access_rules: Mapped[List["DocumentAccessRule"]] = relationship(
+        "DocumentAccessRule", back_populates="document", cascade="all, delete-orphan"
+    )
+
+    # 每个文档有多个修订版本
+    revisions: Mapped[List["DocumentRevision"]] = relationship(
+        "DocumentRevision",
+        back_populates="document",
+        order_by="DocumentRevision.created_time",
+    )
+
+    def get_latest_revision(self):
+        """
+        获取最新的修订版本（按created_time降序排列的第一个）。
+        """
+        if not self.revisions:
+            return None
+        return max(self.revisions, key=lambda rev: rev.created_time)
 
     def __repr__(self) -> str:
         return f"Document(id={self.id!r}, created_time={self.created_time!r})"
@@ -423,6 +462,9 @@ class DocumentRevision(Base):
     created_time: Mapped[float] = mapped_column(
         Float, nullable=False, default=lambda: time.time()
     )
+    active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )  # 文件实际上传后激活
 
     document: Mapped["Document"] = relationship("Document", back_populates="revisions")
 
@@ -433,24 +475,59 @@ class DocumentRevision(Base):
         )
 
 
-class AccessRule(Base):
-    __tablename__ = "access_rules"
+class DocumentAccessRule(Base):
+    __tablename__ = "document_access_rules"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    access_type: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="0: read, 1: write")
-    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id"), nullable=False)
+    access_type: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        comment="0: read, 1: write",  # rename is regarded as write
+    )
+    document_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("documents.id"), nullable=False
+    )
     rule_data: Mapped[dict] = mapped_column(
         JSON, nullable=False
     )  # 存储单个Json格式的规则数据
 
-    document: Mapped["Document"] = relationship("Document", back_populates="access_rules")
+    document: Mapped[Optional["Document"]] = relationship(
+        "Document", back_populates="access_rules"
+    )
 
     def __repr__(self) -> str:
         return f"AccessRule(id={self.id!r}, document_id={self.document_id!r}, rule_data={self.rule_data!r})"
 
 
+class FolderAccessRule(Base):
+    __tablename__ = "folder_access_rules"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    access_type: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        comment="0: read, 1: write",  # rename is regarded as write
+    )
+    folder_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("folders.id"), nullable=True
+    )
+    rule_data: Mapped[dict] = mapped_column(
+        JSON, nullable=False
+    )  # 存储单个Json格式的规则数据
+
+    folder: Mapped[Optional["Document"]] = relationship(
+        "Folder", back_populates="access_rules"
+    )
+
+    def __repr__(self) -> str:
+        return f"FolderAccessRule(id={self.id!r}, folder_id={self.folder_id!r}, rule_data={self.rule_data!r})"
+
+
 class File(Base):
     __tablename__ = "files"
-    id: Mapped[str] = mapped_column(VARCHAR(255), primary_key=True, default=lambda: secrets.token_hex(32))
+    id: Mapped[str] = mapped_column(
+        VARCHAR(255), primary_key=True, default=lambda: secrets.token_hex(32)
+    )
     path: Mapped[str] = mapped_column(Text, nullable=False)
     created_time: Mapped[float] = mapped_column(
         Float, nullable=False, default=lambda: time.time()
@@ -462,12 +539,16 @@ class File(Base):
 
 class FileTask(Base):
     __tablename__ = "file_tasks"
-    id: Mapped[str] = mapped_column(VARCHAR(255), primary_key=True, default=lambda: secrets.token_hex(32))
+    id: Mapped[str] = mapped_column(
+        VARCHAR(255), primary_key=True, default=lambda: secrets.token_hex(32)
+    )
     file_id: Mapped[str] = mapped_column(VARCHAR(255), nullable=False)
     # 0: 等待中, 1: 已完成, 2: 已取消
     status: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    mode: Mapped[int] = mapped_column(Integer, nullable=False, comment="0: download, 1: upload")
-    start_time: Mapped[Optional[float]] = mapped_column(Float, nullable=False)
+    mode: Mapped[int] = mapped_column(
+        Integer, nullable=False, comment="0: download, 1: upload"
+    )
+    start_time: Mapped[float] = mapped_column(Float, nullable=False)
     end_time: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     # created_time: Mapped[float] = mapped_column(
     #     Float, nullable=False, default=lambda: time.time()

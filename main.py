@@ -31,7 +31,7 @@ from websockets.sync.server import serve
 from include.connection_handler import handle_connection
 from include.function.log import getCustomLogger
 
-CORE_VERSION = Version("0.0.1.250618_alpha")
+CORE_VERSION = Version("0.0.1.250623_alpha")
 
 
 def server_init():
@@ -41,6 +41,10 @@ def server_init():
     """
     if os.path.exists("./app.db"):
         os.remove("./app.db")
+    if os.path.exists("./ssl_cert.pem"):
+        os.remove("./ssl_cert.pem")
+    if os.path.exists("./ssl_key.pem"):
+        os.remove("./ssl_key.pem")
 
     Base.metadata.create_all(engine)
 
@@ -51,6 +55,12 @@ def server_init():
             "shutdown": {"granted": True, "start_time": 0, "end_time": None},
         }
         session.add(sysop_group)
+
+        sysop2_group = UserGroup(group_name="sysop2")
+        sysop2_group.permissions = {
+            "shutdown": {"granted": True, "start_time": 0, "end_time": None},
+        }
+        session.add(sysop2_group)
 
         init_file = File(id="init", path="./content/hello")
         session.add(init_file)
@@ -73,10 +83,26 @@ def server_init():
         username="admin",
         password=password,
         nickname="管理员",
-        permissions=[],
+        permissions=[
+            {
+                "permission": "super_create_document",
+                "start_time": 0,
+                "end_time": None,
+            },
+            {
+                "permission": "create_document",
+                "start_time": 0,
+                "end_time": None,
+            },
+        ],
         groups=[
             {
                 "group_name": "sysop",
+                "start_time": 0,
+                "end_time": None,
+            },
+            {
+                "group_name": "sysop2",
                 "start_time": 0,
                 "end_time": None,
             },
