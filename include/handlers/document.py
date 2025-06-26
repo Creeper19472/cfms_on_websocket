@@ -8,14 +8,17 @@ from include.database.models import (
     User,
     Document,
     File,
+    Folder,
     FileTask,
+    NoActiveRevisionsError
 )
 import time
 
 __all__ = ["handle_create_document", "handle_get_document", "handle_download_file", "handle_upload_file", "handle_upload_document"]
 
 
-def create_file_task(file_id: str, transfer_mode=0):
+# def create_file_task(file_id: str, transfer_mode=0):
+def create_file_task(file: File, transfer_mode=0):
     """
     Creates a new file processing task for the specified file.
     Args:
@@ -30,7 +33,7 @@ def create_file_task(file_id: str, transfer_mode=0):
     """
 
     with Session() as session:
-        file = session.get(File, file_id)
+        # file = session.get(File, file_id)
         if not file:
             return None
 
@@ -75,15 +78,16 @@ def handle_get_document(handler: ConnectionHandler):
             handler.conclude_request(403, {}, "Access denied to the document")
             return
 
-        latest_revision = document.get_latest_revision()
-        if not latest_revision:
-            handler.conclude_request(404, {}, "No revisions found for this document")
+        try:
+            latest_revision = document.get_latest_revision()
+        except NoActiveRevisionsError:
+            handler.conclude_request(404, {}, "No active revisions found for this document")
             return
 
         data = {
             "document_id": document.id,
             "title": document.title,
-            "task_data": create_file_task(latest_revision.file_id),
+            "task_data": create_file_task(latest_revision.file),
         }
 
         handler.conclude_request(200, data, "Document successfully fetched")
@@ -136,6 +140,9 @@ def handle_create_document(handler: ConnectionHandler):
     document_title = handler.data.get("title")
     access_rules_to_apply: dict = handler.data.get("access_rules", {})
 
+    if not access_rules_to_apply: # fix
+        access_rules_to_apply = {}
+
     with Session() as session:
         user = session.get(User, handler.username)
 
@@ -147,7 +154,7 @@ def handle_create_document(handler: ConnectionHandler):
             handler.conclude_request(400, {}, "Document title is required")
 
         if folder_id:
-            folder = session.get(Document, folder_id)
+            folder = session.get(Folder, folder_id)
             if not folder:
                 handler.conclude_request(404, {}, "Folder not found")
                 return
@@ -170,7 +177,7 @@ def handle_create_document(handler: ConnectionHandler):
             id = secrets.token_hex(32),
         )
         new_document = Document(
-            id=secrets.token_hex(32), title=document_title, folder_id=folder_id
+            id=secrets.token_hex(32), title=document_title, folder_id=folder_id if folder_id else None
         )
         new_document_revision = DocumentRevision(file_id=new_file.id)
         new_document.revisions.append(new_document_revision)
@@ -180,7 +187,7 @@ def handle_create_document(handler: ConnectionHandler):
             session.add(new_document)
             session.add(new_document_revision)
             session.commit()
-            task_data = create_file_task(new_document_revision.file_id, transfer_mode=1)
+            task_data = create_file_task(new_document_revision.file, transfer_mode=1)
             handler.conclude_request(
                 200, {"task_data": task_data}, "Task successfully created"
             )
@@ -236,7 +243,8 @@ def handle_upload_document(handler: ConnectionHandler):
             handler.conclude_request(404, {}, "Document not found")
             return
 
-    task_data = create_file_task(file_id, 1)
+        task_data = create_file_task(new_file, 1)
+        
     handler.conclude_request(200, {"task_data": task_data}, "Task successfully created")
 
 
@@ -253,7 +261,7 @@ def handle_download_file(handler: ConnectionHandler):
             handler.conclude_request(404, {}, "Task not found")
             return
 
-        if task.status != 0:
+        if task.status != 0 or task.mode != 0:
             handler.conclude_request(
                 400, {}, "Task is not in a valid state for download"
             )
@@ -265,6 +273,7 @@ def handle_download_file(handler: ConnectionHandler):
             )
             return
 
+    ### 服务器还需要发送一次响应
     handler.send_file(task_id)
 
 
@@ -286,7 +295,7 @@ def handle_upload_file(handler: ConnectionHandler):
             handler.conclude_request(404, {}, "Task not found")
             return
 
-        if task.status != 1:
+        if task.status != 0 or task.mode != 1:
             handler.conclude_request(400, {}, "Task is not in a valid state for upload")
             return
         
@@ -296,4 +305,5 @@ def handle_upload_file(handler: ConnectionHandler):
             )
             return
 
+    ### 服务器需要发送一次响应
     handler.receive_file(task_id)

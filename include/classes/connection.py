@@ -11,10 +11,10 @@ from include.conf_loader import global_config
 from include.database.handler import Session
 from include.database.models import File, FileTask
 from include.function.log import getCustomLogger
-from include.function.transfer import get_file_id_by_task_id, get_file_path_by_file_id
 
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
+import mmap
 
 logger = getCustomLogger(
     "connection",
@@ -23,16 +23,17 @@ logger = getCustomLogger(
 
 
 def calculate_sha256(file_path):
-    sha256_hash = hashlib.sha256()
+    # 使用更快的 hashlib 工具和内存映射文件
     with open(file_path, "rb") as f:
-        for chunk in iter(lambda: f.read(4096), b""):
-            sha256_hash.update(chunk)
-    return sha256_hash.hexdigest()
+        # 使用内存映射文件直接映射到内存
+        mmapped_file = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+        return hashlib.sha256(mmapped_file).hexdigest()
 
 
 class ConnectionHandler:
-    def __init__(self, websocket, message: Data) -> None:
+    def __init__(self, websocket: ServerConnection, message: Data) -> None:
         self.websocket = websocket
+        # self.websocket.remote_address
         self.request = json.loads(message)
         self.logger = logger
 
@@ -98,11 +99,20 @@ class ConnectionHandler:
             if not file:
                 raise ValueError(f"File not found for file_id: {file_task.file_id}")
 
+            self.logger.info(
+                f"Task {file_task.id}: preparing to send file (id: {file_task.file_id})."
+            )
+
             sha256 = calculate_sha256(file.path)
             file_size = os.path.getsize(file.path)
 
+            self.logger.info(
+                f"Calculation complete. SHA256: {sha256}, File size: {file_size}"
+            )
+
             file_path = file.path  # 防止 Session 关闭后可能出现的异常
 
+            ### 发送方首先发出文件信息
             self.websocket.send(
                 json.dumps(
                     {
@@ -126,46 +136,57 @@ class ConnectionHandler:
                 self.conclude_request(400, {}, "Client not ready for file transfer")
                 return
 
-            try:
-                # Generate a random AES key and IV
-                aes_key = get_random_bytes(32)  # AES-256
-                iv = get_random_bytes(16)
-                cipher = AES.new(aes_key, AES.MODE_CFB, iv=iv)
+            self.logger.info("File transmission begin.")
 
-                with open(file_path, "rb") as file:
-                    chunk_size = 4096
-                    while True:
-                        chunk = file.read(chunk_size)
-                        if not chunk:
-                            break
-                        encrypted_chunk = cipher.encrypt(chunk)
-                        # Send IV with the first chunk, then only encrypted data
-                        if file.tell() <= chunk_size:
-                            # Send IV + encrypted chunk (base64 encoded)
-                            payload = base64.b64encode(iv + encrypted_chunk).decode()
-                            self.websocket.send(payload)
-                        else:
-                            payload = base64.b64encode(encrypted_chunk).decode()
-                            self.websocket.send(payload)
-                # After sending all chunks, send the AES key (base64 encoded)
-                self.websocket.send(
-                    json.dumps(
-                        {
-                            "action": "aes_key",
-                            "data": {
-                                "key": base64.b64encode(aes_key).decode(),
-                                "iv": base64.b64encode(iv).decode(),
-                            },
-                        }
-                    )
-                )
-                file_task.status = 1
-                session.commit()
-            except Exception as e:
-                self.logger.error(f"Error sending file {file_path}: {e}")
-                self.conclude_request(500, {}, f"Error sending file: {str(e)}")
+            with open(file_path, "rb") as file:
+                chunk_size = 8192
+                while True:
+                    chunk = file.read(chunk_size)
+                    if not chunk:
+                        break
+                    self.websocket.send(chunk)
 
-        self.logger.info(f"File {file_path} sent successfully with AES encryption.")
+            # try:
+            #     # Generate a random AES key and IV
+            #     aes_key = get_random_bytes(32)  # AES-256
+            #     iv = get_random_bytes(16)
+            #     cipher = AES.new(aes_key, AES.MODE_CFB, iv=iv)
+
+            #     with open(file_path, "rb") as file:
+            #         chunk_size = 4096
+            #         while True:
+            #             chunk = file.read(chunk_size)
+            #             if not chunk:
+            #                 break
+            #             encrypted_chunk = cipher.encrypt(chunk)
+            #             # Send IV with the first chunk, then only encrypted data
+            #             if file.tell() <= chunk_size:
+            #                 # Send IV + encrypted chunk (base64 encoded)
+            #                 payload = base64.b64encode(iv + encrypted_chunk).decode()
+            #                 self.websocket.send(payload)
+            #             else:
+            #                 payload = base64.b64encode(encrypted_chunk).decode()
+            #                 self.websocket.send(payload)
+            #     # After sending all chunks, send the AES key (base64 encoded)
+            #     # self.websocket.send("\r\n")
+            #     self.websocket.send(
+            #         json.dumps(
+            #             {
+            #                 "action": "aes_key",
+            #                 "data": {
+            #                     "key": base64.b64encode(aes_key).decode(),
+            #                     # "iv": base64.b64encode(iv).decode(),
+            #                 },
+            #             }
+            #         )
+            #     )
+            #     file_task.status = 1
+            #     session.commit()
+            # except Exception as e:
+            #     self.logger.error(f"Error sending file {file_path}: {e}")
+            #     self.conclude_request(500, {}, f"Error sending file: {str(e)}")
+
+        self.logger.info(f"File {file_path} sent successfully.")
 
     def receive_file(self, task_id: str) -> None:
         """
@@ -179,18 +200,18 @@ class ConnectionHandler:
         Returns:
             None
         """
-        self.websocket.send(
-            json.dumps(
-                {
-                    "action": "transfer_file",
-                    "data": {},
-                    "message": "waiting for file transfer",
-                },
-                ensure_ascii=False,
-            )
-        )
+
+        handshake_msg = {
+            "action": "transfer_file",
+            "data": {},
+            "message": "waiting for file transfer",
+        }
+
+        self.websocket.send(json.dumps(handshake_msg, ensure_ascii=False))
+        self.logger.info("sent handshake")
 
         task_info = json.loads(self.websocket.recv())
+        self.logger.info(task_info)
         if task_info.get("action") != "transfer_file":
             self.logger.error("Invalid flag received for file transfer.")
             self.conclude_request(400, {}, "Invalid flag for file transfer")
@@ -204,7 +225,7 @@ class ConnectionHandler:
             file_task = session.get(FileTask, task_id)
             if not file_task:
                 raise ValueError(f"File transfer task not found for task_id: {task_id}")
-            if file_task.mode != 0:
+            if file_task.mode != 1:
                 raise ValueError(f"Not a write-mode task: {task_id}")
             if file_task.status != 0:
                 raise ValueError(
@@ -220,17 +241,16 @@ class ConnectionHandler:
                 # 生成保存文件的路径
                 if not file.id:
                     raise ValueError(f"File path not found for file_id: {file.id}")
-
-                received_size = 0
+                
+                os.makedirs(os.path.dirname(file.path), exist_ok=True)
                 with open(file.path, "wb") as f:
-                    while received_size < file_size:
-                        chunk_b64 = self.websocket.recv()
-                        chunk = base64.b64decode(chunk_b64)
-                        f.write(chunk)
-                        received_size += len(chunk)
-                self.logger.info(
-                    f"File received and saved to {file.path}, total size: {received_size}"
-                )
+                    while True:
+                        # Receive encrypted data from the server
+                        data = self.websocket.recv() 
+                        f.write(data) # type: ignore
+
+                        if not data or len(data) < 8192:
+                            break
 
                 # 校验文件大小
                 actual_size = os.path.getsize(file.path)
@@ -263,6 +283,10 @@ class ConnectionHandler:
                 file_task.status = 1
                 session.commit()
                 self.conclude_request(200, {}, "File received successfully")
+                
+                self.logger.info(
+                    f"File received and saved to {file.path}, total size: {actual_size}"
+                )
 
             except Exception as e:
                 self.logger.error(f"Error receiving file: {e}")

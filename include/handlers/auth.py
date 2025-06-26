@@ -1,6 +1,7 @@
 from include.classes.connection import ConnectionHandler
 from include.database.handler import Session
 from include.database.models import User
+import time
 
 
 def handle_login(handler: ConnectionHandler):
@@ -12,7 +13,7 @@ def handle_login(handler: ConnectionHandler):
     Args:
         handler (ConnectionHandler): The connection handler containing request data and methods for responding.
     Response Codes:
-        0   - Login successful, returns a token in the response data.
+        200   - Login successful, returns a token in the response data.
         400 - Missing username or password in the request.
         401 - Invalid credentials.
         500 - Internal server error, with the exception message.
@@ -33,7 +34,7 @@ def handle_login(handler: ConnectionHandler):
             elif user:
                 if token := user.authenticate_and_create_token(password):
                     response = {
-                        "code": 0,
+                        "code": 200,
                         "message": "Login successful",
                         "data": {"token": token},
                     }
@@ -41,6 +42,9 @@ def handle_login(handler: ConnectionHandler):
                     response = response_invalid
             else:
                 response = response_invalid
+
+        if response == response_invalid:
+            time.sleep(3)
 
         # Send the response back to the client
         handler.conclude_request(**response)
@@ -56,7 +60,7 @@ def handle_refresh_token(handler: ConnectionHandler):
     Args:
         handler (ConnectionHandler): The connection handler containing request data and methods for responding.
     Response Codes:
-        0   - Token refreshed successfully, returns a new token in the response data.
+        200   - Token refreshed successfully, returns a new token in the response data.
         400 - Missing or invalid token in the request.
         500 - Internal server error, with the exception message.
     """
@@ -75,7 +79,7 @@ def handle_refresh_token(handler: ConnectionHandler):
                 if user and user.is_token_valid(old_token):
                     new_token = user.renew_token()
                     response = {
-                        "code": 0,
+                        "code": 200,
                         "message": "Token refreshed successfully",
                         "data": {"token": new_token},
                     }

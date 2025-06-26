@@ -31,7 +31,7 @@ from websockets.sync.server import serve
 from include.connection_handler import handle_connection
 from include.function.log import getCustomLogger
 
-CORE_VERSION = Version("0.0.1.250623_alpha")
+CORE_VERSION = Version("0.0.1.250626_alpha")
 
 
 def server_init():
@@ -55,12 +55,6 @@ def server_init():
             "shutdown": {"granted": True, "start_time": 0, "end_time": None},
         }
         session.add(sysop_group)
-
-        sysop2_group = UserGroup(group_name="sysop2")
-        sysop2_group.permissions = {
-            "shutdown": {"granted": True, "start_time": 0, "end_time": None},
-        }
-        session.add(sysop2_group)
 
         init_file = File(id="init", path="./content/hello")
         session.add(init_file)
@@ -94,15 +88,15 @@ def server_init():
                 "start_time": 0,
                 "end_time": None,
             },
+            {
+                "permission": "create_directory",
+                "start_time": 0,
+                "end_time": None,
+            },
         ],
         groups=[
             {
                 "group_name": "sysop",
-                "start_time": 0,
-                "end_time": None,
-            },
-            {
-                "group_name": "sysop2",
                 "start_time": 0,
                 "end_time": None,
             },

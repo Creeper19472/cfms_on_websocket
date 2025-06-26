@@ -15,6 +15,7 @@ from include.handlers.document import (
     handle_upload_document,
     handle_upload_file,
 )
+from include.handlers.directory import handle_list_directory, handle_create_directory
 from include.function.log import getCustomLogger
 
 logger = getCustomLogger(
@@ -30,7 +31,7 @@ def handle_connection(websocket: websockets.sync.server.ServerConnection):
         websocket: The WebSocket connection object.
     """
 
-    logger.info(f"incoming connection: {websocket.remote_address[0]}")
+    logger.info(f"Incoming connection: {websocket.remote_address[0]}")
 
     try:
         while True:
@@ -42,7 +43,7 @@ def handle_connection(websocket: websockets.sync.server.ServerConnection):
     except websockets.ConnectionClosed:
         logger.info("WebSocket connection closed")
     except Exception as e:
-        logger.error(f"Error handling WebSocket connection: {e}")
+        logger.error(f"Error handling WebSocket connection: {e}", exc_info=True)
     finally:
         websocket.close()
 
@@ -70,6 +71,8 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "upload_document": handle_upload_document,
         "download_file": handle_download_file,
         "upload_file": handle_upload_file,
+        "list_directory": handle_list_directory,
+        "create_directory": handle_create_directory,
     }
 
     if action == "echo":

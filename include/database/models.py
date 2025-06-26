@@ -18,6 +18,9 @@ import hashlib
 import os
 
 
+class NoActiveRevisionsError(RuntimeError): pass
+
+
 class User(Base):
     __tablename__ = "users"
     # id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -442,13 +445,28 @@ class Document(BaseObject):
         order_by="DocumentRevision.created_time",
     )
 
+    @property
+    def active(self):
+        try:
+            self.get_latest_revision()
+        except NoActiveRevisionsError:
+            return False
+        return True
+
     def get_latest_revision(self):
         """
-        获取最新的修订版本（按created_time降序排列的第一个）。
+        获取最新的修订版本（按created_time降序排列的第一个），且revision.active为True。
         """
         if not self.revisions:
-            return None
-        return max(self.revisions, key=lambda rev: rev.created_time)
+            raise RuntimeError("A document cannot have no revisions.")
+        
+        # 过滤出active为True的修订版本
+        active_revisions = [rev for rev in self.revisions if rev.active]
+
+        if not active_revisions:
+            raise NoActiveRevisionsError("No active revisions found.")
+        
+        return max(active_revisions, key=lambda rev: rev.created_time)
 
     def __repr__(self) -> str:
         return f"Document(id={self.id!r}, created_time={self.created_time!r})"
@@ -458,20 +476,25 @@ class DocumentRevision(Base):
     __tablename__ = "document_revisions"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     document_id: Mapped[str] = mapped_column(ForeignKey("documents.id"))
-    file_id: Mapped[str] = mapped_column(VARCHAR(255), nullable=False)
+    file_id: Mapped[str] = mapped_column(ForeignKey("files.id"))
     created_time: Mapped[float] = mapped_column(
         Float, nullable=False, default=lambda: time.time()
     )
-    active: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False
-    )  # 文件实际上传后激活
+    # active: Mapped[bool] = mapped_column(
+    #     Boolean, nullable=False, default=False
+    # )  # 文件实际上传后激活
 
     document: Mapped["Document"] = relationship("Document", back_populates="revisions")
+    file: Mapped["File"] = relationship("File", primaryjoin="DocumentRevision.file_id == File.id")
+
+    @property
+    def active(self):
+        return self.file.active
 
     def __repr__(self) -> str:
         return (
             f"DocumentRevision(id={self.id!r}, document_id={self.document_id!r}, "
-            f"file_id={self.file_id!r}, created_time={self.created_time!r})"
+            f"file={self.file!r}, created_time={self.created_time!r})"
         )
 
 
@@ -532,6 +555,10 @@ class File(Base):
     created_time: Mapped[float] = mapped_column(
         Float, nullable=False, default=lambda: time.time()
     )
+
+    @property
+    def active(self):
+        return os.path.exists(self.path) and os.path.getsize(self.path) > 0
 
     def __repr__(self) -> str:
         return f"File(id={self.id!r}, file_path={self.path!r}, created_time={self.created_time!r})"
