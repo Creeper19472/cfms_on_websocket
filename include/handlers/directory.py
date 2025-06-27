@@ -109,6 +109,7 @@ def handle_list_directory(handler: ConnectionHandler):
                             "title": document.title,
                             "created_time": document.created_time,
                             "last_modified": document.get_latest_revision().created_time,
+                            "sha256": document.get_latest_revision().file.sha256,
                         }
                         for document in active_documents
                     ],

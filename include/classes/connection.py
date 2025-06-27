@@ -291,6 +291,7 @@ class ConnectionHandler:
                         return
 
                 file_task.status = 1
+                file.sha256 = sha256
                 session.commit()
 
                 self.logger.info(

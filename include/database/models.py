@@ -595,6 +595,13 @@ class File(Base):
     id: Mapped[str] = mapped_column(
         VARCHAR(255), primary_key=True, default=lambda: secrets.token_hex(32)
     )
+    
+    sha256: Mapped[str] = mapped_column(VARCHAR(64), nullable=True) 
+    # calculate sha256 takes time, especially for large files lol
+    # 
+    # there are also a lot of situations where sha256 in the database is null 
+    # or mismatch, so don't use it as a must
+    
     path: Mapped[str] = mapped_column(Text, nullable=False)
     created_time: Mapped[float] = mapped_column(
         Float, nullable=False, default=lambda: time.time()
