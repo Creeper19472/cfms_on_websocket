@@ -10,11 +10,17 @@ from include.database.models import (
     File,
     Folder,
     FileTask,
-    NoActiveRevisionsError
+    NoActiveRevisionsError,
 )
 import time
 
-__all__ = ["handle_create_document", "handle_get_document", "handle_download_file", "handle_upload_file", "handle_upload_document"]
+__all__ = [
+    "handle_create_document",
+    "handle_get_document",
+    "handle_download_file",
+    "handle_upload_file",
+    "handle_upload_document",
+]
 
 
 # def create_file_task(file_id: str, transfer_mode=0):
@@ -81,7 +87,9 @@ def handle_get_document(handler: ConnectionHandler):
         try:
             latest_revision = document.get_latest_revision()
         except NoActiveRevisionsError:
-            handler.conclude_request(404, {}, "No active revisions found for this document")
+            handler.conclude_request(
+                404, {}, "No active revisions found for this document"
+            )
             return
 
         data = {
@@ -140,7 +148,7 @@ def handle_create_document(handler: ConnectionHandler):
     document_title = handler.data.get("title")
     access_rules_to_apply: dict = handler.data.get("access_rules", {})
 
-    if not access_rules_to_apply: # fix
+    if not access_rules_to_apply:  # fix
         access_rules_to_apply = {}
 
     with Session() as session:
@@ -164,7 +172,7 @@ def handle_create_document(handler: ConnectionHandler):
             ):  # 创建文件肯定是写权限
                 handler.conclude_request(403, {}, "Access denied to the folder")
                 return
-            
+
         if not "create_document" in user.all_permissions:
             handler.conclude_request(403, {}, "Permission denied")
             return
@@ -174,10 +182,12 @@ def handle_create_document(handler: ConnectionHandler):
 
         new_file = File(
             path=f"./content/files/{today.year}/{today.month}/{new_real_filename}",
-            id = secrets.token_hex(32),
+            id=secrets.token_hex(32),
         )
         new_document = Document(
-            id=secrets.token_hex(32), title=document_title, folder_id=folder_id if folder_id else None
+            id=secrets.token_hex(32),
+            title=document_title,
+            folder_id=folder_id if folder_id else None,
         )
         new_document_revision = DocumentRevision(file_id=new_file.id)
         new_document.revisions.append(new_document_revision)
@@ -244,7 +254,7 @@ def handle_upload_document(handler: ConnectionHandler):
             return
 
         task_data = create_file_task(new_file, 1)
-        
+
     handler.conclude_request(200, {"task_data": task_data}, "Task successfully created")
 
 
@@ -270,11 +280,22 @@ def handle_delete_document(handler: ConnectionHandler):
             handler.conclude_request(404, {}, "Document not found")
             return
 
-        if "delete_document" not in user.all_permissions or not document.check_access_requirements(user, access_type=1):
+        if (
+            "delete_document" not in user.all_permissions
+            or not document.check_access_requirements(user, access_type=1)
+        ):
             handler.conclude_request(403, {}, "Access denied to the document")
             return
 
-        document.delete_all_revisions()
+        try:
+            document.delete_all_revisions()
+        except PermissionError:
+            handler.conclude_request(
+                500,
+                {},
+                "Failed to delete revisions. Perhaps a download task is still in progress?",
+            )
+            return
         session.delete(document)
         session.commit()
 
@@ -289,7 +310,7 @@ def handle_rename_document(handler: ConnectionHandler):
         # Parse the directory renaming request
         document_id = handler.data.get("document_id")
         new_title = handler.data.get("new_title")
-        
+
         if not document_id:
             handler.conclude_request(
                 **{"code": 400, "message": "Directory ID is required", "data": {}}
@@ -315,27 +336,35 @@ def handle_rename_document(handler: ConnectionHandler):
                     **{"code": 404, "message": "Document not found", "data": {}}
                 )
                 return
-            if "rename_document" not in this_user.all_permissions or not document.check_access_requirements(this_user, 1):
+            if (
+                "rename_document" not in this_user.all_permissions
+                or not document.check_access_requirements(this_user, 1)
+            ):
                 handler.conclude_request(
                     **{"code": 403, "message": "Access denied", "data": {}}
                 )
                 return
-            
+
             if document.title == new_title:
                 handler.conclude_request(
-                    **{"code": 400, "message": "New name is the same as the current name", "data": {}}
+                    **{
+                        "code": 400,
+                        "message": "New name is the same as the current name",
+                        "data": {},
+                    }
                 )
                 return
             else:
                 document.title = new_title
-            
+
             session.commit()
-            
-            handler.conclude_request(**{"code": 200, "message": "Document renamed successfully", "data": {}})
-            
+
+            handler.conclude_request(
+                **{"code": 200, "message": "Document renamed successfully", "data": {}}
+            )
+
     except Exception as e:
         handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
-
 
 
 def handle_download_file(handler: ConnectionHandler):
@@ -356,10 +385,12 @@ def handle_download_file(handler: ConnectionHandler):
                 400, {}, "Task is not in a valid state for download"
             )
             return
-        
-        if task.start_time > time.time() or (task.end_time and task.end_time < time.time()):
+
+        if task.start_time > time.time() or (
+            task.end_time and task.end_time < time.time()
+        ):
             handler.conclude_request(
-            400, {}, "Task is either not started yet or has already ended"
+                400, {}, "Task is either not started yet or has already ended"
             )
             return
 
@@ -388,10 +419,12 @@ def handle_upload_file(handler: ConnectionHandler):
         if task.status != 0 or task.mode != 1:
             handler.conclude_request(400, {}, "Task is not in a valid state for upload")
             return
-        
-        if task.start_time > time.time() or (task.end_time and task.end_time < time.time()):
+
+        if task.start_time > time.time() or (
+            task.end_time and task.end_time < time.time()
+        ):
             handler.conclude_request(
-            400, {}, "Task is either not started yet or has already ended"
+                400, {}, "Task is either not started yet or has already ended"
             )
             return
 

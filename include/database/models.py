@@ -502,7 +502,10 @@ class Document(BaseObject):
                 .count()
             )
             if other_refs == 0:
-                revision.file.delete()
+                try:
+                    revision.file.delete()
+                except PermissionError:
+                    raise
                 session.delete(revision.file)
             session.delete(revision)
 
@@ -602,7 +605,10 @@ class File(Base):
         return os.path.exists(self.path) and os.path.getsize(self.path) > 0
     
     def delete(self):
-        os.remove(self.path)
+        try:
+            os.remove(self.path)
+        except PermissionError:
+            raise
 
     def __repr__(self) -> str:
         return f"File(id={self.id!r}, file_path={self.path!r}, created_time={self.created_time!r})"

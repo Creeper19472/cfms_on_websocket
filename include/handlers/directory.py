@@ -6,6 +6,7 @@ import time
 
 AVAILABLE_ACCESS_TYPES = [0, 1]
 
+
 def apply_directory_access_rules(
     folder: Folder, set_access_rules: dict, user: User
 ) -> bool:
@@ -24,7 +25,7 @@ def apply_directory_access_rules(
                 if rule.access_type == access_type:
                     folder.access_rules.remove(rule)
             this_new_rule = FolderAccessRule(
-                folder_id=folder.id,      
+                folder_id=folder.id,
                 access_type=access_type,
                 rule_data=this_rule_data,
             )
@@ -37,12 +38,6 @@ def apply_directory_access_rules(
                 return False
 
     return True
-
-
-
-
-
-
 
 
 def handle_list_directory(handler: ConnectionHandler):
@@ -94,11 +89,7 @@ def handle_list_directory(handler: ConnectionHandler):
                 children = folder.children
                 documents = folder.documents
 
-            active_documents = [
-                document
-                for document in documents
-                if document.active
-            ]
+            active_documents = [document for document in documents if document.active]
 
             if parent:
                 parent_id = parent.id
@@ -214,7 +205,7 @@ def handle_create_directory(handler: ConnectionHandler):
                     },
                     "Directory created successfully",
                 )
-                
+
             else:
                 session.rollback()
                 handler.conclude_request(
@@ -223,7 +214,7 @@ def handle_create_directory(handler: ConnectionHandler):
 
             session.add(folder)
             session.commit()
-            
+
     except Exception as e:
         handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
 
@@ -244,14 +235,16 @@ def handle_delete_directory(handler: ConnectionHandler):
     """
     try:
         # Parse the directory deletion request
-        folder_id = handler.data.get("folder_id") # Get the folder ID from the request data
+        folder_id = handler.data.get(
+            "folder_id"
+        )  # Get the folder ID from the request data
 
         if not folder_id:
             handler.conclude_request(
                 **{"code": 400, "message": "Directory ID is required", "data": {}}
             )
             return
-        
+
         with Session() as session:
             this_user = session.get(User, handler.username)
             if not this_user or not this_user.is_token_valid(handler.token):
@@ -265,18 +258,31 @@ def handle_delete_directory(handler: ConnectionHandler):
                     **{"code": 404, "message": "Directory not found", "data": {}}
                 )
                 return
-            if "delete_directory" not in this_user.all_permissions or not folder.check_access_requirements(this_user, 1):
+            if (
+                "delete_directory" not in this_user.all_permissions
+                or not folder.check_access_requirements(this_user, 1)
+            ):
                 handler.conclude_request(
                     **{"code": 403, "message": "Access denied", "data": {}}
                 )
                 return
-            
-            folder.delete_all_children()
+
+            try:
+                folder.delete_all_children()
+            except PermissionError:
+                handler.conclude_request(
+                    500,
+                    {},
+                    "An error occurred when attempting to delete documents in the directory. Perhaps a download task is still in progress?",
+                )
+                return
             session.delete(folder)
             session.commit()
-            
-            handler.conclude_request(**{"code": 200, "message": "Directory deleted successfully", "data": {}})
-            
+
+            handler.conclude_request(
+                **{"code": 200, "message": "Directory deleted successfully", "data": {}}
+            )
+
     except Exception as e:
         handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
 
@@ -299,7 +305,7 @@ def handle_rename_directory(handler: ConnectionHandler):
         # Parse the directory renaming request
         folder_id = handler.data.get("folder_id")
         new_name = handler.data.get("new_name")
-        
+
         if not folder_id:
             handler.conclude_request(
                 **{"code": 400, "message": "Directory ID is required", "data": {}}
@@ -325,23 +331,32 @@ def handle_rename_directory(handler: ConnectionHandler):
                     **{"code": 404, "message": "Directory not found", "data": {}}
                 )
                 return
-            if "rename_directory" not in this_user.all_permissions or not folder.check_access_requirements(this_user, 1):
+            if (
+                "rename_directory" not in this_user.all_permissions
+                or not folder.check_access_requirements(this_user, 1)
+            ):
                 handler.conclude_request(
                     **{"code": 403, "message": "Access denied", "data": {}}
                 )
                 return
-            
+
             if folder.name == new_name:
                 handler.conclude_request(
-                    **{"code": 400, "message": "New name is the same as the current name", "data": {}}
+                    **{
+                        "code": 400,
+                        "message": "New name is the same as the current name",
+                        "data": {},
+                    }
                 )
                 return
             else:
                 folder.name = new_name
-            
+
             session.commit()
-            
-            handler.conclude_request(**{"code": 200, "message": "Directory renamed successfully", "data": {}})
-            
+
+            handler.conclude_request(
+                **{"code": 200, "message": "Directory renamed successfully", "data": {}}
+            )
+
     except Exception as e:
         handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
