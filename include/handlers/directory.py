@@ -226,3 +226,122 @@ def handle_create_directory(handler: ConnectionHandler):
             
     except Exception as e:
         handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
+
+
+def handle_delete_directory(handler: ConnectionHandler):
+    """
+    Handles directory deletion requests.
+    This function processes a directory deletion request by deleting the specified directory.
+    It sends an appropriate response back to the client, indicating success or failure.
+    Args:
+        handler (ConnectionHandler): The connection handler containing request data and methods for responding.
+    Response Codes:
+        200 - Directory deleted successfully.
+        400 - Invalid request.
+        403 - Invalid user or token.
+        404 - Directory not found.
+        500 - Internal server error, with the exception message.
+    """
+    try:
+        # Parse the directory deletion request
+        folder_id = handler.data.get("folder_id") # Get the folder ID from the request data
+
+        if not folder_id:
+            handler.conclude_request(
+                **{"code": 400, "message": "Directory ID is required", "data": {}}
+            )
+            return
+        
+        with Session() as session:
+            this_user = session.get(User, handler.username)
+            if not this_user or not this_user.is_token_valid(handler.token):
+                handler.conclude_request(
+                    **{"code": 403, "message": "Invalid user or token", "data": {}}
+                )
+                return
+            folder = session.get(Folder, folder_id)
+            if not folder:
+                handler.conclude_request(
+                    **{"code": 404, "message": "Directory not found", "data": {}}
+                )
+                return
+            if "delete_directory" not in this_user.all_permissions or not folder.check_access_requirements(this_user, 1):
+                handler.conclude_request(
+                    **{"code": 403, "message": "Access denied", "data": {}}
+                )
+                return
+            
+            folder.delete_all_children()
+            session.delete(folder)
+            session.commit()
+            
+            handler.conclude_request(**{"code": 200, "message": "Directory deleted successfully", "data": {}})
+            
+    except Exception as e:
+        handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
+
+
+def handle_rename_directory(handler: ConnectionHandler):
+    """
+    Handles directory renaming requests.
+    This function processes a directory renaming request by updating the name of the specified directory.
+    It sends an appropriate response back to the client, indicating success or failure.
+    Args:
+        handler (ConnectionHandler): The connection handler containing request data and methods for responding.
+    Response Codes:
+        200 - Directory renamed successfully.
+        400 - Invalid request.
+        403 - Invalid user or token.
+        404 - Directory not found.
+        500 - Internal server error, with the exception message.
+    """
+    try:
+        # Parse the directory renaming request
+        folder_id = handler.data.get("folder_id")
+        new_name = handler.data.get("new_name")
+        
+        if not folder_id:
+            handler.conclude_request(
+                **{"code": 400, "message": "Directory ID is required", "data": {}}
+            )
+            return
+
+        if not new_name:
+            handler.conclude_request(
+                **{"code": 400, "message": "New name is required", "data": {}}
+            )
+            return
+
+        with Session() as session:
+            this_user = session.get(User, handler.username)
+            if not this_user or not this_user.is_token_valid(handler.token):
+                handler.conclude_request(
+                    **{"code": 403, "message": "Invalid user or token", "data": {}}
+                )
+                return
+            folder = session.get(Folder, folder_id)
+            if not folder:
+                handler.conclude_request(
+                    **{"code": 404, "message": "Directory not found", "data": {}}
+                )
+                return
+            if "rename_directory" not in this_user.all_permissions or not folder.check_access_requirements(this_user, 1):
+                handler.conclude_request(
+                    **{"code": 403, "message": "Access denied", "data": {}}
+                )
+                return
+            
+            if folder.name == new_name:
+                handler.conclude_request(
+                    **{"code": 400, "message": "New name is the same as the current name", "data": {}}
+                )
+                return
+            else:
+                folder.name = new_name
+            
+            session.commit()
+            
+            handler.conclude_request(**{"code": 200, "message": "Directory renamed successfully", "data": {}})
+            
+    except Exception as e:
+        handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})

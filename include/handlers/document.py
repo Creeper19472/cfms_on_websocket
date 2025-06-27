@@ -248,6 +248,96 @@ def handle_upload_document(handler: ConnectionHandler):
     handler.conclude_request(200, {"task_data": task_data}, "Task successfully created")
 
 
+def handle_delete_document(handler: ConnectionHandler):
+    """
+    Handles the document deletion request from the client.
+    """
+    document_id = handler.data.get("document_id")
+
+    if not document_id:
+        handler.conclude_request(400, {}, "Document ID is required")
+        return
+
+    with Session() as session:
+        user = session.get(User, handler.username)
+        document = session.get(Document, document_id)
+
+        if not user or not user.is_token_valid(handler.token):
+            handler.conclude_request(403, {}, "Invalid user or token")
+            return
+
+        if not document:
+            handler.conclude_request(404, {}, "Document not found")
+            return
+
+        if "delete_document" not in user.all_permissions or not document.check_access_requirements(user, access_type=1):
+            handler.conclude_request(403, {}, "Access denied to the document")
+            return
+
+        document.delete_all_revisions()
+        session.delete(document)
+        session.commit()
+
+    handler.conclude_request(200, {}, "Document successfully deleted")
+
+
+def handle_rename_document(handler: ConnectionHandler):
+    """
+    Handles the document renaming request from the client.
+    """
+    try:
+        # Parse the directory renaming request
+        document_id = handler.data.get("document_id")
+        new_title = handler.data.get("new_title")
+        
+        if not document_id:
+            handler.conclude_request(
+                **{"code": 400, "message": "Directory ID is required", "data": {}}
+            )
+            return
+
+        if not new_title:
+            handler.conclude_request(
+                **{"code": 400, "message": "New document title is required", "data": {}}
+            )
+            return
+
+        with Session() as session:
+            this_user = session.get(User, handler.username)
+            if not this_user or not this_user.is_token_valid(handler.token):
+                handler.conclude_request(
+                    **{"code": 403, "message": "Invalid user or token", "data": {}}
+                )
+                return
+            document = session.get(Document, document_id)
+            if not document:
+                handler.conclude_request(
+                    **{"code": 404, "message": "Document not found", "data": {}}
+                )
+                return
+            if "rename_document" not in this_user.all_permissions or not document.check_access_requirements(this_user, 1):
+                handler.conclude_request(
+                    **{"code": 403, "message": "Access denied", "data": {}}
+                )
+                return
+            
+            if document.title == new_title:
+                handler.conclude_request(
+                    **{"code": 400, "message": "New name is the same as the current name", "data": {}}
+                )
+                return
+            else:
+                document.title = new_title
+            
+            session.commit()
+            
+            handler.conclude_request(**{"code": 200, "message": "Document renamed successfully", "data": {}})
+            
+    except Exception as e:
+        handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
+
+
+
 def handle_download_file(handler: ConnectionHandler):
     task_id = handler.data.get("task_id")
 

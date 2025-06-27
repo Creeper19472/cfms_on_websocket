@@ -31,7 +31,7 @@ from websockets.sync.server import serve
 from include.connection_handler import handle_connection
 from include.function.log import getCustomLogger
 
-CORE_VERSION = Version("0.0.1.250626_alpha")
+CORE_VERSION = Version("0.0.1.250627_alpha")
 
 
 def server_init():
@@ -90,6 +90,26 @@ def server_init():
             },
             {
                 "permission": "create_directory",
+                "start_time": 0,
+                "end_time": None,
+            },
+            {
+                "permission": "delete_document",
+                "start_time": 0,
+                "end_time": None,
+            },
+            {
+                "permission": "rename_document",
+                "start_time": 0,
+                "end_time": None,
+            },
+            {
+                "permission": "delete_directory",
+                "start_time": 0,
+                "end_time": None,
+            },
+                        {
+                "permission": "rename_directory",
                 "start_time": 0,
                 "end_time": None,
             },

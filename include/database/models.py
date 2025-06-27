@@ -416,6 +416,25 @@ class Folder(BaseObject):  # 文档文件夹
         "Document", back_populates="folder"
     )
 
+    def delete_all_children(self):
+        session = object_session(self)
+        if not session:
+            raise Exception("The object is not associated with a session")
+        
+        if self.documents:
+            for document in self.documents:
+                document.delete_all_revisions()
+                session.delete(document)
+        self.documents.clear()
+
+        if self.children:
+            for child in self.children:
+                child.delete_all_children()
+                session.delete(child)
+        self.children.clear()
+
+        session.commit()
+
 
 class Document(BaseObject):
     __tablename__ = "documents"
@@ -467,6 +486,28 @@ class Document(BaseObject):
             raise NoActiveRevisionsError("No active revisions found.")
         
         return max(active_revisions, key=lambda rev: rev.created_time)
+    
+    def delete_all_revisions(self):
+        session = object_session(self)
+        if not session:
+            raise Exception("The object is not associated with a session")
+        
+        for revision in self.revisions:
+            revision.file
+            # 检查该File对象是否被其他revision引用
+            other_refs = (
+                session.query(DocumentRevision)
+                .filter(DocumentRevision.file_id == revision.file_id)
+                .filter(DocumentRevision.id != revision.id)
+                .count()
+            )
+            if other_refs == 0:
+                revision.file.delete()
+                session.delete(revision.file)
+            session.delete(revision)
+
+        self.revisions.clear()
+        session.commit()
 
     def __repr__(self) -> str:
         return f"Document(id={self.id!r}, created_time={self.created_time!r})"
@@ -559,6 +600,9 @@ class File(Base):
     @property
     def active(self):
         return os.path.exists(self.path) and os.path.getsize(self.path) > 0
+    
+    def delete(self):
+        os.remove(self.path)
 
     def __repr__(self) -> str:
         return f"File(id={self.id!r}, file_path={self.path!r}, created_time={self.created_time!r})"

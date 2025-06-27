@@ -4,6 +4,7 @@ import os
 import base64
 import hashlib
 
+import websockets
 from websockets.sync.server import ServerConnection
 from websockets.typing import Data
 
@@ -241,16 +242,22 @@ class ConnectionHandler:
                 # 生成保存文件的路径
                 if not file.id:
                     raise ValueError(f"File path not found for file_id: {file.id}")
-                
+
                 os.makedirs(os.path.dirname(file.path), exist_ok=True)
                 with open(file.path, "wb") as f:
-                    while True:
-                        # Receive encrypted data from the server
-                        data = self.websocket.recv() 
-                        f.write(data) # type: ignore
+                    try:
+                        while True:
+                            # Receive encrypted data from the server
+                            data = self.websocket.recv()
+                            f.write(data)  # type: ignore
 
-                        if not data or len(data) < 8192:
-                            break
+                            if not data or len(data) < 8192:
+                                break
+                    except (
+                        websockets.ConnectionClosed,
+                        websockets.exceptions.ConnectionClosedOK,
+                    ) as exc:
+                        pass
 
                 # 校验文件大小
                 actual_size = os.path.getsize(file.path)
@@ -258,12 +265,13 @@ class ConnectionHandler:
                     self.logger.error(
                         f"File size mismatch: expected {file_size}, got {actual_size}"
                     )
+                    os.remove(file.path)
+
                     self.conclude_request(
                         400,
                         {},
                         f"File size mismatch: expected {file_size}, got {actual_size}",
                     )
-                    os.remove(file.path)
                     return
 
                 # 校验sha256
@@ -273,21 +281,31 @@ class ConnectionHandler:
                         self.logger.error(
                             f"SHA256 mismatch: expected {sha256}, got {actual_sha256}"
                         )
+                        os.remove(file.path)
+
                         self.conclude_request(
                             400,
                             {},
                             f"SHA256 mismatch: expected {sha256}, got {actual_sha256}",
                         )
-                        os.remove(file.path)
                         return
+
                 file_task.status = 1
                 session.commit()
-                self.conclude_request(200, {}, "File received successfully")
-                
+
                 self.logger.info(
                     f"File received and saved to {file.path}, total size: {actual_size}"
                 )
 
+                self.conclude_request(200, {}, "File received successfully")
+
+            except (
+                websockets.ConnectionClosed,
+                websockets.exceptions.ConnectionClosedError,
+                websockets.exceptions.ConnectionClosedOK,
+            ):
+                raise
+
             except Exception as e:
-                self.logger.error(f"Error receiving file: {e}")
+                self.logger.error(f"Error receiving file: {e}", exc_info=True)
                 self.conclude_request(500, {}, f"Error receiving file: {str(e)}")
