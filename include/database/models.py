@@ -15,10 +15,11 @@ from sqlalchemy.orm.session import object_session
 from sqlalchemy import JSON
 import jwt
 import hashlib
-import os
+import os, sys
 
 
-class NoActiveRevisionsError(RuntimeError): pass
+class NoActiveRevisionsError(RuntimeError):
+    pass
 
 
 class User(Base):
@@ -420,7 +421,7 @@ class Folder(BaseObject):  # 文档文件夹
         session = object_session(self)
         if not session:
             raise Exception("The object is not associated with a session")
-        
+
         if self.documents:
             for document in self.documents:
                 document.delete_all_revisions()
@@ -468,7 +469,7 @@ class Document(BaseObject):
     def active(self):
         try:
             self.get_latest_revision()
-        except NoActiveRevisionsError:
+        except (RuntimeError, NoActiveRevisionsError):
             return False
         return True
 
@@ -478,20 +479,20 @@ class Document(BaseObject):
         """
         if not self.revisions:
             raise RuntimeError("A document cannot have no revisions.")
-        
+
         # 过滤出active为True的修订版本
         active_revisions = [rev for rev in self.revisions if rev.active]
 
         if not active_revisions:
             raise NoActiveRevisionsError("No active revisions found.")
-        
+
         return max(active_revisions, key=lambda rev: rev.created_time)
-    
+
     def delete_all_revisions(self):
         session = object_session(self)
         if not session:
             raise Exception("The object is not associated with a session")
-        
+
         for revision in self.revisions:
             revision.file
             # 检查该File对象是否被其他revision引用
@@ -529,7 +530,9 @@ class DocumentRevision(Base):
     # )  # 文件实际上传后激活
 
     document: Mapped["Document"] = relationship("Document", back_populates="revisions")
-    file: Mapped["File"] = relationship("File", primaryjoin="DocumentRevision.file_id == File.id")
+    file: Mapped["File"] = relationship(
+        "File", primaryjoin="DocumentRevision.file_id == File.id"
+    )
 
     @property
     def active(self):
@@ -595,27 +598,65 @@ class File(Base):
     id: Mapped[str] = mapped_column(
         VARCHAR(255), primary_key=True, default=lambda: secrets.token_hex(32)
     )
-    
-    sha256: Mapped[str] = mapped_column(VARCHAR(64), nullable=True) 
+
+    sha256: Mapped[str] = mapped_column(VARCHAR(64), nullable=True)
     # calculate sha256 takes time, especially for large files lol
-    # 
-    # there are also a lot of situations where sha256 in the database is null 
+    #
+    # there are also a lot of situations where sha256 in the database is null
     # or mismatch, so don't use it as a must
-    
+
     path: Mapped[str] = mapped_column(Text, nullable=False)
     created_time: Mapped[float] = mapped_column(
         Float, nullable=False, default=lambda: time.time()
     )
 
     @property
+    def size(self):
+        if os.path.exists(self.path):
+            return os.path.getsize(self.path)
+        else:
+            return None
+
+    @property
     def active(self):
+        if sys.platform == "win32":
+            import win32file, pywintypes
+
+            hFile = None
+            try:
+                if os.path.exists(self.path):
+                    hFile = win32file.CreateFile(
+                        self.path,
+                        win32file.GENERIC_READ,
+                        win32file.FILE_SHARE_READ,
+                        None,
+                        win32file.OPEN_EXISTING,
+                        0,
+                        None,
+                    )
+            except pywintypes.error:
+                return False
+            finally:
+                if hFile:
+                    hFile.Close()
+
+        # elif sys.platform == "linux":
+        #     import fcntl
+        #     try:
+        #         with open(self.path, 'a') as f:
+        #             fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        #     except IOError:
+        #         return False
+
+        # unsafe: for unknown platforms, won't check if the file is locked
         return os.path.exists(self.path) and os.path.getsize(self.path) > 0
-    
+
     def delete(self):
         try:
             os.remove(self.path)
-        except PermissionError:
-            raise
+        except (OSError, PermissionError):
+            if os.path.exists(self.path):
+                raise
 
     def __repr__(self) -> str:
         return f"File(id={self.id!r}, file_path={self.path!r}, created_time={self.created_time!r})"

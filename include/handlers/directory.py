@@ -108,8 +108,9 @@ def handle_list_directory(handler: ConnectionHandler):
                             "id": document.id,
                             "title": document.title,
                             "created_time": document.created_time,
-                            "last_modified": document.get_latest_revision().created_time,
-                            "sha256": document.get_latest_revision().file.sha256,
+                            "last_modified": (last_revision:=document.get_latest_revision()).created_time,
+                            "sha256": last_revision.file.sha256,
+                            "size": last_revision.file.size,
                         }
                         for document in active_documents
                     ],
@@ -127,6 +128,7 @@ def handle_list_directory(handler: ConnectionHandler):
         # Send the response back to the client
         handler.conclude_request(**response)
     except Exception as e:
+        handler.logger.error(f"Error detected when handling requests.", exc_info=True)
         handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
 
 
@@ -217,6 +219,7 @@ def handle_create_directory(handler: ConnectionHandler):
             session.commit()
 
     except Exception as e:
+        handler.logger.error(f"Error detected when handling requests.", exc_info=True)
         handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
 
 
@@ -360,4 +363,5 @@ def handle_rename_directory(handler: ConnectionHandler):
             )
 
     except Exception as e:
+        handler.logger.error(f"Error detected when handling requests.", exc_info=True)
         handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})

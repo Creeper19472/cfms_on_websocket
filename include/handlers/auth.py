@@ -18,7 +18,7 @@ def handle_login(handler: ConnectionHandler):
         401 - Invalid credentials.
         500 - Internal server error, with the exception message.
     """
-    
+
     try:
         # Parse the login request
         username = handler.data.get("username")
@@ -27,16 +27,28 @@ def handle_login(handler: ConnectionHandler):
         with Session() as session:
             user = session.get(User, username)
 
-            response_invalid = {"code": 401, "message": "Invalid credentials", "data": {}}
+            response_invalid = {
+                "code": 401,
+                "message": "Invalid credentials",
+                "data": {},
+            }
 
             if not username or not password:
-                response = {"code": 400, "message": "missing username or password", "data": {}}
+                response = {
+                    "code": 400,
+                    "message": "missing username or password",
+                    "data": {},
+                }
             elif user:
                 if token := user.authenticate_and_create_token(password):
                     response = {
                         "code": 200,
                         "message": "Login successful",
-                        "data": {"token": token},
+                        "data": {
+                            "token": token,
+                            "permissions": list(user.all_permissions),
+                            "groups": list(user.all_groups),
+                        },
                     }
                 else:
                     response = response_invalid
@@ -50,7 +62,9 @@ def handle_login(handler: ConnectionHandler):
         handler.conclude_request(**response)
 
     except Exception as e:
+        handler.logger.error(f"Error detected when handling requests.", exc_info=True)
         handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
+
 
 def handle_refresh_token(handler: ConnectionHandler):
     """
@@ -64,7 +78,7 @@ def handle_refresh_token(handler: ConnectionHandler):
         400 - Missing or invalid token in the request.
         500 - Internal server error, with the exception message.
     """
-    
+
     try:
         # Parse the refresh token request
         old_token = handler.token
@@ -84,10 +98,15 @@ def handle_refresh_token(handler: ConnectionHandler):
                         "data": {"token": new_token},
                     }
                 else:
-                    response = {"code": 400, "message": "Invalid or expired token", "data": {}}
+                    response = {
+                        "code": 400,
+                        "message": "Invalid or expired token",
+                        "data": {},
+                    }
 
         # Send the response back to the client
         handler.conclude_request(**response)
 
     except Exception as e:
+        handler.logger.error(f"Error detected when handling requests.", exc_info=True)
         handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})

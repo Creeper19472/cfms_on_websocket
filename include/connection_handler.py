@@ -23,6 +23,8 @@ from include.handlers.directory import (
     handle_delete_directory,
     handle_rename_directory
     )
+from include.handlers.management import handle_list_users
+
 from include.function.log import getCustomLogger
 
 logger = getCustomLogger(
@@ -83,7 +85,8 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "list_directory": handle_list_directory,
         "create_directory": handle_create_directory,
         "delete_directory": handle_delete_directory,
-        "rename_directory": handle_rename_directory
+        "rename_directory": handle_rename_directory,
+        "list_users": handle_list_users,
     }
 
     if action == "echo":

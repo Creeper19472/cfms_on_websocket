@@ -364,6 +364,7 @@ def handle_rename_document(handler: ConnectionHandler):
             )
 
     except Exception as e:
+        handler.logger.error(f"Error detected when handling requests.", exc_info=True)
         handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
 
 
