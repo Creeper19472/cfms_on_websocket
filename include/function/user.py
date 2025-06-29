@@ -12,6 +12,30 @@ def get_passwd_sha256(password: str, salt: str) -> str:
 
 
 def create_user(**kwargs) -> None:
+    """
+    Create a new user in the system.
+    This function generates a random salt, hashes the provided password with the salt,
+    and creates a user record along with associated permissions and group memberships.
+    Args:
+        **kwargs: Arbitrary keyword arguments that may include:
+            - username (str): The username for the new user.
+            - password (str): The password for the new user.
+            - nickname (str, optional): The nickname for the new user.
+            - permissions (list, optional): A list of dictionaries representing user permissions,
+              where each dictionary may contain:
+                - permission (str): The permission to be granted.
+                - granted (bool, optional): Whether the permission is granted (default is True).
+                - start_time (float, optional): The start time for the permission (default is current time).
+                - end_time (float, optional): The end time for the permission (default is None).
+            - groups (list, optional): A list of dictionaries representing user group memberships,
+              where each dictionary may contain:
+                - group_name (str): The name of the group.
+                - start_time (float, optional): The start time for the membership (default is current time).
+                - end_time (float, optional): The end time for the membership (default is None).
+    Returns:
+        None: This function does not return a value. It commits the new user to the database.
+    """
+    
     # 随机生成8位salt
     alphabet = string.ascii_letters + string.digits
     salt = "".join(secrets.choice(alphabet) for i in range(8))  # 安全化

@@ -260,6 +260,7 @@ class UserGroup(Base):
     __tablename__ = "user_groups"
     group_name: Mapped[str] = mapped_column(VARCHAR(255), primary_key=True)
     # permissions字段存储为JSON字符串，内容为权限字典
+    group_display_name: Mapped[str] = mapped_column(VARCHAR(128), nullable=True)
 
     permissions: Mapped[dict] = mapped_column(
         JSON, nullable=False, default=dict, server_default="{}"

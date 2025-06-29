@@ -18,12 +18,18 @@ from include.handlers.document import (
     handle_upload_file,
 )
 from include.handlers.directory import (
-    handle_list_directory, 
+    handle_list_directory,
     handle_create_directory,
     handle_delete_directory,
-    handle_rename_directory
-    )
-from include.handlers.management import handle_list_users
+    handle_rename_directory,
+)
+from include.handlers.management import (
+    handle_list_users,
+    handle_create_user,
+    handle_delete_user,
+    handle_rename_user,
+    handle_get_user_info
+)
 
 from include.function.log import getCustomLogger
 
@@ -87,6 +93,10 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "delete_directory": handle_delete_directory,
         "rename_directory": handle_rename_directory,
         "list_users": handle_list_users,
+        "create_user": handle_create_user,
+        "delete_user": handle_delete_user,
+        "rename_user": handle_rename_user,
+        "get_user_info": handle_get_user_info,
     }
 
     if action == "echo":
