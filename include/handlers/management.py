@@ -77,7 +77,20 @@ def handle_create_user(handler: ConnectionHandler):
                 )
                 return
 
-            existing_user = session.get(User, handler.data["username"])
+            new_username = handler.data.get("username")
+            new_password = handler.data.get("password")
+
+            if not new_username or not new_password:
+                handler.conclude_request(
+                    **{
+                        "code": 400,
+                        "message": "Username and password are required",
+                        "data": {},
+                    }
+                )
+                return
+
+            existing_user = session.get(User, new_username)
             if existing_user:
                 handler.conclude_request(
                     **{"code": 400, "message": "Username already exists", "data": {}}
@@ -85,8 +98,6 @@ def handle_create_user(handler: ConnectionHandler):
                 return
             del existing_user
 
-            new_username = handler.data["username"]
-            new_password = handler.data["password"]
             new_nickname = handler.data.get("nickname", None)
             new_user_rights: list[dict] = handler.data.get("permissions", [])
             new_user_groups: list[dict] = handler.data.get("groups", [])
