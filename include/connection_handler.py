@@ -10,15 +10,18 @@ from include.database.models import User
 from include.handlers.auth import handle_login, handle_refresh_token
 from include.handlers.document import (
     handle_create_document,
+    handle_get_document_info,
     handle_get_document,
     handle_download_file,
     handle_upload_document,
     handle_delete_document,
     handle_rename_document,
     handle_upload_file,
+    handle_set_document_rules,
 )
 from include.handlers.directory import (
     handle_list_directory,
+    handle_get_directory_info,
     handle_create_directory,
     handle_delete_directory,
     handle_rename_directory,
@@ -86,9 +89,12 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "upload_document": handle_upload_document,
         "delete_document": handle_delete_document,
         "rename_document": handle_rename_document,
+        "get_document_info": handle_get_document_info,
+        "set_document_rules": handle_set_document_rules,
         "download_file": handle_download_file,
         "upload_file": handle_upload_file,
         "list_directory": handle_list_directory,
+        "get_directory_info": handle_get_directory_info,
         "create_directory": handle_create_directory,
         "delete_directory": handle_delete_directory,
         "rename_directory": handle_rename_directory,

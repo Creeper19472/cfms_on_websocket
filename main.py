@@ -31,7 +31,7 @@ from websockets.sync.server import serve
 from include.connection_handler import handle_connection
 from include.function.log import getCustomLogger
 
-CORE_VERSION = Version("0.0.1.250629_alpha")
+CORE_VERSION = Version("0.0.1.250704_alpha")
 
 
 def server_init():
@@ -135,6 +135,11 @@ def server_init():
             },
             {
                 "permission": "get_user_info",
+                "start_time": 0,
+                "end_time": None,
+            },
+            {
+                "permission": "view_access_rules",
                 "start_time": 0,
                 "end_time": None,
             },

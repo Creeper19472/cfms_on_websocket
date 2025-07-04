@@ -388,6 +388,9 @@ class BaseObject(Base):
             elif access_type == 1:  # 如果要检查写权限
                 if each_rule.access_type not in [0, 1]:
                     continue
+            elif access_type == 2:  # 如果要检查管理权限
+                if each_rule.access_type not in [0, 2]:
+                    continue
 
             if not match_primary_sub_group(each_rule.rule_data):
                 return False
@@ -401,7 +404,7 @@ class Folder(BaseObject):  # 文档文件夹
         VARCHAR(255), primary_key=True, default=lambda: secrets.token_hex(32)
     )
     name: Mapped[str] = mapped_column(VARCHAR(255), nullable=False)  # 文件夹名称
-    last_modified: Mapped[float] = mapped_column(
+    created_time: Mapped[float] = mapped_column(
         Float, nullable=False, default=lambda: time.time()
     )
     parent_id: Mapped[Optional[str]] = mapped_column(
@@ -417,6 +420,10 @@ class Folder(BaseObject):  # 文档文件夹
     documents: Mapped[List["Document"]] = relationship(
         "Document", back_populates="folder"
     )
+
+    @property
+    def count_of_child(self):
+        return len(self.children) + len(self.documents)
 
     def delete_all_children(self):
         session = object_session(self)

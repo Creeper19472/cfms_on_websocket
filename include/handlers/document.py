@@ -20,6 +20,10 @@ __all__ = [
     "handle_download_file",
     "handle_upload_file",
     "handle_upload_document",
+    "handle_get_document_info",
+    "handle_delete_document",
+    "handle_rename_document",
+    "handle_set_document_rules",
 ]
 
 
@@ -28,7 +32,7 @@ def create_file_task(file: File, transfer_mode=0):
     """
     Creates a new file processing task for the specified file.
     Args:
-        file_id (str): The unique identifier of the file for which the task is to be generated.
+        file (File): The file object for which the task is to be generated.
     Returns:
         dict or None: A dictionary containing the task details:
             - task_id (int): The unique identifier of the created task.
@@ -59,6 +63,71 @@ def create_file_task(file: File, transfer_mode=0):
             "start_time": task.start_time,
             "end_time": task.end_time,
         }
+
+
+def handle_get_document_info(handler: ConnectionHandler):
+    """
+    Handles the "get_document_info" action.
+    Args:
+        handler (ConnectionHandler): The connection handler object.
+    Returns:
+        None
+    """
+
+    document_id = handler.data.get("document_id")
+
+    if not document_id:
+        handler.conclude_request(400, {}, "Document ID is required")
+        return
+
+    if not handler.username:
+        handler.conclude_request(
+            **{"code": 403, "message": "Authentication is required", "data": {}}
+        )
+        return
+
+    with Session() as session:
+        user = session.get(User, handler.username)
+        document = session.get(Document, document_id)
+
+        if user is None or not user.is_token_valid(handler.token):
+            handler.conclude_request(403, {}, "Invalid user or token")
+            return
+
+        if not document:
+            handler.conclude_request(404, {}, "Document not found")
+            return
+
+        if not document.check_access_requirements(user, access_type=0):
+            handler.conclude_request(403, {}, "Permission denied")
+            return
+
+        info_code = 0
+        ### generate access_rules text
+        access_rules = []
+        if "view_access_rules" in user.all_permissions:
+            for each_rule in document.access_rules:
+                access_rules.append(
+                    {
+                        "rule_id": each_rule.id,
+                        "rule_data": each_rule.rule_data,
+                        "access_type": each_rule.access_type,
+                    }
+                )
+        else:
+            info_code = 1  # 无权访问文档的权限
+
+        data = {
+            "document_id": document.id,
+            "parent_id": document.folder_id,
+            "title": document.title,
+            "size": document.get_latest_revision().file.size,
+            "last_modified": document.get_latest_revision().created_time,
+            "access_rules": access_rules,
+            "info_code": info_code,
+        }
+
+        handler.conclude_request(200, data, "Document info retrieved successfully")
 
 
 def handle_get_document(handler: ConnectionHandler):
@@ -431,3 +500,53 @@ def handle_upload_file(handler: ConnectionHandler):
 
     ### 服务器需要发送一次响应
     handler.receive_file(task_id)
+
+
+def handle_set_document_rules(handler: ConnectionHandler):
+    """
+    Handles the document access rules setting request from the client.
+    """
+    document_id = handler.data.get("document_id")
+    access_rules_to_apply = handler.data.get("access_rules")
+
+    if not handler.username:
+        handler.conclude_request(
+            **{"code": 403, "message": "Authentication is required", "data": {}}
+        )
+        return
+
+    if not document_id or not access_rules_to_apply:
+        handler.conclude_request(
+            **{
+                "code": 400,
+                "message": "Document_id and access_rules are required",
+                "data": {},
+            }
+        )
+        return
+
+    with Session() as session:
+        user = session.get(User, handler.username)
+        if not user or not user.is_token_valid(handler.token):
+            handler.conclude_request(
+                **{"code": 403, "message": "Invalid user or token", "data": {}}
+            )
+            return
+
+        document = session.get(Document, document_id)
+
+        if not document:
+            handler.conclude_request(404, {}, "Document not found")
+            return
+
+        if not document.check_access_requirements(user, access_type=2):
+            handler.conclude_request(403, {}, "Access denied to the document")
+            return
+
+        if apply_document_access_rules(document.id, access_rules_to_apply, user):
+            handler.conclude_request(200, {}, "Set access rules successfully")
+        else:
+            session.rollback()
+            handler.conclude_request(
+                403, {}, "Set access rules failed: permission denied"
+            )

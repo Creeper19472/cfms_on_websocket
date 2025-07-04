@@ -108,7 +108,9 @@ def handle_list_directory(handler: ConnectionHandler):
                             "id": document.id,
                             "title": document.title,
                             "created_time": document.created_time,
-                            "last_modified": (last_revision:=document.get_latest_revision()).created_time,
+                            "last_modified": (
+                                last_revision := document.get_latest_revision()
+                            ).created_time,
                             "sha256": last_revision.file.sha256,
                             "size": last_revision.file.size,
                         }
@@ -118,7 +120,7 @@ def handle_list_directory(handler: ConnectionHandler):
                         {
                             "id": child.id,
                             "name": child.name,
-                            "last_modified": child.last_modified,
+                            "created_time": child.created_time,
                         }
                         for child in children
                     ],
@@ -127,6 +129,81 @@ def handle_list_directory(handler: ConnectionHandler):
 
         # Send the response back to the client
         handler.conclude_request(**response)
+    except Exception as e:
+        handler.logger.error(f"Error detected when handling requests.", exc_info=True)
+        handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
+
+
+def handle_get_directory_info(handler: ConnectionHandler):
+    """
+    Handles directory information requests.
+    This function processes a directory information request by retrieving information about the specified directory.
+    It sends an appropriate response back to the client, indicating success or failure.
+    Args:
+        handler (ConnectionHandler): The connection handler containing request data and methods for responding.
+    Response Codes:
+        200 - Directory info successful, returns directory info in the response data.
+        400 - Invalid request.
+        403 - Invalid user or token.
+        404 - Directory not found.
+        500 - Internal server error, with the exception message.
+    """
+    try:
+        directory_id = handler.data.get("directory_id")
+
+        if not directory_id:
+            handler.conclude_request(400, {}, "Directory ID is required")
+            return
+
+        if not handler.username:
+            handler.conclude_request(
+                **{"code": 403, "message": "Authentication is required", "data": {}}
+            )
+            return
+
+        with Session() as session:
+            user = session.get(User, handler.username)
+            directory = session.get(Folder, directory_id)
+
+            if user is None or not user.is_token_valid(handler.token):
+                handler.conclude_request(403, {}, "Invalid user or token")
+                return
+
+            if not directory:
+                handler.conclude_request(404, {}, "Directory not found")
+                return
+
+            if not directory.check_access_requirements(user, access_type=0):
+                handler.conclude_request(403, {}, "Permission denied")
+                return
+
+            info_code = 0
+            ### generate access_rules text
+            access_rules = []
+            if "view_access_rules" in user.all_permissions:
+                for each_rule in directory.access_rules:
+                    access_rules.append(
+                        {
+                            "rule_id": each_rule.id,
+                            "rule_data": each_rule.rule_data,
+                            "access_type": each_rule.access_type,
+                        }
+                    )
+            else:
+                info_code = 1  # 无权访问目录
+
+            data = {
+                "directory_id": directory.id,
+                "count_of_child": directory.count_of_child,
+                "parent_id": directory.parent_id,
+                "name": directory.name,
+                "created_time": directory.created_time,
+                "access_rules": access_rules,
+                "info_code": info_code,
+            }
+
+            handler.conclude_request(200, data, "Directory info retrieved successfully")
+
     except Exception as e:
         handler.logger.error(f"Error detected when handling requests.", exc_info=True)
         handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
@@ -204,7 +281,7 @@ def handle_create_directory(handler: ConnectionHandler):
                     {
                         "id": folder.id,
                         "name": folder.name,
-                        "last_modified": folder.last_modified,
+                        "last_modified": folder.created_time,
                     },
                     "Directory created successfully",
                 )
