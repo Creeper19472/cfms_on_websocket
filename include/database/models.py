@@ -138,20 +138,14 @@ class User(Base):
             if hasattr(membership, "group_name"):
                 with Session() as session:
                     group = session.get(UserGroup, membership.group_name)
-                    if group and group.permissions:
-                        for perm, info in group.permissions.items():
-                            if info.get("start_time", 0) > now:
-                                continue
-                            if (
-                                info.get("end_time") is not None
-                                and info["end_time"] < now
-                            ):
-                                continue
-                            (
-                                group_granted_perms
-                                if info.get("granted", True)
-                                else group_revoked_perms
-                            ).add(perm)
+                    if group:
+                        for perm in group.permissions:
+                            if (perm.end_time is None or perm.end_time >= now):
+                                if perm.granted:
+                                    group_granted_perms.add(perm.permission)
+                                else:
+                                    group_revoked_perms.add(perm.permission)
+
             else:
                 raise ValueError(
                     f"UserMembership {membership.id} does not have a valid group_name attribute."
@@ -193,17 +187,6 @@ class UserPermission(Base):
         )
 
 
-# # 监听权限添加事件，若权限被剥夺或已过期则不添加
-# @event.listens_for(User.rights, "append", retval=True)
-# def filter_revoked_or_expired_permission(user, permission, initiator):
-#     now = time.time()
-#     if not permission.granted:
-#         return None  # 不添加被剥夺的权限
-#     if permission.end_time is not None and permission.end_time < now:
-#         return None  # 不添加已过期的权限
-#     return permission
-
-
 @event.listens_for(User, "load")
 def filter_permissions_on_load(target, context):
     now = time.time()
@@ -218,12 +201,6 @@ def filter_permissions_on_load(target, context):
         else:
             valid_permissions.append(perm)
     target.rights = valid_permissions
-
-
-# @event.listens_for(User.rights, "append")
-# def set_username_on_permission(user, permission, initiator):
-#     if getattr(permission, "username", None) is None:
-#         permission.username = user.username
 
 
 # 用户所属组，包括在此用户组中的持续时间
@@ -262,14 +239,39 @@ class UserGroup(Base):
     # permissions字段存储为JSON字符串，内容为权限字典
     group_display_name: Mapped[str] = mapped_column(VARCHAR(128), nullable=True)
 
-    permissions: Mapped[dict] = mapped_column(
-        JSON, nullable=False, default=dict, server_default="{}"
+    permissions: Mapped[List["UserGroupPermission"]] = relationship(
+        "UserGroupPermission", back_populates="group"
     )
 
     def __repr__(self) -> str:
         return (
             f"UserGroup(group_name={self.group_name!r}, "
             f"permissions={self.permissions!r})"
+        )
+    
+    
+# 用户组权限表，支持权限的给予/剥夺及持续时间
+class UserGroupPermission(Base):
+    __tablename__ = "group_permissions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    group_name: Mapped[str] = mapped_column(ForeignKey("user_groups.group_name"))
+    permission: Mapped[str] = mapped_column(VARCHAR(255))
+    granted: Mapped[bool] = mapped_column(
+        Boolean, default=True
+    )  # True: 给予, False: 剥夺
+    start_time: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=False, default=0.0
+    )  # 权限生效时间（时间戳）
+    end_time: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True
+    )  # 权限失效时间（时间戳）
+    group: Mapped["UserGroup"] = relationship("UserGroup", back_populates="permissions")
+
+    def __repr__(self) -> str:
+        return (
+            f"UserGroupPermission(id={self.id!r}, group_name={self.group_name!r}, "
+            f"permission={self.permission!r}, granted={self.granted!r}, "
+            f"start_time={self.start_time!r}, end_time={self.end_time!r})"
         )
 
 

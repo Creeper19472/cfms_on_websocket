@@ -209,10 +209,10 @@ class ConnectionHandler:
         }
 
         self.websocket.send(json.dumps(handshake_msg, ensure_ascii=False))
-        self.logger.info("sent handshake")
+        self.logger.info("Receiving file: handshake sent")
 
         task_info = json.loads(self.websocket.recv())
-        self.logger.info(task_info)
+        # self.logger.info(task_info)
         if task_info.get("action") != "transfer_file":
             self.logger.error("Invalid flag received for file transfer.")
             self.conclude_request(400, {}, "Invalid flag for file transfer")
@@ -243,6 +243,7 @@ class ConnectionHandler:
                 if not file.id:
                     raise ValueError(f"File path not found for file_id: {file.id}")
 
+                logger.info("Receiving file: transfer started")
                 os.makedirs(os.path.dirname(file.path), exist_ok=True)
                 with open(file.path, "wb") as f:
                     try:

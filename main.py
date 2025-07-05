@@ -31,7 +31,7 @@ from websockets.sync.server import serve
 from include.connection_handler import handle_connection
 from include.function.log import getCustomLogger
 
-CORE_VERSION = Version("0.0.1.250704_alpha")
+CORE_VERSION = Version("0.0.1.250705_alpha")
 
 
 def server_init():
@@ -48,14 +48,29 @@ def server_init():
 
     Base.metadata.create_all(engine)
 
-    with Session() as session:
-        # 创建 sysop 用户组，并赋予 shutdown 权限
-        sysop_group = UserGroup(group_name="sysop")
-        sysop_group.permissions = {
-            "shutdown": {"granted": True, "start_time": 0, "end_time": None},
-        }
-        session.add(sysop_group)
+    from include.function.group import create_group
 
+    create_group(group_name="user", permissions=[])
+    create_group(
+        group_name="sysop",
+        permissions=[
+            {"permission": "shutdown", "start_time": 0, "end_time": None},
+            {"permission": "super_create_document", "start_time": 0, "end_time": None},
+            {"permission": "create_document", "start_time": 0, "end_time": None},
+            {"permission": "create_directory", "start_time": 0, "end_time": None},
+            {"permission": "delete_document", "start_time": 0, "end_time": None},
+            {"permission": "rename_document", "start_time": 0, "end_time": None},
+            {"permission": "delete_directory", "start_time": 0, "end_time": None},
+            {"permission": "rename_directory", "start_time": 0, "end_time": None},
+            {"permission": "manage_system", "start_time": 0, "end_time": None},
+            {"permission": "create_user", "start_time": 0, "end_time": None},
+            {"permission": "delete_user", "start_time": 0, "end_time": None},
+            {"permission": "rename_user", "start_time": 0, "end_time": None},
+            {"permission": "get_user_info", "start_time": 0, "end_time": None},
+            {"permission": "view_access_rules", "start_time": 0, "end_time": None},
+        ],
+    )
+    with Session() as session:
         init_file = File(id="init", path="./content/hello")
         session.add(init_file)
 
@@ -77,76 +92,15 @@ def server_init():
         username="admin",
         password=password,
         nickname="管理员",
-        permissions=[
-            {
-                "permission": "super_create_document",
-                "start_time": 0,
-                "end_time": None,
-            },
-            {
-                "permission": "create_document",
-                "start_time": 0,
-                "end_time": None,
-            },
-            {
-                "permission": "create_directory",
-                "start_time": 0,
-                "end_time": None,
-            },
-            {
-                "permission": "delete_document",
-                "start_time": 0,
-                "end_time": None,
-            },
-            {
-                "permission": "rename_document",
-                "start_time": 0,
-                "end_time": None,
-            },
-            {
-                "permission": "delete_directory",
-                "start_time": 0,
-                "end_time": None,
-            },
-            {
-                "permission": "rename_directory",
-                "start_time": 0,
-                "end_time": None,
-            },
-            {
-                "permission": "manage_system",
-                "start_time": 0,
-                "end_time": None,
-            },
-            {
-                "permission": "create_user",
-                "start_time": 0,
-                "end_time": None,
-            },
-            {
-                "permission": "delete_user",
-                "start_time": 0,
-                "end_time": None,
-            },
-            {
-                "permission": "rename_user",
-                "start_time": 0,
-                "end_time": None,
-            },
-            {
-                "permission": "get_user_info",
-                "start_time": 0,
-                "end_time": None,
-            },
-            {
-                "permission": "view_access_rules",
-                "start_time": 0,
-                "end_time": None,
-            },
-        ],
+        permissions=[],
         groups=[
             {
                 "group_name": "sysop",
+                "start_time": 0,
+                "end_time": None,
+            },
+            {
+                "group_name": "user",
                 "start_time": 0,
                 "end_time": None,
             },

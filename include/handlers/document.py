@@ -122,6 +122,7 @@ def handle_get_document_info(handler: ConnectionHandler):
             "parent_id": document.folder_id,
             "title": document.title,
             "size": document.get_latest_revision().file.size,
+            "created_time": document.created_time,
             "last_modified": document.get_latest_revision().created_time,
             "access_rules": access_rules,
             "info_code": info_code,

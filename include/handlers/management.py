@@ -178,13 +178,13 @@ def handle_delete_user(handler: ConnectionHandler):
     try:
         with Session() as session:
             this_user = session.get(User, handler.username)
-            
+
             if not this_user or not this_user.is_token_valid(handler.token):
                 handler.conclude_request(
                     **{"code": 403, "message": "Invalid user or token", "data": {}}
                 )
                 return
-            
+
             if "delete_user" not in this_user.all_permissions:
                 handler.conclude_request(
                     **{
@@ -201,7 +201,7 @@ def handle_delete_user(handler: ConnectionHandler):
                     **{"code": 400, "message": "Username is required", "data": {}}
                 )
                 return
-            
+
             user_to_delete = session.get(User, user_to_delete_username)
             if not user_to_delete:
                 handler.conclude_request(
@@ -214,7 +214,7 @@ def handle_delete_user(handler: ConnectionHandler):
                     **{"code": 400, "message": "Cannot delete yourself", "data": {}}
                 )
                 return
-            
+
             # if "create_user" not in this_user.all_permissions:
             #     users_with_create_permission = session.query(User).filter(
             #         User.all_permissions.contains("create_user")
@@ -229,18 +229,18 @@ def handle_delete_user(handler: ConnectionHandler):
             #             }
             #         )
             #         return
-            
+
             session.delete(user_to_delete)
             session.commit()
-            
+
         response = {
             "code": 200,
             "message": "User deleted successfully",
             "data": {},
         }
-        
+
         handler.conclude_request(**response)
-        
+
     except Exception as e:
         handler.logger.error(f"Error detected when handling requests.", exc_info=True)
         handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
@@ -258,14 +258,17 @@ def handle_rename_user(handler: ConnectionHandler):
     try:
         with Session() as session:
             this_user = session.get(User, handler.username)
-            
+
             if not this_user or not this_user.is_token_valid(handler.token):
                 handler.conclude_request(
                     **{"code": 403, "message": "Invalid user or token", "data": {}}
                 )
                 return
-            
-            if "rename_user" not in this_user.all_permissions and target_username != this_user.username:
+
+            if (
+                "rename_user" not in this_user.all_permissions
+                and target_username != this_user.username
+            ):
                 handler.conclude_request(
                     **{
                         "code": 403,
@@ -274,27 +277,27 @@ def handle_rename_user(handler: ConnectionHandler):
                     }
                 )
                 return
-            
+
             new_nickname = handler.data.get("nickname", None)
-            
+
             user_to_rename = session.get(User, target_username)
             if not user_to_rename:
                 handler.conclude_request(
                     **{"code": 400, "message": "User does not exist", "data": {}}
                 )
                 return
-            
+
             user_to_rename.nickname = new_nickname
             session.commit()
-            
+
         response = {
             "code": 200,
             "message": "User renamed successfully",
             "data": {},
         }
-        
+
         handler.conclude_request(**response)
-        
+
     except Exception as e:
         handler.logger.error(f"Error detected when handling requests.", exc_info=True)
         handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
@@ -317,15 +320,18 @@ def handle_get_user_info(handler: ConnectionHandler):
                     **{"code": 403, "message": "Invalid user or token", "data": {}}
                 )
                 return
-            
+
             user_to_get = session.get(User, user_to_get_username)
             if not user_to_get:
                 handler.conclude_request(
                     **{"code": 404, "message": "User does not exist", "data": {}}
                 )
                 return
-            
-            if user_to_get_username != this_user.username and "get_user_info" not in this_user.all_permissions:
+
+            if (
+                user_to_get_username != this_user.username
+                and "get_user_info" not in this_user.all_permissions
+            ):
                 handler.conclude_request(
                     **{
                         "code": 403,
@@ -334,7 +340,7 @@ def handle_get_user_info(handler: ConnectionHandler):
                     }
                 )
                 return
-            
+
             user_info = {
                 "nickname": user_to_get.nickname,
                 "username": user_to_get.username,
@@ -343,11 +349,11 @@ def handle_get_user_info(handler: ConnectionHandler):
                 "last_login": user_to_get.last_login,
                 "created_time": user_to_get.created_time,
             }
-            
+
             handler.conclude_request(
                 **{"code": 200, "message": "OK", "data": user_info}
             )
-            
+
     except Exception as e:
         handler.logger.error(f"Error detected when handling requests.", exc_info=True)
         handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
