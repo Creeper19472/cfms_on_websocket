@@ -425,7 +425,7 @@ class Folder(BaseObject):  # 文档文件夹
 
     @property
     def count_of_child(self):
-        return len(self.children) + len(self.documents)
+        return len(self.children) + sum(1 for doc in self.documents if doc.active)
 
     def delete_all_children(self):
         session = object_session(self)
