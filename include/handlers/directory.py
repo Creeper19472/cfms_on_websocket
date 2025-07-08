@@ -80,7 +80,10 @@ def handle_list_directory(handler: ConnectionHandler):
                         **{"code": 404, "message": "Directory not found", "data": {}}
                     )
                     return
-                if not folder.check_access_requirements(this_user, 0):
+                if (
+                    not "super_list_directory" in this_user.all_permissions
+                    and not folder.check_access_requirements(this_user, 0)
+                ):
                     handler.conclude_request(
                         **{"code": 403, "message": "Access denied", "data": {}}
                     )

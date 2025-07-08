@@ -62,6 +62,8 @@ def server_init():
         permissions=[
             {"permission": "shutdown", "start_time": 0, "end_time": None},
             {"permission": "super_create_document", "start_time": 0, "end_time": None},
+            {"permission": "super_create_directory", "start_time": 0, "end_time": None},
+            {"permission": "super_list_directory", "start_time": 0, "end_time": None},
             {"permission": "create_document", "start_time": 0, "end_time": None},
             {"permission": "create_directory", "start_time": 0, "end_time": None},
             {"permission": "delete_document", "start_time": 0, "end_time": None},
