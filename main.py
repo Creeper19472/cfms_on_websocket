@@ -170,6 +170,7 @@ def server_init():
 
 
 def main():
+    os.makedirs("./content/logs/", exist_ok=True)
     logger = getCustomLogger("CFMS", filepath="./content/logs/core.log")
 
     if not os.path.exists("./init"):
