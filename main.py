@@ -21,6 +21,11 @@ Constants:
 """
 
 import os
+
+# fix
+os.makedirs("./content/logs/", exist_ok=True)
+os.makedirs("./content/ssl/", exist_ok=True)
+
 import ssl
 from include.conf_loader import global_config
 from include.database.handler import engine, Base
@@ -32,7 +37,7 @@ from include.connection_handler import handle_connection
 from include.function.log import getCustomLogger
 import socket
 
-CORE_VERSION = Version("0.0.1.250705_alpha")
+CORE_VERSION = Version("0.0.1.250708_alpha")
 
 
 def server_init():
@@ -170,7 +175,6 @@ def server_init():
 
 
 def main():
-    os.makedirs("./content/logs/", exist_ok=True)
     logger = getCustomLogger("CFMS", filepath="./content/logs/core.log")
 
     if not os.path.exists("./init"):

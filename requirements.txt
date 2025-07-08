@@ -3,3 +3,4 @@ sqlalchemy
 tomlkit
 websockets
 pycryptodome
+cryptography
