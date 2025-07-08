@@ -30,6 +30,7 @@ from include.database.models import User, UserGroup, File, Document, DocumentRev
 from websockets.sync.server import serve
 from include.connection_handler import handle_connection
 from include.function.log import getCustomLogger
+import socket
 
 CORE_VERSION = Version("0.0.1.250705_alpha")
 
@@ -188,10 +189,12 @@ def main():
         global_config["server"]["host"],
         global_config["server"]["port"],
         ssl=ssl_context,
+        family=socket.AF_INET6,
+        dualstack_ipv6=global_config["server"]["dualstack_ipv6"]
     ) as server:
         logger.info(
             f"CFMS WebSocket server started at wss://{global_config['server']['host']}:{global_config['server']['port']}"
-        )
+        ) # TODO
         server.serve_forever()
 
 

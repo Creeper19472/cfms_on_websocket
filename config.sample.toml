@@ -3,6 +3,7 @@ debug = false
 [server]
 host = "127.0.0.1"
 port = 5104
+dualstack_ipv6 = true
 secret_key = ""
 ssl_keyfile = "./content/ssl/key.pem"
 ssl_certfile = "./content/ssl/cert.pem"
