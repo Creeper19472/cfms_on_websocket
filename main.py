@@ -75,7 +75,11 @@ def server_init():
             {"permission": "delete_user", "start_time": 0, "end_time": None},
             {"permission": "rename_user", "start_time": 0, "end_time": None},
             {"permission": "get_user_info", "start_time": 0, "end_time": None},
+            {"permission": "change_user_groups", "start_time": 0, "end_time": None},
             {"permission": "view_access_rules", "start_time": 0, "end_time": None},
+            {"permission": "set_access_rules", "start_time": 0, "end_time": None},
+            {"permission": "list_users", "start_time": 0, "end_time": None},
+            {"permission": "list_groups", "start_time": 0, "end_time": None},
         ],
     )
     with Session() as session:

@@ -26,13 +26,21 @@ from include.handlers.directory import (
     handle_delete_directory,
     handle_rename_directory,
 )
-from include.handlers.management import (
+from include.handlers.management.user import (
     handle_list_users,
     handle_create_user,
     handle_delete_user,
     handle_rename_user,
-    handle_get_user_info
+    handle_get_user_info,
+    handle_change_user_groups
 )
+from include.handlers.management.group import (
+    handle_list_groups,
+    handle_create_group,
+    handle_delete_group,
+    handle_rename_group,
+)
+
 
 from include.function.log import getCustomLogger
 
@@ -84,6 +92,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
     available_functions = {
         "login": handle_login,
         "refresh_token": handle_refresh_token,
+        # 文档类
         "get_document": handle_get_document,
         "create_document": handle_create_document,
         "upload_document": handle_upload_document,
@@ -91,18 +100,27 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "rename_document": handle_rename_document,
         "get_document_info": handle_get_document_info,
         "set_document_rules": handle_set_document_rules,
+        # 文件类
         "download_file": handle_download_file,
         "upload_file": handle_upload_file,
+        # 目录类
         "list_directory": handle_list_directory,
         "get_directory_info": handle_get_directory_info,
         "create_directory": handle_create_directory,
         "delete_directory": handle_delete_directory,
         "rename_directory": handle_rename_directory,
+        # 用户类
         "list_users": handle_list_users,
         "create_user": handle_create_user,
         "delete_user": handle_delete_user,
         "rename_user": handle_rename_user,
         "get_user_info": handle_get_user_info,
+        "change_user_groups": handle_change_user_groups,
+        # 用户组类
+        "list_groups": handle_list_groups,
+        "create_group": handle_create_group,
+        "delete_group": handle_delete_group,
+        "rename_group": handle_rename_group,
     }
 
     if action == "echo":

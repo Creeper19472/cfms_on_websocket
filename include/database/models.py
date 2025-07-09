@@ -113,6 +113,26 @@ class User(Base):
             if (membership.start_time is None or membership.start_time <= now)
             and (membership.end_time is None or membership.end_time >= now)
         }
+    
+    @all_groups.setter
+    def all_groups(self, new_group_list: list[str]):
+        session = object_session(self)
+        if not session:
+            raise RuntimeError()
+        
+        for old_group in self.groups:
+            session.delete(old_group)
+        self.groups.clear()
+        for group_name in new_group_list:
+            membership = UserMembership(
+                user=self,
+                group_name=group_name,
+                start_time=time.time(),
+                end_time=None
+            )
+            session.add(membership)
+            self.groups.append(membership)
+        # session.commit()
 
     @property
     def all_permissions(self) -> Set[str]:
@@ -140,7 +160,7 @@ class User(Base):
                     group = session.get(UserGroup, membership.group_name)
                     if group:
                         for perm in group.permissions:
-                            if (perm.end_time is None or perm.end_time >= now):
+                            if perm.end_time is None or perm.end_time >= now:
                                 if perm.granted:
                                     group_granted_perms.add(perm.permission)
                                 else:
@@ -236,20 +256,64 @@ def filter_expired_group(user, group, initiator):
 class UserGroup(Base):
     __tablename__ = "user_groups"
     group_name: Mapped[str] = mapped_column(VARCHAR(255), primary_key=True)
-    # permissions字段存储为JSON字符串，内容为权限字典
-    group_display_name: Mapped[str] = mapped_column(VARCHAR(128), nullable=True)
+    group_display_name: Mapped[Optional[str]] = mapped_column(VARCHAR(128), nullable=True)
 
     permissions: Mapped[List["UserGroupPermission"]] = relationship(
         "UserGroupPermission", back_populates="group"
     )
+
+    @property
+    def all_permissions(self) -> Set[str]:
+        """
+        该属性的实现是对 User.all_permissions 的复制。
+        """
+
+        now = time.time()
+        # 用户组自身有效权限
+        group_granted_perms = {
+            perm.permission
+            for perm in self.permissions
+            if perm.granted and (perm.end_time is None or perm.end_time >= now)
+        }
+        # 用户组剥夺权限
+        group_revoked_perms = set()
+
+        for perm in self.permissions:
+            if perm.end_time is None or perm.end_time >= now:
+                if perm.granted:
+                    group_granted_perms.add(perm.permission)
+                else:
+                    group_revoked_perms.add(perm.permission)
+        # 合并
+        all_perms = group_granted_perms
+        # 再减去被剥夺的权限
+        return (
+            (all_perms - group_revoked_perms)
+            if (all_perms or group_revoked_perms)
+            else set()
+        )
+    
+    @property
+    def members(self) -> set[str]:
+        session = object_session(self)
+        if not session:
+            raise RuntimeError("No active object session found")
+
+        now = time.time()
+        _members = set()
+        for membership in session.query(UserMembership).filter(UserMembership.group_name == self.group_name).all():
+            if (membership.end_time is None or membership.end_time >= now):
+                _members.add(membership.username)
+
+        return _members
 
     def __repr__(self) -> str:
         return (
             f"UserGroup(group_name={self.group_name!r}, "
             f"permissions={self.permissions!r})"
         )
-    
-    
+
+
 # 用户组权限表，支持权限的给予/剥夺及持续时间
 class UserGroupPermission(Base):
     __tablename__ = "group_permissions"

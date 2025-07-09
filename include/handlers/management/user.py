@@ -15,7 +15,7 @@ def handle_list_users(handler: ConnectionHandler):
                 )
                 return
 
-            if "manage_system" not in this_user.all_permissions:
+            if "list_users" not in this_user.all_permissions:
                 handler.conclude_request(
                     **{
                         "code": 403,
@@ -205,7 +205,7 @@ def handle_delete_user(handler: ConnectionHandler):
             user_to_delete = session.get(User, user_to_delete_username)
             if not user_to_delete:
                 handler.conclude_request(
-                    **{"code": 400, "message": "User does not exist", "data": {}}
+                    **{"code": 404, "message": "User does not exist", "data": {}}
                 )
                 return
 
@@ -354,6 +354,63 @@ def handle_get_user_info(handler: ConnectionHandler):
                 **{"code": 200, "message": "OK", "data": user_info}
             )
 
+    except Exception as e:
+        handler.logger.error(f"Error detected when handling requests.", exc_info=True)
+        handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
+
+
+def handle_change_user_groups(handler: ConnectionHandler):
+    try:
+        with Session() as session:
+            this_user = session.get(User, handler.username)
+            if not this_user or not this_user.is_token_valid(handler.token):
+                handler.conclude_request(
+                    **{"code": 403, "message": "Invalid user or token", "data": {}}
+                )
+                return
+            
+            if "change_user_groups" not in this_user.all_permissions:
+                handler.conclude_request(
+                    **{
+                        "code": 403,
+                        "message": "You do not have permission to change user groups",
+                        "data": {},
+                    }
+                )
+                return
+            
+            user_to_change_username = handler.data["username"]
+            if not user_to_change_username:
+                handler.conclude_request(
+                    **{"code": 400, "message": "Username is required", "data": {}}
+                )
+                return
+            
+            user_to_change = session.get(User, user_to_change_username)
+            if not user_to_change:
+                handler.conclude_request(
+                    **{"code": 404, "message": "User does not exist", "data": {}}
+                )
+                return
+            
+            new_user_groups: list[str] = handler.data.get("groups", [])
+            if not new_user_groups:
+                handler.conclude_request(
+                    **{"code": 400, "message": "Groups are required", "data": {}}
+                )
+                return
+            
+            user_to_change.all_groups = new_user_groups
+            session.commit()
+            
+        response = {
+            "code": 200,
+            "message": "User groups changed successfully",
+            "data": {},
+        }
+        
+        handler.conclude_request(**response)
+        
     except Exception as e:
         handler.logger.error(f"Error detected when handling requests.", exc_info=True)
         handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})

@@ -10,7 +10,7 @@ from websockets.typing import Data
 
 from include.conf_loader import global_config
 from include.database.handler import Session
-from include.database.models import File, FileTask
+from include.database.models import File, FileTask, User
 from include.function.log import getCustomLogger
 
 from Crypto.Cipher import AES
@@ -62,6 +62,23 @@ class ConnectionHandler:
         self.logger.debug(f"Sending response: {response_json}")
 
         self.websocket.send(response_json)
+        
+    # def authenticate_user(self, user: User|None) -> bool:
+    #     """
+    #     Authenticates the user by checking the user authentication status.
+    #     Returns:
+    #         bool: True if the user is authenticated, False otherwise. If the user is not authenticated,
+    #               it concludes the request with a 403 status code and an error message indicating
+    #               an invalid user or token.
+    #     """
+
+    #     if not user or not user.is_token_valid(self.token):
+    #         self.conclude_request(
+    #             **{"code": 403, "message": "Invalid user or token", "data": {}}
+    #         )
+    #         return False
+        
+    #     return True
 
     def send_file(self, task_id: str) -> None:
         """
