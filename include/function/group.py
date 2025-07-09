@@ -8,7 +8,7 @@ def create_group(**kwargs) -> None:
     with Session() as session:
         group = UserGroup(
             group_name=kwargs["group_name"],
-            group_display_name=kwargs.get("group_display_name", None),
+            group_display_name=kwargs.get("display_name", None),
         )
         for i in kwargs.get("permissions", []):
             permission = UserGroupPermission(
