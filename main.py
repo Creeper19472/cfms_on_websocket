@@ -37,7 +37,7 @@ from include.connection_handler import handle_connection
 from include.function.log import getCustomLogger
 import socket
 
-CORE_VERSION = Version("0.0.1.250708_alpha")
+CORE_VERSION = Version("0.0.1.250709_alpha")
 
 
 def server_init():

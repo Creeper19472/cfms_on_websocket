@@ -230,6 +230,9 @@ def handle_delete_user(handler: ConnectionHandler):
             #         )
             #         return
 
+            for membership in user_to_delete.groups:
+                session.delete(membership)
+
             session.delete(user_to_delete)
             session.commit()
 
@@ -394,11 +397,6 @@ def handle_change_user_groups(handler: ConnectionHandler):
                 return
             
             new_user_groups: list[str] = handler.data.get("groups", [])
-            if not new_user_groups:
-                handler.conclude_request(
-                    **{"code": 400, "message": "Groups are required", "data": {}}
-                )
-                return
             
             user_to_change.all_groups = new_user_groups
             session.commit()
