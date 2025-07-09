@@ -56,7 +56,12 @@ def server_init():
 
     from include.function.group import create_group
 
-    create_group(group_name="user", permissions=[])
+    create_group(
+        group_name="user",
+        permissions=[
+            {"permission": "set_passwd", "start_time": 0, "end_time": None},
+        ],
+    )
     create_group(
         group_name="sysop",
         permissions=[
@@ -76,10 +81,14 @@ def server_init():
             {"permission": "rename_user", "start_time": 0, "end_time": None},
             {"permission": "get_user_info", "start_time": 0, "end_time": None},
             {"permission": "change_user_groups", "start_time": 0, "end_time": None},
+            {"permission": "super_set_passwd", "start_time": 0, "end_time": None},
             {"permission": "view_access_rules", "start_time": 0, "end_time": None},
             {"permission": "set_access_rules", "start_time": 0, "end_time": None},
             {"permission": "list_users", "start_time": 0, "end_time": None},
             {"permission": "list_groups", "start_time": 0, "end_time": None},
+            {"permission": "create_group", "start_time": 0, "end_time": None},
+            {"permission": "delete_group", "start_time": 0, "end_time": None},
+            {"permission": "rename_group", "start_time": 0, "end_time": None}
         ],
     )
     with Session() as session:
@@ -201,11 +210,11 @@ def main():
         global_config["server"]["port"],
         ssl=ssl_context,
         family=socket.AF_INET6,
-        dualstack_ipv6=global_config["server"]["dualstack_ipv6"]
+        dualstack_ipv6=global_config["server"]["dualstack_ipv6"],
     ) as server:
         logger.info(
             f"CFMS WebSocket server started at wss://{global_config['server']['host']}:{global_config['server']['port']}"
-        ) # TODO
+        )  # TODO
         server.serve_forever()
 
 

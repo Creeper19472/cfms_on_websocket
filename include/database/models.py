@@ -32,6 +32,12 @@ class User(Base):
     last_login: Mapped[Optional[float]] = mapped_column(Float)
     created_time: Mapped[Optional[float]] = mapped_column(Float, nullable=False)
 
+    # 这是对应每个用户的 secret_key. 每次更改密码时将重新生成，如果该属性不为空，则在验证 token 时使用此
+    # 密钥，否则，使用从 config.toml 加载的全局密钥。
+    secret_key: Mapped[str] = mapped_column(
+        VARCHAR(32), default=secrets.token_hex(32), nullable=True
+    )
+
     groups: Mapped[List["UserMembership"]] = relationship(
         "UserMembership", back_populates="user"
     )
@@ -52,7 +58,13 @@ class User(Base):
         if password_hash == self.pass_hash:
             payload = {"username": self.username, "exp": time.time() + 3600}
             token = jwt.encode(
-                payload, global_config["server"]["secret_key"], algorithm="HS256"
+                payload,
+                (
+                    global_config["server"]["secret_key"]
+                    if not self.secret_key
+                    else self.secret_key
+                ),
+                algorithm="HS256",
             )
             session = object_session(self)
             if session is not None:
@@ -69,7 +81,13 @@ class User(Base):
         """
         try:
             payload = jwt.decode(
-                token, global_config["server"]["secret_key"], algorithms=["HS256"]
+                token,
+                (
+                    global_config["server"]["secret_key"]
+                    if not self.secret_key
+                    else self.secret_key
+                ),
+                algorithms=["HS256"],
             )
             return payload.get("username") == self.username
         except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
@@ -84,7 +102,13 @@ class User(Base):
             "exp": time.time() + 3600,  # 令牌有效期为1小时
         }
         token = jwt.encode(
-            payload, global_config["server"]["secret_key"], algorithm="HS256"
+            payload,
+            (
+                global_config["server"]["secret_key"]
+                if not self.secret_key
+                else self.secret_key
+            ),
+            algorithm="HS256",
         )
         return token
 
@@ -95,6 +119,9 @@ class User(Base):
         self.salt = os.urandom(16).hex()
         salted = plain_password + self.salt
         self.pass_hash = hashlib.sha256(salted.encode("utf-8")).hexdigest()
+
+        self.secret_key = os.urandom(64).hex()  # int/2
+
         # 写入数据库
         session = object_session(self)
         if session is not None:
@@ -113,22 +140,19 @@ class User(Base):
             if (membership.start_time is None or membership.start_time <= now)
             and (membership.end_time is None or membership.end_time >= now)
         }
-    
+
     @all_groups.setter
     def all_groups(self, new_group_list: list[str]):
         session = object_session(self)
         if not session:
             raise RuntimeError()
-        
+
         for old_group in self.groups:
             session.delete(old_group)
         self.groups.clear()
         for group_name in new_group_list:
             membership = UserMembership(
-                user=self,
-                group_name=group_name,
-                start_time=time.time(),
-                end_time=None
+                user=self, group_name=group_name, start_time=time.time(), end_time=None
             )
             session.add(membership)
             self.groups.append(membership)
@@ -256,7 +280,9 @@ def filter_expired_group(user, group, initiator):
 class UserGroup(Base):
     __tablename__ = "user_groups"
     group_name: Mapped[str] = mapped_column(VARCHAR(255), primary_key=True)
-    group_display_name: Mapped[Optional[str]] = mapped_column(VARCHAR(128), nullable=True)
+    group_display_name: Mapped[Optional[str]] = mapped_column(
+        VARCHAR(128), nullable=True
+    )
 
     permissions: Mapped[List["UserGroupPermission"]] = relationship(
         "UserGroupPermission", back_populates="group"
@@ -292,7 +318,7 @@ class UserGroup(Base):
             if (all_perms or group_revoked_perms)
             else set()
         )
-    
+
     @property
     def members(self) -> set[str]:
         session = object_session(self)
@@ -301,8 +327,12 @@ class UserGroup(Base):
 
         now = time.time()
         _members = set()
-        for membership in session.query(UserMembership).filter(UserMembership.group_name == self.group_name).all():
-            if (membership.end_time is None or membership.end_time >= now):
+        for membership in (
+            session.query(UserMembership)
+            .filter(UserMembership.group_name == self.group_name)
+            .all()
+        ):
+            if membership.end_time is None or membership.end_time >= now:
                 _members.add(membership.username)
 
         return _members

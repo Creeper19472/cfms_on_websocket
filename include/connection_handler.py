@@ -32,7 +32,8 @@ from include.handlers.management.user import (
     handle_delete_user,
     handle_rename_user,
     handle_get_user_info,
-    handle_change_user_groups
+    handle_change_user_groups,
+    handle_set_passwd
 )
 from include.handlers.management.group import (
     handle_list_groups,
@@ -116,6 +117,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "rename_user": handle_rename_user,
         "get_user_info": handle_get_user_info,
         "change_user_groups": handle_change_user_groups,
+        "set_passwd": handle_set_passwd,
         # 用户组类
         "list_groups": handle_list_groups,
         "create_group": handle_create_group,

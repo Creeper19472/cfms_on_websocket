@@ -371,7 +371,7 @@ def handle_change_user_groups(handler: ConnectionHandler):
                     **{"code": 403, "message": "Invalid user or token", "data": {}}
                 )
                 return
-            
+
             if "change_user_groups" not in this_user.all_permissions:
                 handler.conclude_request(
                     **{
@@ -381,34 +381,138 @@ def handle_change_user_groups(handler: ConnectionHandler):
                     }
                 )
                 return
-            
+
             user_to_change_username = handler.data["username"]
             if not user_to_change_username:
                 handler.conclude_request(
                     **{"code": 400, "message": "Username is required", "data": {}}
                 )
                 return
-            
+
             user_to_change = session.get(User, user_to_change_username)
             if not user_to_change:
                 handler.conclude_request(
                     **{"code": 404, "message": "User does not exist", "data": {}}
                 )
                 return
-            
+
             new_user_groups: list[str] = handler.data.get("groups", [])
-            
+
             user_to_change.all_groups = new_user_groups
             session.commit()
-            
+
         response = {
             "code": 200,
             "message": "User groups changed successfully",
             "data": {},
         }
-        
+
         handler.conclude_request(**response)
-        
+
+    except Exception as e:
+        handler.logger.error(f"Error detected when handling requests.", exc_info=True)
+        handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
+
+
+def handle_set_passwd(handler: ConnectionHandler):
+    try:
+        with Session() as session:
+            operator_username = handler.username
+            token = handler.data.get("token", None)
+
+            target_username = handler.data.get("username", None)
+            old_passwd = handler.data.get("old_passwd", None)
+            new_passwd = handler.data.get("new_passwd", None)
+
+            if not target_username:
+                handler.conclude_request(
+                    **{"code": 400, "message": "Username is required", "data": {}}
+                )
+                return
+            if not new_passwd:
+                handler.conclude_request(
+                    **{"code": 400, "message": "New password is required", "data": {}}
+                )
+                return
+
+            user = session.get(User, target_username)
+            if not user:
+                handler.conclude_request(
+                    **{"code": 401, "message": "Invalid credentials", "data": {}}
+                )
+                return
+
+            # 初始化操作员用户，如果没有指定 operator, 则以目标用户充任
+            if operator_username:
+                if not token:
+                    handler.conclude_request(
+                        **{
+                            "code": 400,
+                            "message": "Given an operator, token is required",
+                            "data": {},
+                        }
+                    )
+                    return
+
+                operator_user = session.get(User, operator_username)
+                if not operator_user or not operator_user.is_token_valid(token):
+                    handler.conclude_request(
+                        **{"code": 401, "message": "Invalid user or token", "data": {}}
+                    )
+                    return
+            else:  # 这条路径下的 operator_user 应该永远也不会被调用。
+                operator_user = None
+
+            if old_passwd:  # 如果指定了旧密码，说明是用户更改自己的密码
+                if not user.authenticate_and_create_token(old_passwd):
+                    handler.conclude_request(
+                        **{
+                            "code": 401,
+                            "message": "Invalid credentials",
+                            "data": {},
+                        }
+                    )
+                    return
+                if {"set_passwd", "super_set_passwd"} & user.all_permissions:
+                    handler.conclude_request(
+                        **{
+                            "code": 403,
+                            "message": "You do not have permission to change your own password",
+                            "data": {},
+                        }
+                    )
+                    return
+            else:  # 用户更改其他用户的密码
+                if not operator_user:
+                    handler.conclude_request(
+                        **{
+                            "code": 400,
+                            "message": "Operator is required when setting other user password",
+                            "data": {},
+                        }
+                    )
+                    return
+                if not "super_set_passwd" in operator_user.all_permissions:
+                    handler.conclude_request(
+                        **{
+                            "code": 403,
+                            "message": "You do not have permission to set user password",
+                            "data": {},
+                        }
+                    )
+                    return
+
+            user.set_password(new_passwd)
+            # session.commit()
+
+        response = {
+            "code": 200,
+            "message": "Password set successfully",
+            "data": {},
+        }
+
+        handler.conclude_request(**response)
+
     except Exception as e:
         handler.logger.error(f"Error detected when handling requests.", exc_info=True)
         handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
