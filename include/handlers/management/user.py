@@ -473,7 +473,7 @@ def handle_set_passwd(handler: ConnectionHandler):
                         }
                     )
                     return
-                if {"set_passwd", "super_set_passwd"} & user.all_permissions:
+                if not ({"set_passwd", "super_set_passwd"} & user.all_permissions):
                     handler.conclude_request(
                         **{
                             "code": 403,
