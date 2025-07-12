@@ -46,6 +46,7 @@ def handle_login(handler: ConnectionHandler):
                         "message": "Login successful",
                         "data": {
                             "token": token,
+                            "nickname": user.nickname,
                             "permissions": list(user.all_permissions),
                             "groups": list(user.all_groups),
                         },
