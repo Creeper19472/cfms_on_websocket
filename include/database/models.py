@@ -330,7 +330,7 @@ class UserGroup(Base):
         self.permissions.clear()
         for new_permission in new_permission_list:
             permission = UserGroupPermission(
-                user=self,
+                group=self,
                 group_name=new_permission,
                 start_time=time.time(),
                 end_time=None,

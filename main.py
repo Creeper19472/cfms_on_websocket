@@ -89,7 +89,8 @@ def server_init():
             {"permission": "list_groups", "start_time": 0, "end_time": None},
             {"permission": "create_group", "start_time": 0, "end_time": None},
             {"permission": "delete_group", "start_time": 0, "end_time": None},
-            {"permission": "rename_group", "start_time": 0, "end_time": None}
+            {"permission": "rename_group", "start_time": 0, "end_time": None},
+            {"permission": "set_group_permissions"},
         ],
     )
     with Session() as session:
