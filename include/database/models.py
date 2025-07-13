@@ -331,7 +331,8 @@ class UserGroup(Base):
         for new_permission in new_permission_list:
             permission = UserGroupPermission(
                 group=self,
-                group_name=new_permission,
+                group_name=self.group_name,
+                permission=new_permission,
                 start_time=time.time(),
                 end_time=None,
             )
