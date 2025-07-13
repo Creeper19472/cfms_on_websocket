@@ -40,6 +40,8 @@ from include.handlers.management.group import (
     handle_create_group,
     handle_delete_group,
     handle_rename_group,
+    handle_get_group_info,
+    handle_change_group_permissions
 )
 
 
@@ -123,6 +125,8 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "create_group": handle_create_group,
         "delete_group": handle_delete_group,
         "rename_group": handle_rename_group,
+        "get_group_info": handle_get_group_info,
+        "change_group_permissions": handle_change_group_permissions
     }
 
     if action == "echo":

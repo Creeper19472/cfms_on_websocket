@@ -243,7 +243,7 @@ def handle_rename_group(handler: ConnectionHandler):  # display_name
                 )
                 return
 
-            new_display_name: str|None = handler.data.get("display_name", None)
+            new_display_name: str | None = handler.data.get("display_name", None)
             if type(new_display_name) not in (str, None):
                 handler.conclude_request(
                     **{
@@ -272,6 +272,122 @@ def handle_rename_group(handler: ConnectionHandler):  # display_name
 
         handler.conclude_request(**response)
 
+    except Exception as e:
+        handler.logger.error(f"Error detected when handling requests.", exc_info=True)
+        handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
+
+
+def handle_get_group_info(handler: ConnectionHandler):
+    try:
+        with Session() as session:
+            user = session.get(User, handler.username)  # 执行操作的用户
+
+            if not user or not user.is_token_valid(handler.token):
+                handler.conclude_request(
+                    **{"code": 403, "message": "Invalid user or token", "data": {}}
+                )
+                return
+            
+            if not handler.data["group_name"]:
+                handler.conclude_request(
+                    **{"code": 400, "message": "Group name is required", "data": {}}
+                )
+                return
+
+            if "get_group_info" not in user.all_permissions:
+                handler.conclude_request(
+                    **{
+                        "code": 403,
+                        "message": "You do not have permission to view group info",
+                        "data": {},
+                    }
+                )
+                return
+
+            group = session.get(UserGroup, handler.data["group_name"])
+            if not group:
+                handler.conclude_request(
+                    **{"code": 404, "message": "Group does not exist", "data": {}}
+                )
+                return
+
+            response = {
+                "code": 200,
+                "message": "Group info retrieved successfully",
+                "data": {
+                    "name": group.group_name,
+                    "display_name": group.group_display_name,
+                    "permissions": list(group.all_permissions),
+                    "members": list(group.members),
+                },
+            }
+
+            handler.conclude_request(**response)
+
+    except Exception as e:
+        handler.logger.error(f"Error detected when handling requests.", exc_info=True)
+        handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
+
+
+def handle_change_group_permissions(handler: ConnectionHandler):
+    try:
+        with Session() as session:
+            user = session.get(User, handler.username)
+            
+            if not user or not user.is_token_valid(handler.token):
+                handler.conclude_request(
+                    **{"code": 403, "message": "Invalid user or token", "data": {}}
+                )
+                return
+            
+            if not handler.data["group_name"]:
+                handler.conclude_request(
+                    **{"code": 400, "message": "Group name is required", "data": {}}
+                )
+                return
+            
+            if "set_group_permissions" not in user.all_permissions:
+                handler.conclude_request(
+                    **{
+                        "code": 403,
+                        "message": "You do not have permission to set group permissions",
+                        "data": {},
+                    }
+                )
+                return
+            
+            group = session.get(UserGroup, handler.data["group_name"])
+            if not group:
+                handler.conclude_request(
+                    **{"code": 404, "message": "Group does not exist", "data": {}}
+                )
+                return
+            
+            new_permissions = handler.data.get("permissions", [])
+            
+            # Check if all elements in new_permissions are of type str
+            if not all(isinstance(permission, str) for permission in new_permissions):
+                handler.conclude_request(
+                    **{
+                        "code": 400,
+                        "message": "All permissions must be of type str",
+                        "data": {},
+                    }
+                )
+                return
+
+            group.all_permissions = new_permissions
+            session.commit()
+            
+            
+        response = {
+            "code": 200,
+            "message": "Group permissions set successfully",
+            "data": {},
+        }
+        
+        handler.conclude_request(**response)
+        
     except Exception as e:
         handler.logger.error(f"Error detected when handling requests.", exc_info=True)
         handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})

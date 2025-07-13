@@ -37,7 +37,7 @@ from include.connection_handler import handle_connection
 from include.function.log import getCustomLogger
 import socket
 
-CORE_VERSION = Version("0.0.1.250712_alpha")
+CORE_VERSION = Version("0.0.1.250714_alpha")
 
 
 def server_init():
@@ -80,6 +80,7 @@ def server_init():
             {"permission": "delete_user", "start_time": 0, "end_time": None},
             {"permission": "rename_user", "start_time": 0, "end_time": None},
             {"permission": "get_user_info", "start_time": 0, "end_time": None},
+            {"permission": "get_group_info"},
             {"permission": "change_user_groups", "start_time": 0, "end_time": None},
             {"permission": "super_set_passwd", "start_time": 0, "end_time": None},
             {"permission": "view_access_rules", "start_time": 0, "end_time": None},

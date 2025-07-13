@@ -319,6 +319,25 @@ class UserGroup(Base):
             else set()
         )
 
+    @all_permissions.setter
+    def all_permissions(self, new_permission_list: list[str]):
+        session = object_session(self)
+        if not session:
+            raise RuntimeError()
+
+        for old_permission in self.permissions:
+            session.delete(old_permission)
+        self.permissions.clear()
+        for new_permission in new_permission_list:
+            permission = UserGroupPermission(
+                user=self,
+                group_name=new_permission,
+                start_time=time.time(),
+                end_time=None,
+            )
+            session.add(permission)
+            self.permissions.append(permission)
+
     @property
     def members(self) -> set[str]:
         session = object_session(self)
