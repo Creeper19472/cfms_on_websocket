@@ -287,7 +287,7 @@ def handle_get_group_info(handler: ConnectionHandler):
                     **{"code": 403, "message": "Invalid user or token", "data": {}}
                 )
                 return
-            
+
             if not handler.data["group_name"]:
                 handler.conclude_request(
                     **{"code": 400, "message": "Group name is required", "data": {}}
@@ -333,19 +333,19 @@ def handle_change_group_permissions(handler: ConnectionHandler):
     try:
         with Session() as session:
             user = session.get(User, handler.username)
-            
+
             if not user or not user.is_token_valid(handler.token):
                 handler.conclude_request(
                     **{"code": 403, "message": "Invalid user or token", "data": {}}
                 )
                 return
-            
+
             if not handler.data["group_name"]:
                 handler.conclude_request(
                     **{"code": 400, "message": "Group name is required", "data": {}}
                 )
                 return
-            
+
             if "set_group_permissions" not in user.all_permissions:
                 handler.conclude_request(
                     **{
@@ -355,16 +355,16 @@ def handle_change_group_permissions(handler: ConnectionHandler):
                     }
                 )
                 return
-            
+
             group = session.get(UserGroup, handler.data["group_name"])
             if not group:
                 handler.conclude_request(
                     **{"code": 404, "message": "Group does not exist", "data": {}}
                 )
                 return
-            
+
             new_permissions = handler.data.get("permissions", [])
-            
+
             # Check if all elements in new_permissions are of type str
             if not all(isinstance(permission, str) for permission in new_permissions):
                 handler.conclude_request(
@@ -376,18 +376,18 @@ def handle_change_group_permissions(handler: ConnectionHandler):
                 )
                 return
 
-            group.all_permissions = new_permissions
-            session.commit()
-            
-            
+            if set(new_permissions) != group.all_permissions: # 预判断，减少数据库开销
+                group.all_permissions = new_permissions
+                session.commit()
+
         response = {
             "code": 200,
             "message": "Group permissions set successfully",
             "data": {},
         }
-        
+
         handler.conclude_request(**response)
-        
+
     except Exception as e:
         handler.logger.error(f"Error detected when handling requests.", exc_info=True)
         handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})

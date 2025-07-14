@@ -1,6 +1,7 @@
 from include.classes.connection import ConnectionHandler
 from include.database.handler import Session
 from include.database.models import User, Folder, Document, FolderAccessRule
+import include.system.messages as smsg
 import time
 
 
@@ -445,3 +446,73 @@ def handle_rename_directory(handler: ConnectionHandler):
     except Exception as e:
         handler.logger.error(f"Error detected when handling requests.", exc_info=True)
         handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
+
+
+def handle_move_directory(handler: ConnectionHandler):
+    folder_id = handler.data.get("folder_id")
+    target_folder_id = handler.data.get("target_folder_id")
+
+    if not folder_id:
+        handler.conclude_request(
+            **{
+                "code": 400,
+                "message": "folder_id is required",
+                "data": {},
+            }
+        )
+        return
+
+    with Session() as session:
+        user = session.get(User, handler.username)
+        if not user or not user.is_token_valid(handler.token):
+            handler.conclude_request(
+                **{"code": 403, "message": smsg.INVALID_USER_OR_TOKEN, "data": {}}
+            )
+            return
+
+        if "move" not in user.all_permissions:
+            handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MOVE_DIRECTORY)
+            return
+
+        folder = session.get(Folder, folder_id)
+        
+        if not folder:
+            handler.conclude_request(
+                **{
+                    "code": 404,
+                    "message": smsg.SUBJECT_DIRECTORY_NOT_FOUND,
+                    "data": {},
+                }
+            )
+            return
+        
+        if not folder.check_access_requirements(user, 2):
+            handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MOVE_DIRECTORY)
+            return
+        
+        if target_folder_id:
+            target_folder = session.get(Folder, target_folder_id)
+            if not target_folder:
+                handler.conclude_request(
+                    **{
+                        "code": 404,
+                        "message": smsg.TARGET_DIRECTORY_NOT_FOUND,
+                        "data": {},
+                    }
+                )
+                return
+            
+            if not target_folder.check_access_requirements(
+                user, 1
+            ):  # 对于目标文件夹，移动可视为一种写操作
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY)
+                return
+        
+            folder.parent = target_folder
+        else:
+            # 未来添加有关根目录写入的规则
+            folder.parent = None
+
+        session.commit()
+
+    handler.conclude_request(200, {}, smsg.SUCCESS)

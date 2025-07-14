@@ -398,8 +398,9 @@ def handle_change_user_groups(handler: ConnectionHandler):
 
             new_user_groups: list[str] = handler.data.get("groups", [])
 
-            user_to_change.all_groups = new_user_groups
-            session.commit()
+            if set(new_user_groups) != user_to_change.all_groups:
+                user_to_change.all_groups = new_user_groups
+                session.commit()
 
         response = {
             "code": 200,

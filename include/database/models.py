@@ -498,15 +498,25 @@ class BaseObject(Base):
             if not each_rule:
                 continue
 
-            if access_type == 0:  # 如果要检查的是读权限
-                if each_rule.access_type != 0:
-                    continue
-            elif access_type == 1:  # 如果要检查写权限
-                if each_rule.access_type not in [0, 1]:
-                    continue
-            elif access_type == 2:  # 如果要检查管理权限
-                if each_rule.access_type not in [0, 2]:
-                    continue
+            # access_type 一览：
+            # 0 - 读
+            # 1 - 写（删除=清空数据，重命名=写文件元数据，因此都算写）
+            # 2 - 移动
+            # 3 - 管理
+
+            match access_type:
+                case 0:  # 如果要检查的是读权限
+                    if each_rule.access_type != 0:
+                        continue
+                case 1:  # 如果要检查写权限
+                    if each_rule.access_type not in [0, 1]:
+                        continue
+                case 2:
+                    if each_rule.access_type not in [0, 2]:
+                        continue
+                case 3:  # 如果要检查管理权限
+                    if each_rule.access_type not in [0, 3]:
+                        continue
 
             if not match_primary_sub_group(each_rule.rule_data):
                 return False
@@ -526,7 +536,7 @@ class Folder(BaseObject):  # 文档文件夹
     parent_id: Mapped[Optional[str]] = mapped_column(
         VARCHAR(255), ForeignKey("folders.id")
     )  # 父文件夹ID
-    parent: Mapped["Folder"] = relationship(
+    parent: Mapped[Optional["Folder"]] = relationship(
         "Folder", back_populates="children", remote_side=[id]
     )
     children: Mapped[List["Folder"]] = relationship("Folder", back_populates="parent")
@@ -575,7 +585,7 @@ class Document(BaseObject):
     folder_id: Mapped[Optional[str]] = mapped_column(
         VARCHAR(255), ForeignKey("folders.id"), nullable=True
     )  # 文档所属文件夹ID
-    folder: Mapped["Folder"] = relationship("Folder", back_populates="documents")
+    folder: Mapped[Optional["Folder"]] = relationship("Folder", back_populates="documents")
 
     # 每个文档有多个访问规则（AccessRule对象），以JSON格式存储规则数据
     access_rules: Mapped[List["DocumentAccessRule"]] = relationship(

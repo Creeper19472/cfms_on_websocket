@@ -18,6 +18,7 @@ from include.handlers.document import (
     handle_rename_document,
     handle_upload_file,
     handle_set_document_rules,
+    handle_move_document
 )
 from include.handlers.directory import (
     handle_list_directory,
@@ -25,6 +26,7 @@ from include.handlers.directory import (
     handle_create_directory,
     handle_delete_directory,
     handle_rename_directory,
+    handle_move_directory
 )
 from include.handlers.management.user import (
     handle_list_users,
@@ -101,6 +103,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "upload_document": handle_upload_document,
         "delete_document": handle_delete_document,
         "rename_document": handle_rename_document,
+        "move_document": handle_move_document,
         "get_document_info": handle_get_document_info,
         "set_document_rules": handle_set_document_rules,
         # 文件类
@@ -112,6 +115,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "create_directory": handle_create_directory,
         "delete_directory": handle_delete_directory,
         "rename_directory": handle_rename_directory,
+        "move_directory": handle_move_directory,
         # 用户类
         "list_users": handle_list_users,
         "create_user": handle_create_user,

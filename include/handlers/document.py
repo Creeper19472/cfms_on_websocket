@@ -12,6 +12,7 @@ from include.database.models import (
     FileTask,
     NoActiveRevisionsError,
 )
+import include.system.messages as smsg
 import time
 
 __all__ = [
@@ -544,7 +545,7 @@ def handle_set_document_rules(handler: ConnectionHandler):
             handler.conclude_request(403, {}, "Access denied to set access rules")
             return
 
-        if not document.check_access_requirements(user, access_type=2):
+        if not document.check_access_requirements(user, access_type=3):
             handler.conclude_request(403, {}, "Access denied to the document")
             return
 
@@ -555,3 +556,71 @@ def handle_set_document_rules(handler: ConnectionHandler):
             handler.conclude_request(
                 403, {}, "Set access rules failed: permission denied"
             )
+
+
+def handle_move_document(handler: ConnectionHandler):
+    document_id = handler.data.get("document_id")
+    target_folder_id = handler.data.get("target_folder_id")
+
+    if not document_id:
+        handler.conclude_request(
+            **{
+                "code": 400,
+                "message": "Document_id is required",
+                "data": {},
+            }
+        )
+        return
+
+    with Session() as session:
+        user = session.get(User, handler.username)
+        if not user or not user.is_token_valid(handler.token):
+            handler.conclude_request(
+                **{"code": 403, "message": smsg.INVALID_USER_OR_TOKEN, "data": {}}
+            )
+            return
+
+        if "move" not in user.all_permissions:
+            handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MOVE_DOCUMENT)
+            return
+
+        document = session.get(Document, document_id)
+        if not document:
+            handler.conclude_request(
+                **{
+                    "code": 404,
+                    "message": smsg.TARGET_DOCUMENT_NOT_FOUND,
+                    "data": {},
+                }
+            )
+            return
+
+        if not document.check_access_requirements(user, 2):
+            handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MOVE_DOCUMENT)
+            return
+
+        if target_folder_id:
+            target_folder = session.get(Folder, target_folder_id)
+            if not target_folder:
+                handler.conclude_request(
+                    **{
+                        "code": 404,
+                        "message": smsg.TARGET_DIRECTORY_NOT_FOUND,
+                        "data": {},
+                    }
+                )
+                return
+
+            if not target_folder.check_access_requirements(
+                user, 1
+            ):  # 对于目标文件夹，移动可视为一种写操作
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY)
+                return
+
+            document.folder = target_folder
+        else:
+            document.folder = None
+
+        session.commit()
+
+    handler.conclude_request(200, {}, smsg.SUCCESS)

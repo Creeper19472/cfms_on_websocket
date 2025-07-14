@@ -65,6 +65,7 @@ def server_init():
     create_group(
         group_name="sysop",
         permissions=[
+            {"permission": "move"},
             {"permission": "shutdown", "start_time": 0, "end_time": None},
             {"permission": "super_create_document", "start_time": 0, "end_time": None},
             {"permission": "super_create_directory", "start_time": 0, "end_time": None},
