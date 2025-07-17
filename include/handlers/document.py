@@ -571,6 +571,12 @@ def handle_move_document(handler: ConnectionHandler):
             }
         )
         return
+    
+    if not handler.username or not handler.token:
+        handler.conclude_request(
+            **{"code": 403, "message": smsg.MISSING_USERNAME_OR_TOKEN, "data": {}}
+        )
+        return
 
     with Session() as session:
         user = session.get(User, handler.username)
@@ -617,9 +623,9 @@ def handle_move_document(handler: ConnectionHandler):
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY)
                 return
 
-            document.folder = target_folder
+            document.folder_id = target_folder_id
         else:
-            document.folder = None
+            document.folder_id = None
 
         session.commit()
 

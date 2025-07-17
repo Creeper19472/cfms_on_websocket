@@ -12,6 +12,8 @@ TARGET_OBJECT_NOT_FOUND = _("Target object not found")
 TARGET_DIRECTORY_NOT_FOUND = _("Target directory not found")
 TARGET_DOCUMENT_NOT_FOUND = _("Target document not found")
 
+MISSING_USERNAME = _("Username is missing")
+MISSING_USERNAME_OR_TOKEN = _("Username or token is missing")
 INVALID_USER_OR_TOKEN = _("Invalid user or token")
 
 ACCESS_DENIED = _("Access denied")
