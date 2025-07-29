@@ -585,7 +585,9 @@ class Document(BaseObject):
     folder_id: Mapped[Optional[str]] = mapped_column(
         VARCHAR(255), ForeignKey("folders.id"), nullable=True
     )  # 文档所属文件夹ID
-    folder: Mapped[Optional["Folder"]] = relationship("Folder", back_populates="documents")
+    folder: Mapped[Optional["Folder"]] = relationship(
+        "Folder", back_populates="documents"
+    )
 
     # 每个文档有多个访问规则（AccessRule对象），以JSON格式存储规则数据
     access_rules: Mapped[List["DocumentAccessRule"]] = relationship(
@@ -809,9 +811,9 @@ class FileTask(Base):
     )
     start_time: Mapped[float] = mapped_column(Float, nullable=False)
     end_time: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    # created_time: Mapped[float] = mapped_column(
-    #     Float, nullable=False, default=lambda: time.time()
-    # )
+    # encryption_mode: Mapped[Optional[str]] = mapped_column(
+    #     VARCHAR(32), nullable=True, default=None
+    # )  # 加密模式，如 'AES', 'RSA'，未加密则为 None
 
     def __repr__(self) -> str:
         return (

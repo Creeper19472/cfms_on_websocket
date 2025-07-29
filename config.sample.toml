@@ -1,12 +1,16 @@
 debug = false
 
 [server]
+name = "CFMS WebSocket Server"
 host = "127.0.0.1"
 port = 5104
 dualstack_ipv6 = true
 secret_key = ""
 ssl_keyfile = "./content/ssl/key.pem"
 ssl_certfile = "./content/ssl/cert.pem"
+
+file_chunk_size = 2097152 # 2MB
+# 过高的分块大小可能因客户端的配置而导致传输失败
 
 [database]
 type = "sqlite"

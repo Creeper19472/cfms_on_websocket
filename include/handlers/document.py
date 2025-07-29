@@ -623,9 +623,9 @@ def handle_move_document(handler: ConnectionHandler):
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY)
                 return
 
-            document.folder_id = target_folder_id
+            document.folder = target_folder
         else:
-            document.folder_id = None
+            document.folder = None
 
         session.commit()
 

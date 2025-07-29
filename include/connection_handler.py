@@ -18,7 +18,7 @@ from include.handlers.document import (
     handle_rename_document,
     handle_upload_file,
     handle_set_document_rules,
-    handle_move_document
+    handle_move_document,
 )
 from include.handlers.directory import (
     handle_list_directory,
@@ -26,7 +26,7 @@ from include.handlers.directory import (
     handle_create_directory,
     handle_delete_directory,
     handle_rename_directory,
-    handle_move_directory
+    handle_move_directory,
 )
 from include.handlers.management.user import (
     handle_list_users,
@@ -35,7 +35,7 @@ from include.handlers.management.user import (
     handle_rename_user,
     handle_get_user_info,
     handle_change_user_groups,
-    handle_set_passwd
+    handle_set_passwd,
 )
 from include.handlers.management.group import (
     handle_list_groups,
@@ -43,9 +43,9 @@ from include.handlers.management.group import (
     handle_delete_group,
     handle_rename_group,
     handle_get_group_info,
-    handle_change_group_permissions
+    handle_change_group_permissions,
 )
-
+from include.constants import CORE_VERSION, PROTOCOL_VERSION
 
 from include.function.log import getCustomLogger
 
@@ -95,6 +95,8 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         return
 
     available_functions = {
+        "server_info": handle_server_info,
+        # 认证类
         "login": handle_login,
         "refresh_token": handle_refresh_token,
         # 文档类
@@ -130,7 +132,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "delete_group": handle_delete_group,
         "rename_group": handle_rename_group,
         "get_group_info": handle_get_group_info,
-        "change_group_permissions": handle_change_group_permissions
+        "change_group_permissions": handle_change_group_permissions,
     }
 
     if action == "echo":
@@ -160,3 +162,20 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         this_handler.conclude_request(400, {}, f"Unknown action: {this_handler.action}")
 
     return
+
+
+def handle_server_info(this_handler: ConnectionHandler):
+    """
+    Handle the 'server_info' action to return server information.
+
+    Args:
+        this_handler: The ConnectionHandler instance handling the request.
+    """
+    server_info = {
+        "server_name": global_config["server"]["name"],
+        "version": CORE_VERSION.original,
+        "protocol_version": PROTOCOL_VERSION,
+    }
+    this_handler.conclude_request(
+        200, server_info, "Server information retrieved successfully"
+    )

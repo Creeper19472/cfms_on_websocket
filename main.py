@@ -28,16 +28,14 @@ os.makedirs("./content/ssl/", exist_ok=True)
 
 import ssl
 from include.conf_loader import global_config
+from include.constants import CORE_VERSION
 from include.database.handler import engine, Base
 from include.database.handler import Session
-from include.classes.version import Version
 from include.database.models import User, UserGroup, File, Document, DocumentRevision
 from websockets.sync.server import serve
 from include.connection_handler import handle_connection
 from include.function.log import getCustomLogger
 import socket
-
-CORE_VERSION = Version("0.0.1.250714_alpha")
 
 
 def server_init():
