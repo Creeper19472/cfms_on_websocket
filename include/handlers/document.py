@@ -12,6 +12,7 @@ from include.database.models import (
     FileTask,
     NoActiveRevisionsError,
 )
+from include.conf_loader import global_config
 import include.system.messages as smsg
 import time
 
@@ -242,6 +243,25 @@ def handle_create_document(handler: ConnectionHandler):
                 and not "super_create_document" in user.all_permissions
             ):  # 创建文件肯定是写权限
                 handler.conclude_request(403, {}, "Access denied to the folder")
+                return
+            
+            # 检查同一 folder_id 下是否有同名文件
+            existing_doc = (
+                session.query(Document)
+                .filter_by(folder_id=folder_id, title=document_title)
+                .first()
+            )
+            # 检查同一 folder_id 下是否有同名文件夹
+            existing_folder = (
+                session.query(Folder)
+                .filter_by(parent_id=folder_id, name=document_title)
+                .first()
+            )
+            if (
+                (existing_doc or existing_folder)
+                and global_config["document"]["allow_name_duplicate"] is False
+            ):
+                handler.conclude_request(400, {}, smsg.DOCUMENT_OR_DIRECTORY_NAME_DUPLICATE)
                 return
 
         if not "create_document" in user.all_permissions:

@@ -12,6 +12,12 @@ ssl_certfile = "./content/ssl/cert.pem"
 file_chunk_size = 2097152 # 2MB
 # 过高的分块大小可能因客户端的配置而导致传输失败
 
+[document]
+allow_name_duplicate = false
+# 是否允许同目录下的文档名称重复
+# 如果在允许重复后又设置为禁止重复，原有的重复文档将被保留
+# 但新上传的文档将会被拒绝
+
 [database]
 type = "sqlite"
 

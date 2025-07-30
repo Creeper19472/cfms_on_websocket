@@ -1,4 +1,5 @@
 from include.classes.connection import ConnectionHandler
+from include.conf_loader import global_config
 from include.database.handler import Session
 from include.database.models import User, Folder, Document, FolderAccessRule
 import include.system.messages as smsg
@@ -232,6 +233,7 @@ def handle_create_directory(handler: ConnectionHandler):
         parent_id = handler.data.get("parent_id")
         name = handler.data.get("name")
         access_rules_to_apply = handler.data.get("access_rules", {})
+        exists_ok = handler.data.get("exists_ok", False)
 
         if not name:
             handler.conclude_request(
@@ -262,6 +264,53 @@ def handle_create_directory(handler: ConnectionHandler):
                         **{"code": 403, "message": "Access denied", "data": {}}
                     )
                     return
+
+                # Check for duplicate folder or document name under the same parent
+                if not global_config["document"]["allow_name_duplicate"]:
+                    existing_folder = (
+                        session.query(Folder)
+                        .filter(Folder.parent_id == parent_id, Folder.name == name)
+                        .first()
+                    )
+                    existing_document = (
+                        session.query(Document)
+                        .filter(Document.folder_id == parent_id, Document.title == name)
+                        .first()
+                    )
+
+                    if (
+                        existing_document
+                    ):  # 如果存在同名文档，无论是否有 exists_ok 都不能忽略重名
+
+                        handler.conclude_request(
+                            400,
+                            {},
+                            smsg.DOCUMENT_NAME_DUPLICATE,
+                        )
+                        return
+
+                    elif (
+                        existing_folder
+                    ):  # 第二步判断有无同名文件夹，如有检查 exists_ok
+
+                        if exists_ok:
+                            handler.conclude_request(
+                                200,
+                                {
+                                    "id": existing_folder.id,
+                                    "name": existing_folder.name,
+                                    "last_modified": existing_folder.created_time,
+                                },
+                                "Directory already exists",
+                            )
+                        else:
+                            handler.conclude_request(
+                                400,
+                                {},
+                                smsg.DIRECTORY_NAME_DUPLICATE,  # 第一步判断已经知道没有同名文档，则一定是同名文件夹
+                            )
+                        return
+                    
             else:
                 parent = None
 
@@ -475,7 +524,7 @@ def handle_move_directory(handler: ConnectionHandler):
             return
 
         folder = session.get(Folder, folder_id)
-        
+
         if not folder:
             handler.conclude_request(
                 **{
@@ -485,11 +534,11 @@ def handle_move_directory(handler: ConnectionHandler):
                 }
             )
             return
-        
+
         if not folder.check_access_requirements(user, 2):
             handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MOVE_DIRECTORY)
             return
-        
+
         if target_folder_id:
             target_folder = session.get(Folder, target_folder_id)
             if not target_folder:
@@ -501,13 +550,13 @@ def handle_move_directory(handler: ConnectionHandler):
                     }
                 )
                 return
-            
+
             if not target_folder.check_access_requirements(
                 user, 1
             ):  # 对于目标文件夹，移动可视为一种写操作
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY)
                 return
-        
+
             folder.parent = target_folder
         else:
             # 未来添加有关根目录写入的规则
