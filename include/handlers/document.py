@@ -233,6 +233,11 @@ def handle_create_document(handler: ConnectionHandler):
         if not document_title:
             handler.conclude_request(400, {}, "Document title is required")
 
+        # 由于之后的逻辑可能提前结束，必须在实质性操作发生前鉴权
+        if not "create_document" in user.all_permissions:
+            handler.conclude_request(403, {}, "Permission denied")
+            return
+
         if folder_id:
             folder = session.get(Folder, folder_id)
             if not folder:
@@ -244,29 +249,39 @@ def handle_create_document(handler: ConnectionHandler):
             ):  # 创建文件肯定是写权限
                 handler.conclude_request(403, {}, "Access denied to the folder")
                 return
-            
-            # 检查同一 folder_id 下是否有同名文件
-            existing_doc = (
-                session.query(Document)
-                .filter_by(folder_id=folder_id, title=document_title)
-                .first()
-            )
-            # 检查同一 folder_id 下是否有同名文件夹
-            existing_folder = (
-                session.query(Folder)
-                .filter_by(parent_id=folder_id, name=document_title)
-                .first()
-            )
-            if (
-                (existing_doc or existing_folder)
-                and global_config["document"]["allow_name_duplicate"] is False
-            ):
-                handler.conclude_request(400, {}, smsg.DOCUMENT_OR_DIRECTORY_NAME_DUPLICATE)
-                return
 
-        if not "create_document" in user.all_permissions:
-            handler.conclude_request(403, {}, "Permission denied")
-            return
+            if not global_config["document"]["allow_name_duplicate"]:
+                # 检查是否有同名文件或文件夹
+
+                # 检查同一 folder_id 下是否有同名文件
+                existing_doc = (
+                    session.query(Document)
+                    .filter_by(folder_id=folder_id, title=document_title)
+                    .first()
+                )
+                # 检查同一 folder_id 下是否有同名文件夹
+                existing_folder = (
+                    session.query(Folder)
+                    .filter_by(parent_id=folder_id, name=document_title)
+                    .first()
+                )
+
+                if existing_doc:
+                    if existing_doc.active:
+                        handler.conclude_request(400, {}, smsg.DOCUMENT_NAME_DUPLICATE)
+                        return
+                    else:
+                        # 如果该文档尚未被激活，则先尝试删除未激活的文档
+                        if existing_doc.check_access_requirements(user, 1): # 如果有权删除
+                            existing_doc.delete_all_revisions()
+                            session.delete(existing_doc)
+                            session.commit()
+                        else:
+                            handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
+                            return
+                elif existing_folder:
+                    handler.conclude_request(400, {}, smsg.DIRECTORY_NAME_DUPLICATE)
+                    return
 
         today = datetime.date.today()
         new_real_filename = secrets.token_hex(32)

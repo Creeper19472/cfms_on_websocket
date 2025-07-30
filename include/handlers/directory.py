@@ -278,13 +278,12 @@ def handle_create_directory(handler: ConnectionHandler):
                         .first()
                     )
 
-                    if (
-                        existing_document
-                    ):  # 如果存在同名文档，无论是否有 exists_ok 都不能忽略重名
-
+                    if existing_document:
+                        # 如果存在同名文档，无论是否有 exists_ok 都不能忽略重名
+                        # 提醒删除该重名的文档
                         handler.conclude_request(
                             400,
-                            {},
+                            {"type": "document", "id": existing_document.id},
                             smsg.DOCUMENT_NAME_DUPLICATE,
                         )
                         return
@@ -310,7 +309,7 @@ def handle_create_directory(handler: ConnectionHandler):
                                 smsg.DIRECTORY_NAME_DUPLICATE,  # 第一步判断已经知道没有同名文档，则一定是同名文件夹
                             )
                         return
-                    
+
             else:
                 parent = None
 
