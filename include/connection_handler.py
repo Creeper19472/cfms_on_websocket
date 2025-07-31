@@ -6,7 +6,7 @@ from websockets.typing import Data
 from include.conf_loader import global_config
 from include.classes.connection import ConnectionHandler
 from include.database.handler import Session
-from include.database.models import User
+from include.database.models.general import User
 from include.handlers.auth import handle_login, handle_refresh_token
 from include.handlers.document import (
     handle_create_document,

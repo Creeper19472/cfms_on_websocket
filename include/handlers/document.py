@@ -2,7 +2,7 @@ import datetime
 import secrets
 from include.classes.connection import ConnectionHandler
 from include.database.handler import Session
-from include.database.models import (
+from include.database.models.general import (
     DocumentAccessRule,
     DocumentRevision,
     User,
@@ -13,6 +13,7 @@ from include.database.models import (
     NoActiveRevisionsError,
 )
 from include.conf_loader import global_config
+from include.function.audit import log_audit
 import include.system.messages as smsg
 import time
 
@@ -86,6 +87,12 @@ def handle_get_document_info(handler: ConnectionHandler):
         handler.conclude_request(
             **{"code": 403, "message": "Authentication is required", "data": {}}
         )
+        log_audit(
+            "get_document_info",
+            target=document_id,
+            result=401,
+            remote_address=handler.remote_address,
+        )
         return
 
     with Session() as session:
@@ -94,14 +101,34 @@ def handle_get_document_info(handler: ConnectionHandler):
 
         if user is None or not user.is_token_valid(handler.token):
             handler.conclude_request(403, {}, "Invalid user or token")
+            log_audit(
+                "get_document_info",
+                target=document_id,
+                result=401,
+                remote_address=handler.remote_address,
+            )
             return
 
         if not document:
             handler.conclude_request(404, {}, "Document not found")
+            log_audit(
+                "get_document_info",
+                username=handler.username,
+                target=document_id,
+                result=404,
+                remote_address=handler.remote_address,
+            )
             return
 
         if not document.check_access_requirements(user, access_type=0):
             handler.conclude_request(403, {}, "Permission denied")
+            log_audit(
+                "get_document_info",
+                username=handler.username,
+                target=document_id,
+                result=403,
+                remote_address=handler.remote_address,
+            )
             return
 
         info_code = 0
@@ -130,6 +157,14 @@ def handle_get_document_info(handler: ConnectionHandler):
             "info_code": info_code,
         }
 
+        log_audit(
+            "get_document_info",
+            username=handler.username,
+            target=document_id,
+            result=0,
+            remote_address=handler.remote_address,
+        )
+
         handler.conclude_request(200, data, "Document info retrieved successfully")
 
 
@@ -146,14 +181,34 @@ def handle_get_document(handler: ConnectionHandler):
 
         if user is None or not user.is_token_valid(handler.token):
             handler.conclude_request(403, {}, "Invalid user or token")
+            log_audit(
+                "get_document",
+                target=document_id,
+                result=401,
+                remote_address=handler.remote_address,
+            )
             return
 
         if not document:
             handler.conclude_request(404, {}, "Document not found")
+            log_audit(
+                "get_document",
+                username=handler.username,
+                target=document_id,
+                result=404,
+                remote_address=handler.remote_address,
+            )
             return
 
         if not document.check_access_requirements(user):
             handler.conclude_request(403, {}, "Access denied to the document")
+            log_audit(
+                "get_document",
+                username=handler.username,
+                target=document_id,
+                result=403,
+                remote_address=handler.remote_address,
+            )
             return
 
         try:
@@ -162,6 +217,13 @@ def handle_get_document(handler: ConnectionHandler):
             handler.conclude_request(
                 404, {}, "No active revisions found for this document"
             )
+            log_audit(
+                "get_document",
+                username=handler.username,
+                target=document_id,
+                result=4041,
+                remote_address=handler.remote_address,
+            )
             return
 
         data = {
@@ -169,6 +231,14 @@ def handle_get_document(handler: ConnectionHandler):
             "title": document.title,
             "task_data": create_file_task(latest_revision.file),
         }
+
+        log_audit(
+            "get_document",
+            username=handler.username,
+            target=document_id,
+            result=0,
+            remote_address=handler.remote_address,
+        )
 
         handler.conclude_request(200, data, "Document successfully fetched")
 
@@ -226,28 +296,59 @@ def handle_create_document(handler: ConnectionHandler):
     with Session() as session:
         user = session.get(User, handler.username)
 
-        if not user or not user.is_token_valid(handler.token):
-            handler.conclude_request(403, {}, "Invalid user or token")
-            return
-
         if not document_title:
             handler.conclude_request(400, {}, "Document title is required")
+            return
+
+        if not user or not user.is_token_valid(handler.token):
+            handler.conclude_request(403, {}, "Invalid user or token")
+            log_audit(
+                "create_document",
+                target=folder_id,
+                result=401,
+                remote_address=handler.remote_address,
+            )
+            return
 
         # 由于之后的逻辑可能提前结束，必须在实质性操作发生前鉴权
         if not "create_document" in user.all_permissions:
             handler.conclude_request(403, {}, "Permission denied")
+            log_audit(
+                "create_document",
+                username=handler.username,
+                target=folder_id,
+                result=403,
+                data={"title": document_title},
+                remote_address=handler.remote_address,
+            )
             return
 
         if folder_id:
             folder = session.get(Folder, folder_id)
             if not folder:
                 handler.conclude_request(404, {}, "Folder not found")
+                log_audit(
+                    "create_document",
+                    username=handler.username,
+                    target=folder_id,
+                    result=404,
+                    data={"title": document_title},
+                    remote_address=handler.remote_address,
+                )
                 return
             if (
                 not folder.check_access_requirements(user, access_type=1)
                 and not "super_create_document" in user.all_permissions
             ):  # 创建文件肯定是写权限
                 handler.conclude_request(403, {}, "Access denied to the folder")
+                log_audit(
+                    "create_document",
+                    username=handler.username,
+                    target=folder_id,
+                    result=403,
+                    data={"title": document_title},
+                    remote_address=handler.remote_address,
+                )
                 return
 
             if not global_config["document"]["allow_name_duplicate"]:
@@ -272,12 +373,25 @@ def handle_create_document(handler: ConnectionHandler):
                         return
                     else:
                         # 如果该文档尚未被激活，则先尝试删除未激活的文档
-                        if existing_doc.check_access_requirements(user, 1): # 如果有权删除
+                        if existing_doc.check_access_requirements(
+                            user, 1
+                        ):  # 如果有权删除
                             existing_doc.delete_all_revisions()
                             session.delete(existing_doc)
                             session.commit()
                         else:
                             handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
+                            log_audit(
+                                "create_document",
+                                username=handler.username,
+                                target=folder_id,
+                                result=403,
+                                data={
+                                    "title": document_title,
+                                    "duplicate_id": existing_doc.id,
+                                },
+                                remote_address=handler.remote_address,
+                            )
                             return
                 elif existing_folder:
                     handler.conclude_request(400, {}, smsg.DIRECTORY_NAME_DUPLICATE)
@@ -307,10 +421,26 @@ def handle_create_document(handler: ConnectionHandler):
             handler.conclude_request(
                 200, {"task_data": task_data}, "Task successfully created"
             )
+            log_audit(
+                "create_document",
+                username=handler.username,
+                target=folder_id,
+                result=0,
+                data={"title": document_title},
+                remote_address=handler.remote_address,
+            )
         else:
             session.rollback()
             handler.conclude_request(
                 403, {}, "Set access rules failed: permission denied"
+            )
+            log_audit(
+                "create_document",
+                username=handler.username,
+                target=folder_id,
+                result=403,
+                data={"title": document_title},
+                remote_address=handler.remote_address,
             )
 
 
@@ -329,13 +459,27 @@ def handle_upload_document(handler: ConnectionHandler):
     with Session() as session:
         document = session.get(Document, document_id)
         this_user = session.get(User, handler.username)
+
         if not this_user or not this_user.is_token_valid(handler.token):
             handler.conclude_request(403, {}, "Invalid user or token")
+            log_audit(
+                "upload_document",
+                target=document_id,
+                result=401,
+                remote_address=handler.remote_address,
+            )
             return
 
         if document:
             if not document.check_access_requirements(this_user, access_type=1):
                 handler.conclude_request(403, {}, "Access denied to the document")
+                log_audit(
+                    "upload_document",
+                    username=handler.username,
+                    target=document_id,
+                    result=403,
+                    remote_address=handler.remote_address,
+                )
                 return
 
             today = datetime.date.today()
@@ -357,10 +501,25 @@ def handle_upload_document(handler: ConnectionHandler):
 
         else:
             handler.conclude_request(404, {}, "Document not found")
+            log_audit(
+                "upload_document",
+                username=handler.username,
+                target=document_id,
+                result=404,
+                remote_address=handler.remote_address,
+            )
             return
 
         task_data = create_file_task(new_file, 1)
 
+    log_audit(
+        "upload_document",
+        username=handler.username,
+        target=document_id,
+        result=0,
+        data=task_data,
+        remote_address=handler.remote_address,
+    )
     handler.conclude_request(200, {"task_data": task_data}, "Task successfully created")
 
 
@@ -380,10 +539,23 @@ def handle_delete_document(handler: ConnectionHandler):
 
         if not user or not user.is_token_valid(handler.token):
             handler.conclude_request(403, {}, "Invalid user or token")
+            log_audit(
+                "delete_document",
+                target=document_id,
+                result=401,
+                remote_address=handler.remote_address,
+            )
             return
 
         if not document:
             handler.conclude_request(404, {}, "Document not found")
+            log_audit(
+                "delete_document",
+                username=handler.username,
+                target=document_id,
+                result=404,
+                remote_address=handler.remote_address,
+            )
             return
 
         if (
@@ -391,6 +563,13 @@ def handle_delete_document(handler: ConnectionHandler):
             or not document.check_access_requirements(user, access_type=1)
         ):
             handler.conclude_request(403, {}, "Access denied to the document")
+            log_audit(
+                "delete_document",
+                username=handler.username,
+                target=document_id,
+                result=403,
+                remote_address=handler.remote_address,
+            )
             return
 
         try:
@@ -400,6 +579,13 @@ def handle_delete_document(handler: ConnectionHandler):
                 500,
                 {},
                 "Failed to delete revisions. Perhaps a download task is still in progress?",
+            )
+            log_audit(
+                "delete_document",
+                username=handler.username,
+                target=document_id,
+                result=500,
+                remote_address=handler.remote_address,
             )
             return
         session.delete(document)
@@ -435,11 +621,24 @@ def handle_rename_document(handler: ConnectionHandler):
                 handler.conclude_request(
                     **{"code": 403, "message": "Invalid user or token", "data": {}}
                 )
+                log_audit(
+                    "rename_document",
+                    target=document_id,
+                    result=401,
+                    remote_address=handler.remote_address,
+                )
                 return
             document = session.get(Document, document_id)
             if not document:
                 handler.conclude_request(
                     **{"code": 404, "message": "Document not found", "data": {}}
+                )
+                log_audit(
+                    "rename_document",
+                    username=handler.username,
+                    target=document_id,
+                    result=404,
+                    remote_address=handler.remote_address,
                 )
                 return
             if (
@@ -448,6 +647,13 @@ def handle_rename_document(handler: ConnectionHandler):
             ):
                 handler.conclude_request(
                     **{"code": 403, "message": "Access denied", "data": {}}
+                )
+                log_audit(
+                    "rename_document",
+                    username=handler.username,
+                    target=document_id,
+                    result=403,
+                    remote_address=handler.remote_address,
                 )
                 return
 
@@ -465,6 +671,13 @@ def handle_rename_document(handler: ConnectionHandler):
 
             session.commit()
 
+            log_audit(
+                "rename_document",
+                username=handler.username,
+                target=document_id,
+                result=0,
+                remote_address=handler.remote_address,
+            )
             handler.conclude_request(
                 **{"code": 200, "message": "Document renamed successfully", "data": {}}
             )
@@ -550,6 +763,12 @@ def handle_set_document_rules(handler: ConnectionHandler):
         handler.conclude_request(
             **{"code": 403, "message": "Authentication is required", "data": {}}
         )
+        log_audit(
+            "set_document_rules",
+            target=document_id,
+            result=401,
+            remote_address=handler.remote_address,
+        )
         return
 
     if not document_id or not access_rules_to_apply:
@@ -568,26 +787,67 @@ def handle_set_document_rules(handler: ConnectionHandler):
             handler.conclude_request(
                 **{"code": 403, "message": "Invalid user or token", "data": {}}
             )
+            log_audit(
+                "set_document_rules",
+                target=document_id,
+                result=401,
+                remote_address=handler.remote_address,
+            )
             return
 
         document = session.get(Document, document_id)
 
         if not document:
             handler.conclude_request(404, {}, "Document not found")
+            log_audit(
+                "set_document_rules",
+                username=handler.username,
+                target=document_id,
+                result=404,
+                remote_address=handler.remote_address,
+            )
             return
 
         if not "set_access_rules" in user.all_permissions:
             handler.conclude_request(403, {}, "Access denied to set access rules")
+            log_audit(
+                "set_document_rules",
+                username=handler.username,
+                target=document_id,
+                result=403,
+                remote_address=handler.remote_address,
+            )
             return
 
         if not document.check_access_requirements(user, access_type=3):
             handler.conclude_request(403, {}, "Access denied to the document")
+            log_audit(
+                "set_document_rules",
+                username=handler.username,
+                target=document_id,
+                result=403,
+                remote_address=handler.remote_address,
+            )
             return
 
         if apply_document_access_rules(document.id, access_rules_to_apply, user):
+            log_audit(
+                "set_document_rules",
+                username=handler.username,
+                target=document_id,
+                result=0,
+                remote_address=handler.remote_address,
+            )
             handler.conclude_request(200, {}, "Set access rules successfully")
         else:
             session.rollback()
+            log_audit(
+                "set_document_rules",
+                username=handler.username,
+                target=document_id,
+                result=403,
+                remote_address=handler.remote_address,
+            )
             handler.conclude_request(
                 403, {}, "Set access rules failed: permission denied"
             )
@@ -606,10 +866,17 @@ def handle_move_document(handler: ConnectionHandler):
             }
         )
         return
-    
+
     if not handler.username or not handler.token:
         handler.conclude_request(
             **{"code": 403, "message": smsg.MISSING_USERNAME_OR_TOKEN, "data": {}}
+        )
+        log_audit(
+            "move_document",
+            target=document_id,
+            data={"target_folder_id": target_folder_id},
+            result=401,
+            remote_address=handler.remote_address,
         )
         return
 
@@ -619,10 +886,25 @@ def handle_move_document(handler: ConnectionHandler):
             handler.conclude_request(
                 **{"code": 403, "message": smsg.INVALID_USER_OR_TOKEN, "data": {}}
             )
+            log_audit(
+                "move_document",
+                target=document_id,
+                data={"target_folder_id": target_folder_id},
+                result=401,
+                remote_address=handler.remote_address,
+            )
             return
 
         if "move" not in user.all_permissions:
             handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MOVE_DOCUMENT)
+            log_audit(
+                "move_document",
+                username=handler.username,
+                target=document_id,
+                data={"target_folder_id": target_folder_id},
+                result=403,
+                remote_address=handler.remote_address,
+            )
             return
 
         document = session.get(Document, document_id)
@@ -634,10 +916,25 @@ def handle_move_document(handler: ConnectionHandler):
                     "data": {},
                 }
             )
+            log_audit(
+                "move_document",
+                username=handler.username,
+                target=document_id,
+                result=404,
+                remote_address=handler.remote_address,
+            )
             return
 
         if not document.check_access_requirements(user, 2):
             handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MOVE_DOCUMENT)
+            log_audit(
+                "move_document",
+                username=handler.username,
+                target=document_id,
+                data={"target_folder_id": target_folder_id},
+                result=403,
+                remote_address=handler.remote_address,
+            )
             return
 
         if target_folder_id:
@@ -650,12 +947,28 @@ def handle_move_document(handler: ConnectionHandler):
                         "data": {},
                     }
                 )
+                log_audit(
+                    "move_document",
+                    username=handler.username,
+                    target=document_id,
+                    data={"target_folder_id": target_folder_id},
+                    result=404,
+                    remote_address=handler.remote_address,
+                )
                 return
 
             if not target_folder.check_access_requirements(
                 user, 1
             ):  # 对于目标文件夹，移动可视为一种写操作
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY)
+                log_audit(
+                    "move_document",
+                    username=handler.username,
+                    target=document_id,
+                    data={"target_folder_id": target_folder_id},
+                    result=403,
+                    remote_address=handler.remote_address,
+                )
                 return
 
             document.folder = target_folder
@@ -664,4 +977,12 @@ def handle_move_document(handler: ConnectionHandler):
 
         session.commit()
 
+    log_audit(
+        "move_document",
+        username=handler.username,
+        target=document_id,
+        data={"target_folder_id": target_folder_id},
+        result=0,
+        remote_address=handler.remote_address,
+    )
     handler.conclude_request(200, {}, smsg.SUCCESS)

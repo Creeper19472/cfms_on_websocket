@@ -1,6 +1,6 @@
 from include.classes.connection import ConnectionHandler
 from include.database.handler import Session
-from include.database.models import User, UserGroup
+from include.database.models.general import User, UserGroup
 from include.function.user import create_user
 
 

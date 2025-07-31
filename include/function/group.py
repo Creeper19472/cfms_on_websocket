@@ -1,5 +1,5 @@
 import time
-from include.database.models import UserGroup, UserGroupPermission
+from include.database.models.general import UserGroup, UserGroupPermission
 from include.database.handler import Session
 
 

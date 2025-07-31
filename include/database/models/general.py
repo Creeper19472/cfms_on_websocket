@@ -46,6 +46,8 @@ class User(Base):
         "UserPermission", back_populates="user"
     )
 
+    audit_entries: Mapped[List["AuditEntry"]] = relationship("AuditEntry", back_populates="user")
+
     def __repr__(self) -> str:
         return (
             f"User(username={self.username!r}, "
@@ -841,3 +843,22 @@ class FileTask(Base):
             f"FileTask(id={self.id!r}, "
             f"file_id={self.file_id!r}, status={self.status!r})"
         )
+
+
+class AuditEntry(Base):  # 审计条目
+    __tablename__ = "audit_entries"
+    id: Mapped[str] = mapped_column(
+        VARCHAR(255), primary_key=True, default=lambda: secrets.token_hex(32)
+    )
+    action: Mapped[str] = mapped_column(VARCHAR(255), nullable=False)
+    username: Mapped[str] = mapped_column(ForeignKey("users.username"), nullable=True)
+    user: Mapped[User] = relationship(
+        "User", back_populates="audit_entries"
+    )
+    target: Mapped[str] = mapped_column(VARCHAR(255), nullable=True)
+    data: Mapped[dict] = mapped_column(JSON, nullable=True)
+    result: Mapped[int] = mapped_column(Integer, nullable=False)
+    remote_address: Mapped[Optional[str]] = mapped_column(VARCHAR(64), nullable=True)
+    logged_time: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=False, default=time.time
+    )

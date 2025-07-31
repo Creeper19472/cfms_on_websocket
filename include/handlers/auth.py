@@ -1,6 +1,7 @@
 from include.classes.connection import ConnectionHandler
 from include.database.handler import Session
-from include.database.models import User
+from include.database.models.general import User
+from include.function.audit import log_audit
 import time
 
 
@@ -52,8 +53,20 @@ def handle_login(handler: ConnectionHandler):
                             "groups": list(user.all_groups),
                         },
                     }
+                    log_audit(
+                        "login",
+                        target=username,
+                        result=0,
+                        remote_address=handler.remote_address,
+                    )
                 else:
                     response = response_invalid
+                    log_audit(
+                        "login",
+                        target=username,
+                        result=1,
+                        remote_address=handler.remote_address,
+                    )
             else:
                 response = response_invalid
 
@@ -99,12 +112,24 @@ def handle_refresh_token(handler: ConnectionHandler):
                         "message": "Token refreshed successfully",
                         "data": {"token": new_token.raw, "exp": new_token.exp},
                     }
+                    log_audit(
+                        "refresh_token",
+                        target=handler.username,
+                        result=0,
+                        remote_address=handler.remote_address,
+                    )
                 else:
                     response = {
                         "code": 400,
                         "message": "Invalid or expired token",
                         "data": {},
                     }
+                    log_audit(
+                        "refresh_token",
+                        target=handler.username,
+                        result=1,
+                        remote_address=handler.remote_address,
+                    )
 
         # Send the response back to the client
         handler.conclude_request(**response)

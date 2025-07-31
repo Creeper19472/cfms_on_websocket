@@ -1,6 +1,6 @@
 import string, secrets, hashlib
 import time
-from include.database.models import User, UserMembership, UserPermission
+from include.database.models.general import User, UserMembership, UserPermission
 from include.database.handler import Session
 
 

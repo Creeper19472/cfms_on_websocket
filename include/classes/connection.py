@@ -10,7 +10,7 @@ from websockets.typing import Data
 
 from include.conf_loader import global_config
 from include.database.handler import Session
-from include.database.models import File, FileTask, User
+from include.database.models.general import File, FileTask, User
 from include.function.log import getCustomLogger
 
 from Crypto.Cipher import AES
@@ -34,6 +34,7 @@ def calculate_sha256(file_path):
 class ConnectionHandler:
     def __init__(self, websocket: ServerConnection, message: Data) -> None:
         self.websocket = websocket
+        self.remote_address = websocket.remote_address[0]
         # self.websocket.remote_address
         self.request = json.loads(message)
         self.logger = logger

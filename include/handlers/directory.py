@@ -1,7 +1,7 @@
 from include.classes.connection import ConnectionHandler
 from include.conf_loader import global_config
 from include.database.handler import Session
-from include.database.models import User, Folder, Document, FolderAccessRule
+from include.database.models.general import User, Folder, Document, FolderAccessRule
 import include.system.messages as smsg
 import time
 
