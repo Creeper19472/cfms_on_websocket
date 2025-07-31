@@ -45,7 +45,8 @@ def handle_login(handler: ConnectionHandler):
                         "code": 200,
                         "message": "Login successful",
                         "data": {
-                            "token": token,
+                            "token": token.raw,
+                            "exp": token.exp,
                             "nickname": user.nickname,
                             "permissions": list(user.all_permissions),
                             "groups": list(user.all_groups),
@@ -96,7 +97,7 @@ def handle_refresh_token(handler: ConnectionHandler):
                     response = {
                         "code": 200,
                         "message": "Token refreshed successfully",
-                        "data": {"token": new_token},
+                        "data": {"token": new_token.raw, "exp": new_token.exp},
                     }
                 else:
                     response = {

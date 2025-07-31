@@ -2,6 +2,7 @@ import secrets
 from sqlalchemy import VARCHAR, Float, ForeignKey, Table, Column, Integer, Text
 from include.database.handler import Base, Session
 from include.conf_loader import global_config
+from include.classes.auth import Token
 from typing import List
 from typing import Optional
 from typing import Set
@@ -52,20 +53,16 @@ class User(Base):
             f"created_time={self.created_time!r})"
         )
 
-    def authenticate_and_create_token(self, plain_password: str) -> Optional[str]:
+    def authenticate_and_create_token(self, plain_password: str) -> Optional[Token]:
         salted = plain_password + self.salt
         password_hash = hashlib.sha256(salted.encode("utf-8")).hexdigest()
         if password_hash == self.pass_hash:
-            payload = {"username": self.username, "exp": time.time() + 3600}
-            token = jwt.encode(
-                payload,
-                (
-                    global_config["server"]["secret_key"]
-                    if not self.secret_key
-                    else self.secret_key
-                ),
-                algorithm="HS256",
-            )
+            secret = (global_config["server"]["secret_key"]
+                if not self.secret_key
+                else self.secret_key)
+            token = Token(secret, self.username)
+            token.new(3600)
+
             session = object_session(self)
             if session is not None:
                 self.last_login = time.time()
@@ -93,24 +90,18 @@ class User(Base):
         except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
             return False
 
-    def renew_token(self) -> Optional[str]:
+    def renew_token(self) -> Token:
         """
         重新生成用户的JWT令牌。
         """
-        payload = {
-            "username": self.username,
-            "exp": time.time() + 3600,  # 令牌有效期为1小时
-        }
-        token = jwt.encode(
-            payload,
-            (
-                global_config["server"]["secret_key"]
+
+        secret = (global_config["server"]["secret_key"]
                 if not self.secret_key
-                else self.secret_key
-            ),
-            algorithm="HS256",
-        )
-        return token
+                else self.secret_key)
+        new_token = Token(secret, self.username)
+        new_token.new(3600)
+
+        return new_token
 
     def set_password(self, plain_password: str):
         """
