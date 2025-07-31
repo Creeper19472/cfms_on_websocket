@@ -37,6 +37,8 @@ from include.connection_handler import handle_connection
 from include.function.log import getCustomLogger
 import socket
 
+# Always create tables that do not exist
+Base.metadata.create_all(engine)
 
 def server_init():
     """
@@ -49,8 +51,6 @@ def server_init():
         os.remove("./ssl_cert.pem")
     if os.path.exists("./ssl_key.pem"):
         os.remove("./ssl_key.pem")
-
-    Base.metadata.create_all(engine)
 
     from include.function.group import create_group
 
