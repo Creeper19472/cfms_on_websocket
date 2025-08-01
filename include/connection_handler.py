@@ -1,5 +1,6 @@
 import os
 import threading
+from typing import Optional, Union
 import websockets
 import websockets.sync.server
 from websockets.typing import Data
@@ -7,6 +8,7 @@ from include.conf_loader import global_config
 from include.classes.connection import ConnectionHandler
 from include.database.handler import Session
 from include.database.models.general import User
+from include.function.audit import log_audit
 from include.handlers.auth import handle_login, handle_refresh_token
 from include.handlers.document import (
     handle_create_document,
@@ -156,7 +158,46 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         logger.info("Server is shutting down")
         threading.Thread(target=os._exit(0), daemon=True).start()
     elif action in available_functions:
-        available_functions[action](this_handler)
+        callback: Union[
+            int, tuple[int, str], tuple[int, str, dict], tuple[int, str, dict, str], tuple[int, str, str]
+        ] = available_functions[action](this_handler)
+        """
+        callback 的格式：
+        - result, Optional[target], Optional[data], Optional[username]
+        有以下几种情况：
+        1. -> None
+            该结果将被忽略。
+        2. -> int
+            只有 result
+        3. -> tuple[int, str]
+            这种情况下 int 为 result, 第二个元素必定为 target。
+        4. -> tuple[int, str, dict]
+            这种情况下 int 为 result, 第二个元素必定为 target, 第三个元素为 data。
+        5. -> tuple[int, str, str]
+            这种情况下 int 为 result, 第二个元素必定为 target, 第三个元素为 username。
+        6. -> tuple[int, str, dict, str]
+            这种情况下 int 为 result, 第二个元素必定为 target, 第三个元素为 data, 第四个元素为 username。
+
+        """
+        if type(callback) is tuple:
+            match callback:
+                case (result, target) if len(callback) == 2:
+                    # 不判断各元素类型是否正确。第二个元素是目标对象
+                    log_audit(action, result, target=target)
+                case (result, target, data) if isinstance(data, dict) and len(callback) == 3:
+                    log_audit(action, result, target=target, data=data)
+                case (result, target, username) if isinstance(username, str) and len(callback) == 3:
+                    log_audit(action, result, target=target, username=username)
+                case (result, target, data, username) if len(callback) == 4:
+                    log_audit(action, result, target=target, data=data, username=username)
+                case _:
+                    raise TypeError
+        elif type(callback) is int:
+            log_audit(action, callback)
+        elif callback is None:
+            return
+        else:
+            raise TypeError("Invaild returned value")
     else:
         # Handle unknown actions
         this_handler.conclude_request(400, {}, f"Unknown action: {this_handler.action}")

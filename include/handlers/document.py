@@ -7,11 +7,10 @@ from include.database.models.general import (
     DocumentRevision,
     User,
     Document,
-    File,
     Folder,
-    FileTask,
     NoActiveRevisionsError,
 )
+from include.database.models.file import File, FileTask
 from include.conf_loader import global_config
 from include.function.audit import log_audit
 import include.system.messages as smsg

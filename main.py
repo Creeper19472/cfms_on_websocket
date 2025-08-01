@@ -31,14 +31,13 @@ from include.conf_loader import global_config
 from include.constants import CORE_VERSION
 from include.database.handler import engine, Base
 from include.database.handler import Session
-from include.database.models.general import User, UserGroup, File, Document, DocumentRevision
+from include.database.models.general import User, UserGroup, Document, DocumentRevision
+from include.database.models.file import File
 from websockets.sync.server import serve
 from include.connection_handler import handle_connection
 from include.function.log import getCustomLogger
 import socket
 
-# Always create tables that do not exist
-Base.metadata.create_all(engine)
 
 def server_init():
     """
@@ -211,6 +210,9 @@ def main():
         certfile=global_config["server"]["ssl_certfile"],
         keyfile=global_config["server"]["ssl_keyfile"],
     )
+
+    # Always create tables that do not exist
+    Base.metadata.create_all(engine)
 
     with serve(
         handle_connection,

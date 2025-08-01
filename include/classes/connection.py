@@ -10,7 +10,8 @@ from websockets.typing import Data
 
 from include.conf_loader import global_config
 from include.database.handler import Session
-from include.database.models.general import File, FileTask, User
+from include.database.models.general import User
+from include.database.models.file import File, FileTask
 from include.function.log import getCustomLogger
 
 from Crypto.Cipher import AES

@@ -2,6 +2,7 @@ from include.classes.connection import ConnectionHandler
 from include.conf_loader import global_config
 from include.database.handler import Session
 from include.database.models.general import User, Folder, Document, FolderAccessRule
+from include.function.audit import log_audit
 import include.system.messages as smsg
 import time
 
@@ -66,6 +67,12 @@ def handle_list_directory(handler: ConnectionHandler):
                 handler.conclude_request(
                     **{"code": 403, "message": "Invalid user or token", "data": {}}
                 )
+                log_audit(
+                    "list_directory",
+                    target=folder_id,
+                    result=401,
+                    remote_address=handler.remote_address,
+                )
                 return
             if not folder_id:
                 parent = None
@@ -81,6 +88,13 @@ def handle_list_directory(handler: ConnectionHandler):
                     handler.conclude_request(
                         **{"code": 404, "message": "Directory not found", "data": {}}
                     )
+                    log_audit(
+                        "list_directory",
+                        username=handler.username,
+                        target=folder_id,
+                        result=404,
+                        remote_address=handler.remote_address,
+                    )
                     return
                 if (
                     not "super_list_directory" in this_user.all_permissions
@@ -88,6 +102,13 @@ def handle_list_directory(handler: ConnectionHandler):
                 ):
                     handler.conclude_request(
                         **{"code": 403, "message": "Access denied", "data": {}}
+                    )
+                    log_audit(
+                        "list_directory",
+                        username=handler.username,
+                        target=folder_id,
+                        result=403,
+                        remote_address=handler.remote_address,
                     )
                     return
                 parent = folder.parent
@@ -132,6 +153,14 @@ def handle_list_directory(handler: ConnectionHandler):
                 },
             }
 
+        log_audit(
+            "list_directory",
+            username=handler.username,
+            target=folder_id,
+            result=0,
+            remote_address=handler.remote_address,
+        )
+
         # Send the response back to the client
         handler.conclude_request(**response)
     except Exception as e:
@@ -164,6 +193,12 @@ def handle_get_directory_info(handler: ConnectionHandler):
             handler.conclude_request(
                 **{"code": 403, "message": "Authentication is required", "data": {}}
             )
+            log_audit(
+                "get_directory_info",
+                target=directory_id,
+                result=401,
+                remote_address=handler.remote_address,
+            )
             return
 
         with Session() as session:
@@ -172,14 +207,34 @@ def handle_get_directory_info(handler: ConnectionHandler):
 
             if user is None or not user.is_token_valid(handler.token):
                 handler.conclude_request(403, {}, "Invalid user or token")
+                log_audit(
+                    "get_directory_info",
+                    target=directory_id,
+                    result=401,
+                    remote_address=handler.remote_address,
+                )
                 return
 
             if not directory:
                 handler.conclude_request(404, {}, "Directory not found")
+                log_audit(
+                    "get_directory_info",
+                    username=handler.username,
+                    target=directory_id,
+                    result=404,
+                    remote_address=handler.remote_address,
+                )
                 return
 
             if not directory.check_access_requirements(user, access_type=0):
                 handler.conclude_request(403, {}, "Permission denied")
+                log_audit(
+                    "get_directory_info",
+                    username=handler.username,
+                    target=directory_id,
+                    result=403,
+                    remote_address=handler.remote_address,
+                )
                 return
 
             info_code = 0
@@ -206,6 +261,14 @@ def handle_get_directory_info(handler: ConnectionHandler):
                 "access_rules": access_rules,
                 "info_code": info_code,
             }
+
+            log_audit(
+                "get_directory_info",
+                username=handler.username,
+                target=directory_id,
+                result=0,
+                remote_address=handler.remote_address,
+            )
 
             handler.conclude_request(200, data, "Directory info retrieved successfully")
 
@@ -247,6 +310,12 @@ def handle_create_directory(handler: ConnectionHandler):
                 handler.conclude_request(
                     **{"code": 403, "message": "Invalid user or token", "data": {}}
                 )
+                log_audit(
+                    "create_directory",
+                    target=parent_id,
+                    result=401,
+                    remote_address=handler.remote_address,
+                )
                 return
             if parent_id:
                 parent = session.get(Folder, parent_id)
@@ -258,57 +327,26 @@ def handle_create_directory(handler: ConnectionHandler):
                             "data": {},
                         }
                     )
+                    log_audit(
+                        "create_directory",
+                        username=handler.username,
+                        target=parent_id,
+                        result=404,
+                        remote_address=handler.remote_address,
+                    )
                     return
                 if not parent.check_access_requirements(this_user, 1):
                     handler.conclude_request(
                         **{"code": 403, "message": "Access denied", "data": {}}
                     )
+                    log_audit(
+                        "create_directory",
+                        username=handler.username,
+                        target=parent_id,
+                        result=403,
+                        remote_address=handler.remote_address,
+                    )
                     return
-
-                # Check for duplicate folder or document name under the same parent
-                if not global_config["document"]["allow_name_duplicate"]:
-                    existing_folder = (
-                        session.query(Folder)
-                        .filter(Folder.parent_id == parent_id, Folder.name == name)
-                        .first()
-                    )
-                    existing_document = (
-                        session.query(Document)
-                        .filter(Document.folder_id == parent_id, Document.title == name)
-                        .first()
-                    )
-
-                    if existing_document:
-                        # 如果存在同名文档，无论是否有 exists_ok 都不能忽略重名
-                        # 提醒删除该重名的文档
-                        handler.conclude_request(
-                            400,
-                            {"type": "document", "id": existing_document.id},
-                            smsg.DOCUMENT_NAME_DUPLICATE,
-                        )
-                        return
-
-                    elif (
-                        existing_folder
-                    ):  # 第二步判断有无同名文件夹，如有检查 exists_ok
-
-                        if exists_ok:
-                            handler.conclude_request(
-                                200,
-                                {
-                                    "id": existing_folder.id,
-                                    "name": existing_folder.name,
-                                    "last_modified": existing_folder.created_time,
-                                },
-                                "Directory already exists",
-                            )
-                        else:
-                            handler.conclude_request(
-                                400,
-                                {},
-                                smsg.DIRECTORY_NAME_DUPLICATE,  # 第一步判断已经知道没有同名文档，则一定是同名文件夹
-                            )
-                        return
 
             else:
                 parent = None
@@ -321,7 +359,66 @@ def handle_create_directory(handler: ConnectionHandler):
                         "data": {},
                     }
                 )
+                log_audit(
+                    "create_directory",
+                    username=handler.username,
+                    target=parent_id,
+                    result=403,
+                    remote_address=handler.remote_address,
+                )
                 return
+            
+            # Check for duplicate folder or document name under the same parent
+            if not global_config["document"]["allow_name_duplicate"]:
+                existing_folder = (
+                    session.query(Folder)
+                    .filter(Folder.parent_id == parent_id, Folder.name == name)
+                    .first()
+                )
+                existing_document = (
+                    session.query(Document)
+                    .filter(Document.folder_id == parent_id, Document.title == name)
+                    .first()
+                )
+
+                if existing_document:
+                    # 如果存在同名文档，无论是否有 exists_ok 都不能忽略重名
+                    # 提醒删除该重名的文档
+                    handler.conclude_request(
+                        400,
+                        {"type": "document", "id": existing_document.id},
+                        smsg.DOCUMENT_NAME_DUPLICATE,
+                    )
+                    return
+
+                elif (
+                    existing_folder
+                ):  # 第二步判断有无同名文件夹，如有检查 exists_ok
+
+                    if exists_ok:
+                        handler.conclude_request(
+                            200,
+                            {
+                                "id": existing_folder.id,
+                                "name": existing_folder.name,
+                                "last_modified": existing_folder.created_time,
+                            },
+                            "Directory already exists",
+                        )
+                        log_audit(
+                            "create_directory",
+                            username=handler.username,
+                            target=parent_id,
+                            result=0,
+                            remote_address=handler.remote_address,
+                        )
+                    else:
+                        handler.conclude_request(
+                            400,
+                            {},
+                            smsg.DIRECTORY_NAME_DUPLICATE,  # 第一步判断已经知道没有同名文档，则一定是同名文件夹
+                        )
+                    return
 
             folder = Folder(name=name, parent=parent)
 
@@ -337,11 +434,25 @@ def handle_create_directory(handler: ConnectionHandler):
                     },
                     "Directory created successfully",
                 )
+                log_audit(
+                    "create_directory",
+                    username=handler.username,
+                    target=parent_id,
+                    result=0,
+                    remote_address=handler.remote_address,
+                )
 
             else:
                 session.rollback()
                 handler.conclude_request(
                     403, {}, "Set access rules failed: permission denied"
+                )
+                log_audit(
+                    "create_directory",
+                    username=handler.username,
+                    target=parent_id,
+                    result=403,
+                    remote_address=handler.remote_address,
                 )
 
             session.add(folder)
@@ -384,11 +495,24 @@ def handle_delete_directory(handler: ConnectionHandler):
                 handler.conclude_request(
                     **{"code": 403, "message": "Invalid user or token", "data": {}}
                 )
+                log_audit(
+                    "delete_directory",
+                    target=folder_id,
+                    result=401,
+                    remote_address=handler.remote_address,
+                )
                 return
             folder = session.get(Folder, folder_id)
             if not folder:
                 handler.conclude_request(
                     **{"code": 404, "message": "Directory not found", "data": {}}
+                )
+                log_audit(
+                    "delete_directory",
+                    username=handler.username,
+                    target=folder_id,
+                    result=404,
+                    remote_address=handler.remote_address,
                 )
                 return
             if (
@@ -397,6 +521,13 @@ def handle_delete_directory(handler: ConnectionHandler):
             ):
                 handler.conclude_request(
                     **{"code": 403, "message": "Access denied", "data": {}}
+                )
+                log_audit(
+                    "delete_directory",
+                    username=handler.username,
+                    target=folder_id,
+                    result=403,
+                    remote_address=handler.remote_address,
                 )
                 return
 
@@ -408,10 +539,24 @@ def handle_delete_directory(handler: ConnectionHandler):
                     {},
                     "An error occurred when attempting to delete documents in the directory. Perhaps a download task is still in progress?",
                 )
+                log_audit(
+                    "delete_directory",
+                    username=handler.username,
+                    target=folder_id,
+                    result=500,
+                    remote_address=handler.remote_address,
+                )
                 return
             session.delete(folder)
             session.commit()
 
+            log_audit(
+                "delete_directory",
+                username=handler.username,
+                target=folder_id,
+                result=0,
+                remote_address=handler.remote_address,
+            )
             handler.conclude_request(
                 **{"code": 200, "message": "Directory deleted successfully", "data": {}}
             )
@@ -457,11 +602,24 @@ def handle_rename_directory(handler: ConnectionHandler):
                 handler.conclude_request(
                     **{"code": 403, "message": "Invalid user or token", "data": {}}
                 )
+                log_audit(
+                    "rename_directory",
+                    target=folder_id,
+                    result=401,
+                    remote_address=handler.remote_address,
+                )
                 return
             folder = session.get(Folder, folder_id)
             if not folder:
                 handler.conclude_request(
                     **{"code": 404, "message": "Directory not found", "data": {}}
+                )
+                log_audit(
+                    "rename_directory",
+                    username=handler.username,
+                    target=folder_id,
+                    result=404,
+                    remote_address=handler.remote_address,
                 )
                 return
             if (
@@ -470,6 +628,13 @@ def handle_rename_directory(handler: ConnectionHandler):
             ):
                 handler.conclude_request(
                     **{"code": 403, "message": "Access denied", "data": {}}
+                )
+                log_audit(
+                    "rename_directory",
+                    username=handler.username,
+                    target=folder_id,
+                    result=403,
+                    remote_address=handler.remote_address,
                 )
                 return
 
@@ -487,6 +652,13 @@ def handle_rename_directory(handler: ConnectionHandler):
 
             session.commit()
 
+            log_audit(
+                "rename_directory",
+                username=handler.username,
+                target=folder_id,
+                result=0,
+                remote_address=handler.remote_address,
+            )
             handler.conclude_request(
                 **{"code": 200, "message": "Directory renamed successfully", "data": {}}
             )
@@ -516,10 +688,23 @@ def handle_move_directory(handler: ConnectionHandler):
             handler.conclude_request(
                 **{"code": 403, "message": smsg.INVALID_USER_OR_TOKEN, "data": {}}
             )
+            log_audit(
+                "move_directory",
+                target=folder_id,
+                result=401,
+                remote_address=handler.remote_address,
+            )
             return
 
         if "move" not in user.all_permissions:
             handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MOVE_DIRECTORY)
+            log_audit(
+                "move_directory",
+                username=handler.username,
+                target=folder_id,
+                result=403,
+                remote_address=handler.remote_address,
+            )
             return
 
         folder = session.get(Folder, folder_id)
@@ -531,6 +716,13 @@ def handle_move_directory(handler: ConnectionHandler):
                     "message": smsg.SUBJECT_DIRECTORY_NOT_FOUND,
                     "data": {},
                 }
+            )
+            log_audit(
+                "move_directory",
+                username=handler.username,
+                target=folder_id,
+                result=404,
+                remote_address=handler.remote_address,
             )
             return
 
@@ -547,6 +739,13 @@ def handle_move_directory(handler: ConnectionHandler):
                         "message": smsg.TARGET_DIRECTORY_NOT_FOUND,
                         "data": {},
                     }
+                )
+                log_audit(
+                    "move_directory",
+                    username=handler.username,
+                    target=folder_id,
+                    result=404,
+                    remote_address=handler.remote_address,
                 )
                 return
 

@@ -53,20 +53,8 @@ def handle_login(handler: ConnectionHandler):
                             "groups": list(user.all_groups),
                         },
                     }
-                    log_audit(
-                        "login",
-                        target=username,
-                        result=0,
-                        remote_address=handler.remote_address,
-                    )
                 else:
                     response = response_invalid
-                    log_audit(
-                        "login",
-                        target=username,
-                        result=1,
-                        remote_address=handler.remote_address,
-                    )
             else:
                 response = response_invalid
 
@@ -75,6 +63,7 @@ def handle_login(handler: ConnectionHandler):
 
         # Send the response back to the client
         handler.conclude_request(**response)
+        return response["code"], username
 
     except Exception as e:
         handler.logger.error(f"Error detected when handling requests.", exc_info=True)

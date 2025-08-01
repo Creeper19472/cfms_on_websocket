@@ -12,6 +12,8 @@ def log_audit(
     remote_address: Optional[str] = None,
 ):
     """创建审计日志。"""
+    if result == 400:
+        return
 
     with Session() as session:
         new_entry = AuditEntry(
