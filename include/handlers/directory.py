@@ -414,7 +414,7 @@ class RequestCreateDirectoryHandler(RequestHandler):
             handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
 
 
-class RequestDeleteDirectoryInfoHandler(RequestHandler):
+class RequestDeleteDirectoryHandler(RequestHandler):
     """
     Handles directory deletion requests.
     This function processes a directory deletion request by deleting the specified directory.
@@ -492,7 +492,7 @@ class RequestDeleteDirectoryInfoHandler(RequestHandler):
             handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
 
 
-class RequestRenameDirectoryInfoHandler(RequestHandler):
+class RequestRenameDirectoryHandler(RequestHandler):
     """
     Handles directory renaming requests.
     This function processes a directory renaming request by updating the name of the specified directory.
@@ -575,7 +575,7 @@ class RequestRenameDirectoryInfoHandler(RequestHandler):
             handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
 
 
-class RequestMoveDirectoryInfoHandler(RequestHandler):
+class RequestMoveDirectoryHandler(RequestHandler):
 
     data_schema = {
         "type": "object",

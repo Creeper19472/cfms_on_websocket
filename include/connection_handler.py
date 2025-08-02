@@ -28,10 +28,10 @@ from include.handlers.document import (
 from include.handlers.directory import (
     RequestListDirectoryHandler,
     RequestCreateDirectoryHandler,
-    RequestDeleteDirectoryInfoHandler,
+    RequestDeleteDirectoryHandler,
     RequestGetDirectoryInfoHandler,
-    RequestMoveDirectoryInfoHandler,
-    RequestRenameDirectoryInfoHandler,
+    RequestMoveDirectoryHandler,
+    RequestRenameDirectoryHandler,
 )
 from include.handlers.management.user import (
     RequestChangeUserGroupsHandler,
@@ -120,9 +120,9 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "list_directory": RequestListDirectoryHandler,
         "get_directory_info": RequestGetDirectoryInfoHandler,
         "create_directory": RequestCreateDirectoryHandler,
-        "delete_directory": RequestDeleteDirectoryInfoHandler,
-        "rename_directory": RequestRenameDocumentHandler,
-        "move_directory": RequestMoveDirectoryInfoHandler,
+        "delete_directory": RequestDeleteDirectoryHandler,
+        "rename_directory": RequestRenameDirectoryHandler,
+        "move_directory": RequestMoveDirectoryHandler,
         # 用户类
         "list_users": RequestListUsersHandler,
         "create_user": RequestCreateUserHandler,
