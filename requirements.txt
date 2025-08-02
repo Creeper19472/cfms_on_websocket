@@ -4,3 +4,4 @@ tomlkit
 websockets
 pycryptodome
 cryptography
+jsonschema
