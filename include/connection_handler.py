@@ -164,7 +164,11 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
 
         _request_handler: RequestHandler = available_functions[action]()
 
-        jsonschema.validate(this_handler.data, _request_handler.data_schema)
+        try:
+            jsonschema.validate(this_handler.data, _request_handler.data_schema)
+        except jsonschema.ValidationError:
+            this_handler.conclude_request(400, {}, "Bad request")
+            return
 
         callback: Union[
             int,

@@ -7,7 +7,10 @@ from include.function.user import create_user
 
 class RequestListUsersHandler(RequestHandler):
 
-    data_schema = {"type": "object"}
+    data_schema = {
+        "type": "object",
+        "additionalProperties": False,
+    }
 
     def handle(self, handler: ConnectionHandler):
 
@@ -67,8 +70,32 @@ class RequestCreateUserHandler(RequestHandler):
             "username": {"type": "string", "minLength": 1},
             "password": {"type": "string"},
             "nickname": {"type": "string"},
-            "permissions": {"type": "array", "items": {"type": "object"}},
-            "groups": {"type": "array", "items": {"type": "object"}},
+            "permissions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "permission": {"type": "string"},
+                        "start_time": {"type": "number"},
+                        "end_time": {"type": "number"},
+                    },
+                    "required": ["permission", "start_time"],
+                    "additionalProperties": False,
+                },
+            },
+            "groups": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "group_name": {"type": "string"},
+                        "start_time": {"type": "number"},
+                        "end_time": {"type": "number"},
+                    },
+                    "required": ["group_name", "start_time"],
+                    "additionalProperties": False,
+                },
+            },
         },
         "required": ["username", "password"],
         "additionalProperties": False,
@@ -100,18 +127,8 @@ class RequestCreateUserHandler(RequestHandler):
                     )
                     return
 
-                new_username = handler.data.get("username")
-                new_password = handler.data.get("password")
-
-                if not new_username or not new_password:
-                    handler.conclude_request(
-                        **{
-                            "code": 400,
-                            "message": "Username and password are required",
-                            "data": {},
-                        }
-                    )
-                    return
+                new_username = handler.data["username"]
+                new_password = handler.data["password"]
 
                 existing_user = session.get(User, new_username)
                 if existing_user:
@@ -204,7 +221,14 @@ class RequestCreateUserHandler(RequestHandler):
 
 
 class RequestDeleteUserHandler(RequestHandler):
-    data_schema = {}
+    data_schema = {
+        "type": "object",
+        "properties": {
+            "username": {"type": "string", "minLength": 1},
+        },
+        "required": ["username"],
+        "additionalProperties": False,
+    }
 
     def handle(self, handler: ConnectionHandler):
         try:
@@ -277,21 +301,29 @@ class RequestDeleteUserHandler(RequestHandler):
             handler.conclude_request(**response)
 
         except Exception as e:
-            handler.logger.error(f"Error detected when handling requests.", exc_info=True)
+            handler.logger.error(
+                f"Error detected when handling requests.", exc_info=True
+            )
             handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
 
 
 class RequestRenameUserHandler(RequestHandler):
-    data_schema = {}
+    data_schema = {
+        "type": "object",
+        "properties": {
+            "username": {
+                "type": "string",
+                "minLength": 1,
+            },
+            "nickname": {"type": "string"},
+        },
+        "required": ["username"],
+        "additionalProperties": False,
+    }
 
     def handle(self, handler: ConnectionHandler):
 
         target_username = handler.data["username"]
-        if not target_username:
-            handler.conclude_request(
-                **{"code": 400, "message": "Target username is required", "data": {}}
-            )
-            return
 
         try:
             with Session() as session:
@@ -337,12 +369,21 @@ class RequestRenameUserHandler(RequestHandler):
             handler.conclude_request(**response)
 
         except Exception as e:
-            handler.logger.error(f"Error detected when handling requests.", exc_info=True)
+            handler.logger.error(
+                f"Error detected when handling requests.", exc_info=True
+            )
             handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
 
 
 class RequestGetUserInfoHandler(RequestHandler):
-    data_schema = {}
+    data_schema = {
+        "type": "object",
+        "properties": {
+            "username": {"type": "string", "minLength": 1},
+        },
+        "required": ["username"],
+        "additionalProperties": False,
+    }
 
     def handle(self, handler: ConnectionHandler):
         user_to_get_username = handler.data["username"]
@@ -395,12 +436,22 @@ class RequestGetUserInfoHandler(RequestHandler):
                 )
 
         except Exception as e:
-            handler.logger.error(f"Error detected when handling requests.", exc_info=True)
+            handler.logger.error(
+                f"Error detected when handling requests.", exc_info=True
+            )
             handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
 
 
 class RequestChangeUserGroupsHandler(RequestHandler):
-    data_schema = {}
+    data_schema = {
+        "type": "object",
+        "properties": {
+            "username": {"type": "string", "minLength": 1},
+            "groups": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": ["username"],
+        "additionalProperties": False,
+    }
 
     def handle(self, handler: ConnectionHandler):
 
@@ -452,12 +503,25 @@ class RequestChangeUserGroupsHandler(RequestHandler):
             handler.conclude_request(**response)
 
         except Exception as e:
-            handler.logger.error(f"Error detected when handling requests.", exc_info=True)
+            handler.logger.error(
+                f"Error detected when handling requests.", exc_info=True
+            )
             handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
 
 
 class RequestSetPasswdHandler(RequestHandler):
-    data_schema = {}
+    data_schema = {
+        "type": "object",
+        "properties": {
+            "username": {"type": "string", "minLength": 1},
+            "old_passwd": {
+                "type": "string",
+            },
+            "new_passwd": {"type": "string", "minLength": 1},
+        },
+        "required": ["username", "new_passwd"],
+        "additionalProperties": False,
+    }
 
     def handle(self, handler: ConnectionHandler):
 
@@ -477,7 +541,11 @@ class RequestSetPasswdHandler(RequestHandler):
                     return
                 if not new_passwd:
                     handler.conclude_request(
-                        **{"code": 400, "message": "New password is required", "data": {}}
+                        **{
+                            "code": 400,
+                            "message": "New password is required",
+                            "data": {},
+                        }
                     )
                     return
 
@@ -503,7 +571,11 @@ class RequestSetPasswdHandler(RequestHandler):
                     operator_user = session.get(User, operator_username)
                     if not operator_user or not operator_user.is_token_valid(token):
                         handler.conclude_request(
-                            **{"code": 401, "message": "Invalid user or token", "data": {}}
+                            **{
+                                "code": 401,
+                                "message": "Invalid user or token",
+                                "data": {},
+                            }
                         )
                         return
                 else:  # 这条路径下的 operator_user 应该永远也不会被调用。
@@ -560,5 +632,7 @@ class RequestSetPasswdHandler(RequestHandler):
             handler.conclude_request(**response)
 
         except Exception as e:
-            handler.logger.error(f"Error detected when handling requests.", exc_info=True)
+            handler.logger.error(
+                f"Error detected when handling requests.", exc_info=True
+            )
             handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
