@@ -61,7 +61,7 @@ class RequestListDirectoryHandler(RequestHandler):
 
     data_schema = {
         "type": "object",
-        "properties": {"folder_id": {"type": "string"}},
+        "properties": {"folder_id": {"anyOf": [{"type": "string"}, {"type": "null"}]}},
     }
 
     def handle(self, handler: ConnectionHandler):
@@ -250,7 +250,7 @@ class RequestGetDirectoryInfoHandler(RequestHandler):
             handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
 
 
-class RequestCreateDirectoryInfoHandler(RequestHandler):
+class RequestCreateDirectoryHandler(RequestHandler):
     """
     Handles directory creation requests.
     This function processes a directory creation request by creating a new directory in the specified parent directory.
@@ -517,7 +517,7 @@ class RequestRenameDirectoryInfoHandler(RequestHandler):
     }
 
     def handle(self, handler: ConnectionHandler):
-    
+
         try:
             # Parse the directory renaming request
             folder_id = handler.data["folder_id"]
@@ -560,12 +560,18 @@ class RequestRenameDirectoryInfoHandler(RequestHandler):
                 session.commit()
 
                 handler.conclude_request(
-                    **{"code": 200, "message": "Directory renamed successfully", "data": {}}
+                    **{
+                        "code": 200,
+                        "message": "Directory renamed successfully",
+                        "data": {},
+                    }
                 )
                 return 0, folder_id, handler.username
 
         except Exception as e:
-            handler.logger.error(f"Error detected when handling requests.", exc_info=True)
+            handler.logger.error(
+                f"Error detected when handling requests.", exc_info=True
+            )
             handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
 
 
@@ -638,7 +644,9 @@ class RequestMoveDirectoryInfoHandler(RequestHandler):
                 if not target_folder.check_access_requirements(
                     user, 1
                 ):  # 对于目标文件夹，移动可视为一种写操作
-                    handler.conclude_request(403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY)
+                    handler.conclude_request(
+                        403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY
+                    )
                     return 403, folder_id, handler.username
 
                 folder.parent = target_folder

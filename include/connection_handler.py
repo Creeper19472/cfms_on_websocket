@@ -27,7 +27,7 @@ from include.handlers.document import (
 )
 from include.handlers.directory import (
     RequestListDirectoryHandler,
-    RequestCreateDirectoryInfoHandler,
+    RequestCreateDirectoryHandler,
     RequestDeleteDirectoryInfoHandler,
     RequestGetDirectoryInfoHandler,
     RequestMoveDirectoryInfoHandler,
@@ -119,7 +119,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         # 目录类
         "list_directory": RequestListDirectoryHandler,
         "get_directory_info": RequestGetDirectoryInfoHandler,
-        "create_directory": RequestCreateDirectoryInfoHandler,
+        "create_directory": RequestCreateDirectoryHandler,
         "delete_directory": RequestDeleteDirectoryInfoHandler,
         "rename_directory": RequestRenameDocumentHandler,
         "move_directory": RequestMoveDirectoryInfoHandler,
