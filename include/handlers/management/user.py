@@ -315,7 +315,7 @@ class RequestRenameUserHandler(RequestHandler):
                 "type": "string",
                 "minLength": 1,
             },
-            "nickname": {"type": "string"},
+            "nickname": {"anyOf": [{"type": "string"}, {"type": "null"}]},
         },
         "required": ["username"],
         "additionalProperties": False,
@@ -323,7 +323,7 @@ class RequestRenameUserHandler(RequestHandler):
 
     def handle(self, handler: ConnectionHandler):
 
-        target_username = handler.data["username"]
+        target_username: str = handler.data["username"]
 
         try:
             with Session() as session:
@@ -514,9 +514,7 @@ class RequestSetPasswdHandler(RequestHandler):
         "type": "object",
         "properties": {
             "username": {"type": "string", "minLength": 1},
-            "old_passwd": {
-                "type": "string",
-            },
+            "old_passwd": {"anyOf": [{"type": "string"}, {"type": "null"}]},
             "new_passwd": {"type": "string", "minLength": 1},
         },
         "required": ["username", "new_passwd"],
@@ -532,22 +530,7 @@ class RequestSetPasswdHandler(RequestHandler):
 
                 target_username = handler.data.get("username", None)
                 old_passwd = handler.data.get("old_passwd", None)
-                new_passwd = handler.data.get("new_passwd", None)
-
-                if not target_username:
-                    handler.conclude_request(
-                        **{"code": 400, "message": "Username is required", "data": {}}
-                    )
-                    return
-                if not new_passwd:
-                    handler.conclude_request(
-                        **{
-                            "code": 400,
-                            "message": "New password is required",
-                            "data": {},
-                        }
-                    )
-                    return
+                new_passwd = handler.data["new_passwd"]
 
                 user = session.get(User, target_username)
                 if not user:

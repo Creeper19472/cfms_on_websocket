@@ -40,7 +40,7 @@ from include.handlers.management.user import (
     RequestListUsersHandler,
     RequestGetUserInfoHandler,
     RequestRenameUserHandler,
-    RequestSetPasswdHandler
+    RequestSetPasswdHandler,
 )
 from include.handlers.management.group import (
     RequestChangeGroupPermissionsHandler,
@@ -48,7 +48,7 @@ from include.handlers.management.group import (
     RequestDeleteGroupHandler,
     RequestGetGroupInfoHandler,
     RequestListGroupsHandler,
-    RequestRenameGroupHandler
+    RequestRenameGroupHandler,
 )
 from include.constants import CORE_VERSION, PROTOCOL_VERSION
 
@@ -166,36 +166,22 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
 
         try:
             jsonschema.validate(this_handler.data, _request_handler.data_schema)
-        except jsonschema.ValidationError:
-            this_handler.conclude_request(400, {}, "Bad request")
+        except jsonschema.ValidationError as error:
+            this_handler.conclude_request(400, {
+                "validator": error.validator,
+                "validator_value": error.validator_value
+            }, error.message)
             return
 
         callback: Union[
             int,
-            tuple[int, str],
-            tuple[int, str, dict],
-            tuple[int, str, dict, str],
-            tuple[int, str, str],
+            tuple[int, Optional[str]],
+            tuple[int, Optional[str], dict],
+            tuple[int, Optional[str], str],
+            tuple[int, Optional[str], dict, str],
             None,
         ] = _request_handler.handle(this_handler)
-        """
-        callback 的格式：
-        - result, Optional[target], Optional[data], Optional[username]
-        有以下几种情况：
-        1. -> None
-            该结果将被忽略。
-        2. -> int
-            只有 result
-        3. -> tuple[int, str]
-            这种情况下 int 为 result, 第二个元素必定为 target。
-        4. -> tuple[int, str, dict]
-            这种情况下 int 为 result, 第二个元素必定为 target, 第三个元素为 data。
-        5. -> tuple[int, str, str]
-            这种情况下 int 为 result, 第二个元素必定为 target, 第三个元素为 username。
-        6. -> tuple[int, str, dict, str]
-            这种情况下 int 为 result, 第二个元素必定为 target, 第三个元素为 data, 第四个元素为 username。
 
-        """
         if type(callback) is tuple:
             match callback:
                 case (result, target) if len(callback) == 2:
@@ -239,7 +225,7 @@ class RequestServerInfoHandler(RequestHandler):
         this_handler: The ConnectionHandler instance handling the request.
     """
 
-    data_schema = {"type": "object"}
+    data_schema = {"type": "object", "properties": {}, "additionalProperties": False}
 
     def handle(self, handler: ConnectionHandler):
 

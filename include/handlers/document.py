@@ -27,7 +27,7 @@ __all__ = [
     "RequestDownloadFileHandler",
     "RequestUploadFileHandler",
     "RequestSetDocumentRulesHandler",
-    "RequestMoveDocumentHandler"
+    "RequestMoveDocumentHandler",
 ]
 
 
@@ -76,10 +76,8 @@ class RequestGetDocumentInfoHandler(RequestHandler):
 
     data_schema = {
         "type": "object",
-        "properties": {
-            "document_id": {"type": "string", "minLength": 1}
-        },
-        "required": ["document_id"]
+        "properties": {"document_id": {"type": "string", "minLength": 1}},
+        "required": ["document_id"],
     }
 
     def handle(self, handler: ConnectionHandler):
@@ -140,7 +138,8 @@ class RequestGetDocumentInfoHandler(RequestHandler):
 
             handler.conclude_request(200, data, "Document info retrieved successfully")
             return 0, document_id, handler.username
-        
+
+
 class RequestGetDocumentHandler(RequestHandler):
     """
     Handles the "get_document" action.
@@ -148,18 +147,13 @@ class RequestGetDocumentHandler(RequestHandler):
 
     data_schema = {
         "type": "object",
-        "properties": {
-            "document_id": {"type": "string", "minLength": 1}
-        },
-        "required": ["document_id"]
+        "properties": {"document_id": {"type": "string", "minLength": 1}},
+        "required": ["document_id"],
+        "additionalProperties": False,
     }
 
     def handle(self, handler: ConnectionHandler):
         document_id: str = handler.data["document_id"]
-
-        # if not document_id:
-        #     handler.conclude_request(400, {}, "Document ID is required")
-        #     return
 
         with Session() as session:
             user = session.get(User, handler.username)
@@ -242,11 +236,12 @@ class RequestCreateDocumentHandler(RequestHandler):
     data_schema = {
         "type": "object",
         "properties": {
-            "folder_id": {"type": "string"},
+            "folder_id": {"anyOf": [{"type": "string"}, {"type": "null"}]},
             "title": {"type": "string", "minLength": 1},
-            "access_rules": {"type": "object"}
+            "access_rules": {"type": "object"},
         },
-        "required": ["title"]
+        "required": ["title"],
+        "additionalProperties": False,
     }
 
     def handle(self, handler: ConnectionHandler):
@@ -304,7 +299,9 @@ class RequestCreateDocumentHandler(RequestHandler):
 
                     if existing_doc:
                         if existing_doc.active:
-                            handler.conclude_request(400, {}, smsg.DOCUMENT_NAME_DUPLICATE)
+                            handler.conclude_request(
+                                400, {}, smsg.DOCUMENT_NAME_DUPLICATE
+                            )
                             return
                         else:
                             # 如果该文档尚未被激活，则先尝试删除未激活的文档
@@ -344,12 +341,16 @@ class RequestCreateDocumentHandler(RequestHandler):
             new_document_revision = DocumentRevision(file_id=new_file.id)
             new_document.revisions.append(new_document_revision)
 
-            if apply_document_access_rules(new_document.id, access_rules_to_apply, user):
+            if apply_document_access_rules(
+                new_document.id, access_rules_to_apply, user
+            ):
                 session.add(new_file)
                 session.add(new_document)
                 session.add(new_document_revision)
                 session.commit()
-                task_data = create_file_task(new_document_revision.file, transfer_mode=1)
+                task_data = create_file_task(
+                    new_document_revision.file, transfer_mode=1
+                )
                 handler.conclude_request(
                     200, {"task_data": task_data}, "Task successfully created"
                 )
@@ -372,14 +373,12 @@ class RequestUploadDocumentHandler(RequestHandler):
         "properties": {
             "document_id": {"type": "string", "minLength": 1},
         },
-        "required": ["document_id"]
+        "required": ["document_id"],
+        "additionalProperties": False,
     }
 
     def handle(self, handler: ConnectionHandler):
-        document_id = handler.data.get("document_id")
-        if not document_id:
-            handler.conclude_request(400, {}, "Document ID is required")
-            return
+        document_id = handler.data["document_id"]
 
         with Session() as session:
             document = session.get(Document, document_id)
@@ -404,7 +403,9 @@ class RequestUploadDocumentHandler(RequestHandler):
                     path=f"./content/files/{today.year}/{today.month}/{real_filename}",
                 )
 
-                new_revision = DocumentRevision(document_id=document_id, file_id=file_id)
+                new_revision = DocumentRevision(
+                    document_id=document_id, file_id=file_id
+                )
                 document.revisions.append(new_revision)
 
                 session.add(new_file)
@@ -417,8 +418,11 @@ class RequestUploadDocumentHandler(RequestHandler):
 
             task_data = create_file_task(new_file, 1)
 
-        handler.conclude_request(200, {"task_data": task_data}, "Task successfully created")
+        handler.conclude_request(
+            200, {"task_data": task_data}, "Task successfully created"
+        )
         return 0, document_id, task_data, handler.username
+
 
 class RequestDeleteDocumentHandler(RequestHandler):
     """
@@ -430,15 +434,12 @@ class RequestDeleteDocumentHandler(RequestHandler):
         "properties": {
             "document_id": {"type": "string", "minLength": 1},
         },
-        "required": ["document_id"]
+        "required": ["document_id"],
+        "additionalProperties": False,
     }
 
     def handle(self, handler: ConnectionHandler):
         document_id = handler.data["document_id"]
-
-        if not document_id:
-            handler.conclude_request(400, {}, "Document ID is required")
-            return
 
         with Session() as session:
             user = session.get(User, handler.username)
@@ -484,9 +485,10 @@ class RequestRenameDocumentHandler(RequestHandler):
         "type": "object",
         "properties": {
             "document_id": {"type": "string", "minLength": 1},
-            "new_title": {"type": "string", "minLength": 1}
+            "new_title": {"type": "string", "minLength": 1},
         },
-        "required": ["document_id", "new_title"]
+        "required": ["document_id", "new_title"],
+        "additionalProperties": False,
     }
 
     def handle(self, handler: ConnectionHandler):
@@ -532,12 +534,18 @@ class RequestRenameDocumentHandler(RequestHandler):
                 session.commit()
 
                 handler.conclude_request(
-                    **{"code": 200, "message": "Document renamed successfully", "data": {}}
+                    **{
+                        "code": 200,
+                        "message": "Document renamed successfully",
+                        "data": {},
+                    }
                 )
                 return 0, document_id, handler.username
 
         except Exception as e:
-            handler.logger.error(f"Error detected when handling requests.", exc_info=True)
+            handler.logger.error(
+                f"Error detected when handling requests.", exc_info=True
+            )
             handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
 
 
@@ -551,15 +559,12 @@ class RequestDownloadFileHandler(RequestHandler):
         "properties": {
             "task_id": {"type": "string", "minLength": 1},
         },
-        "required": ["task_id"]
+        "required": ["task_id"],
+        "additionalProperties": False,
     }
 
     def handle(self, handler: ConnectionHandler):
         task_id: str = handler.data["task_id"]
-
-        if not task_id:
-            handler.conclude_request(400, {}, "Task ID is required")
-            return
 
         with Session() as session:
             task = session.get(FileTask, task_id)
@@ -595,14 +600,12 @@ class RequestUploadFileHandler(RequestHandler):
         "properties": {
             "task_id": {"type": "string", "minLength": 1},
         },
-        "required": ["task_id"]
+        "required": ["task_id"],
+        "additionalProperties": False,
     }
 
     def handle(self, handler: ConnectionHandler):
         task_id = handler.data["task_id"]
-        if not task_id:
-            handler.conclude_request(400, {}, "Task ID is required")
-            return
 
         with Session() as session:
             task = session.get(FileTask, task_id)
@@ -611,7 +614,9 @@ class RequestUploadFileHandler(RequestHandler):
                 return
 
             if task.status != 0 or task.mode != 1:
-                handler.conclude_request(400, {}, "Task is not in a valid state for upload")
+                handler.conclude_request(
+                    400, {}, "Task is not in a valid state for upload"
+                )
                 return
 
             if task.start_time > time.time() or (
@@ -637,7 +642,8 @@ class RequestSetDocumentRulesHandler(RequestHandler):
             "document_id": {"type": "string", "minLength": 1},
             "access_rules": {"type": "object"},
         },
-        "required": ["document_id", "access_rules"]
+        "required": ["document_id", "access_rules"],
+        "additionalProperties": False,
     }
 
     def handle(self, handler: ConnectionHandler):
@@ -649,7 +655,7 @@ class RequestSetDocumentRulesHandler(RequestHandler):
 
         if not handler.username:
             handler.conclude_request(
-                **{"code": 403, "message": "Authentication is required", "data": {}}
+                **{"code": 401, "message": "Authentication is required", "data": {}}
             )
             return 401, document_id
 
@@ -705,25 +711,16 @@ class RequestMoveDocumentHandler(RequestHandler):
         "type": "object",
         "properties": {
             "document_id": {"type": "string", "minLength": 1},
-            "target_folder_id": {"type": "string"},
+            "target_folder_id": {"anyOf": [{"type": "string"}, {"type": "null"}]},
         },
-        "required": ["document_id"] # , "target_folder_id"
+        "required": ["document_id"],  # , "target_folder_id"
+        "additionalProperties": False,
     }
 
     def handle(self, handler: ConnectionHandler):
 
         document_id: str = handler.data["document_id"]
         target_folder_id: str = handler.data.get("target_folder_id", "")
-
-        if not document_id:
-            handler.conclude_request(
-                **{
-                    "code": 400,
-                    "message": "Document_id is required",
-                    "data": {},
-                }
-            )
-            return
 
         if not handler.username or not handler.token:
             handler.conclude_request(
@@ -741,7 +738,12 @@ class RequestMoveDocumentHandler(RequestHandler):
 
             if "move" not in user.all_permissions:
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MOVE_DOCUMENT)
-                return 403, document_id, {"target_folder_id": target_folder_id}, handler.username
+                return (
+                    403,
+                    document_id,
+                    {"target_folder_id": target_folder_id},
+                    handler.username,
+                )
 
             document = session.get(Document, document_id)
             if not document:
@@ -752,11 +754,21 @@ class RequestMoveDocumentHandler(RequestHandler):
                         "data": {},
                     }
                 )
-                return 404, document_id, {"target_folder_id": target_folder_id}, handler.username
+                return (
+                    404,
+                    document_id,
+                    {"target_folder_id": target_folder_id},
+                    handler.username,
+                )
 
             if not document.check_access_requirements(user, 2):
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MOVE_DOCUMENT)
-                return 403, document_id, {"target_folder_id": target_folder_id}, handler.username
+                return (
+                    403,
+                    document_id,
+                    {"target_folder_id": target_folder_id},
+                    handler.username,
+                )
 
             if target_folder_id:
                 target_folder = session.get(Folder, target_folder_id)
@@ -768,13 +780,25 @@ class RequestMoveDocumentHandler(RequestHandler):
                             "data": {},
                         }
                     )
-                    return 404, document_id, {"target_folder_id": target_folder_id}, handler.username
+                    return (
+                        404,
+                        document_id,
+                        {"target_folder_id": target_folder_id},
+                        handler.username,
+                    )
 
                 if not target_folder.check_access_requirements(
                     user, 1
                 ):  # 对于目标文件夹，移动可视为一种写操作
-                    handler.conclude_request(403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY)
-                    return 403, document_id, {"target_folder_id": target_folder_id}, handler.username
+                    handler.conclude_request(
+                        403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY
+                    )
+                    return (
+                        403,
+                        document_id,
+                        {"target_folder_id": target_folder_id},
+                        handler.username,
+                    )
 
                 document.folder = target_folder
             else:

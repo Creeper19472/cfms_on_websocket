@@ -27,7 +27,8 @@ class RequestLoginHandler(RequestHandler):
             "username": {"type": "string", "minLength": 1},
             "password": {"type": "string", "minLength": 1}
         },
-        "required": ["username", "password"]
+        "required": ["username", "password"],
+        "additionalProperties": False
     }
 
     def handle(self, handler: ConnectionHandler):
@@ -46,13 +47,7 @@ class RequestLoginHandler(RequestHandler):
                     "data": {},
                 }
 
-                if not username or not password:
-                    response = {
-                        "code": 400,
-                        "message": "missing username or password",
-                        "data": {},
-                    }
-                elif user:
+                if user:
                     if token := user.authenticate_and_create_token(password):
                         response = {
                             "code": 200,

@@ -1,3 +1,4 @@
+from typing import Optional
 from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
 from include.conf_loader import global_config
@@ -62,13 +63,15 @@ class RequestListDirectoryHandler(RequestHandler):
     data_schema = {
         "type": "object",
         "properties": {"folder_id": {"anyOf": [{"type": "string"}, {"type": "null"}]}},
+        "required": ["folder_id"],
+        "additionalProperties": False,
     }
 
     def handle(self, handler: ConnectionHandler):
 
         try:
             # Parse the directory listing request
-            folder_id: str = handler.data.get("folder_id", "")
+            folder_id: Optional[str] = handler.data.get("folder_id")
 
             with Session() as session:
                 this_user = session.get(User, handler.username)
@@ -180,6 +183,7 @@ class RequestGetDirectoryInfoHandler(RequestHandler):
         "type": "object",
         "properties": {"directory_id": {"type": "string", "minLength": 1}},
         "required": ["directory_id"],
+        "additionalProperties": False,
     }
 
     def handle(self, handler: ConnectionHandler):
@@ -268,7 +272,7 @@ class RequestCreateDirectoryHandler(RequestHandler):
     data_schema = {
         "type": "object",
         "properties": {
-            "parent_id": {"type": "string"},
+            "parent_id": {"anyOf": [{"type": "string"}, {"type": "null"}]},
             "name": {"type": "string", "minLength": 1},
             "access_rules": {"type": "object"},
         },
@@ -279,7 +283,7 @@ class RequestCreateDirectoryHandler(RequestHandler):
 
         try:
             # Parse the directory creation request
-            parent_id: str = handler.data.get("parent_id", "")
+            parent_id: Optional[str] = handler.data.get("parent_id")
             name: str = handler.data["name"]
             access_rules_to_apply: dict = handler.data.get("access_rules", {})
             exists_ok = handler.data.get("exists_ok", False)
@@ -435,6 +439,7 @@ class RequestDeleteDirectoryHandler(RequestHandler):
             "folder_id": {"type": "string", "minLength": 1},
         },
         "required": ["folder_id"],
+        "additionalProperties": False,
     }
 
     def handle(self, handler: ConnectionHandler):
@@ -514,6 +519,7 @@ class RequestRenameDirectoryHandler(RequestHandler):
             "new_name": {"type": "string", "minLength": 1},
         },
         "required": ["folder_id", "new_name"],
+        "additionalProperties": False,
     }
 
     def handle(self, handler: ConnectionHandler):
@@ -581,25 +587,16 @@ class RequestMoveDirectoryHandler(RequestHandler):
         "type": "object",
         "properties": {
             "folder_id": {"type": "string", "minLength": 1},
-            "target_folder_id": {"type": "string", "minLength": 1},
+            "target_folder_id": {"anyOf": [{"type": "string"}, {"type": "null"}]},
         },
         "required": ["folder_id", "target_folder_id"],
+        "additionalProperties": False,
     }
 
     def handle(self, handler: ConnectionHandler):
 
         folder_id: str = handler.data["folder_id"]
-        target_folder_id: str = handler.data["target_folder_id"]
-
-        if not folder_id:
-            handler.conclude_request(
-                **{
-                    "code": 400,
-                    "message": "folder_id is required",
-                    "data": {},
-                }
-            )
-            return
+        target_folder_id: Optional[str] = handler.data.get("target_folder_id")
 
         with Session() as session:
             user = session.get(User, handler.username)

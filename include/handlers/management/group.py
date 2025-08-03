@@ -1,7 +1,13 @@
+from typing import Optional
 from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
 from include.database.handler import Session
-from include.database.models.general import User, UserGroup, UserGroupPermission, UserMembership
+from include.database.models.general import (
+    User,
+    UserGroup,
+    UserGroupPermission,
+    UserMembership,
+)
 from include.function.group import create_group
 
 
@@ -12,7 +18,7 @@ __all__ = [
 
 
 class RequestListGroupsHandler(RequestHandler):
-    data_schema = {}
+    data_schema = {"type": "object", "additionalProperties": False}
 
     def handle(self, handler: ConnectionHandler):
 
@@ -56,12 +62,35 @@ class RequestListGroupsHandler(RequestHandler):
                 handler.conclude_request(**response)
 
         except Exception as e:
-            handler.logger.error(f"Error detected when handling requests.", exc_info=True)
+            handler.logger.error(
+                f"Error detected when handling requests.", exc_info=True
+            )
             handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
 
 
 class RequestCreateGroupHandler(RequestHandler):
-    data_schema = {}
+    data_schema = {
+        "type": "object",
+        "properties": {
+            "group_name": {"type": "string", "minLength": 1},
+            "display_name": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+            "permissions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "permission": {"type": "string"},
+                        "start_time": {"type": "number"},
+                        "end_time": {"type": "number"},
+                    },
+                    "required": ["permission", "start_time"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["group_name"],
+        "additionalProperties": False,
+    }
 
     def handle(self, handler: ConnectionHandler):
 
@@ -90,17 +119,7 @@ class RequestCreateGroupHandler(RequestHandler):
                     )
                     return
 
-                new_group_name = handler.data.get("group_name")
-
-                if not new_group_name:
-                    handler.conclude_request(
-                        **{
-                            "code": 400,
-                            "message": "Group name is missing",
-                            "data": {},
-                        }
-                    )
-                    return
+                new_group_name: str = handler.data["group_name"]
 
                 existing_group = session.get(UserGroup, new_group_name)
                 if existing_group:
@@ -110,7 +129,7 @@ class RequestCreateGroupHandler(RequestHandler):
                     return
                 del existing_group
 
-                new_display_name = handler.data.get("display_name", None)
+                new_display_name: Optional[str] = handler.data.get("display_name", None)
                 new_group_permissions: list[dict] = handler.data.get("permissions", [])
 
                 for right in new_group_permissions:
@@ -148,12 +167,21 @@ class RequestCreateGroupHandler(RequestHandler):
             handler.conclude_request(**response)
 
         except Exception as e:
-            handler.logger.error(f"Error detected when handling requests.", exc_info=True)
+            handler.logger.error(
+                f"Error detected when handling requests.", exc_info=True
+            )
             handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
 
 
 class RequestDeleteGroupHandler(RequestHandler):
-    data_schema = {}
+    data_schema = {
+        "type": "object",
+        "properties": {
+            "group_name": {"type": "string", "minLength": 1},
+        },
+        "required": ["group_name"],
+        "additionalProperties": False,
+    }
 
     def handle(self, handler: ConnectionHandler):
 
@@ -177,14 +205,9 @@ class RequestDeleteGroupHandler(RequestHandler):
                     )
                     return
 
-                group_to_delete_name = handler.data["group_name"]
-                if not group_to_delete_name:
-                    handler.conclude_request(
-                        **{"code": 400, "message": "Group name is required", "data": {}}
-                    )
-                    return
-
+                group_to_delete_name: str = handler.data["group_name"]
                 group_to_delete = session.get(UserGroup, group_to_delete_name)
+
                 if not group_to_delete:
                     handler.conclude_request(
                         **{"code": 404, "message": "Group does not exist", "data": {}}
@@ -221,21 +244,26 @@ class RequestDeleteGroupHandler(RequestHandler):
             handler.conclude_request(**response)
 
         except Exception as e:
-            handler.logger.error(f"Error detected when handling requests.", exc_info=True)
+            handler.logger.error(
+                f"Error detected when handling requests.", exc_info=True
+            )
             handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
 
 
 class RequestRenameGroupHandler(RequestHandler):
-    data_schema = {}
+    data_schema = {
+        "type": "object",
+        "properties": {
+            "group_name": {"type": "string", "minLength": 1},
+            "display_name": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        },
+        "required": ["group_name", "display_name"],
+        "additionalProperties": False,
+    }
 
     def handle(self, handler: ConnectionHandler):
 
-        target_group_name = handler.data["group_name"]
-        if not target_group_name:
-            handler.conclude_request(
-                **{"code": 400, "message": "Target group_name is required", "data": {}}
-            )
-            return
+        target_group_name: str = handler.data["group_name"]
 
         try:
             with Session() as session:
@@ -287,12 +315,21 @@ class RequestRenameGroupHandler(RequestHandler):
             handler.conclude_request(**response)
 
         except Exception as e:
-            handler.logger.error(f"Error detected when handling requests.", exc_info=True)
+            handler.logger.error(
+                f"Error detected when handling requests.", exc_info=True
+            )
             handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
 
 
 class RequestGetGroupInfoHandler(RequestHandler):
-    data_schema = {}
+    data_schema = {
+        "type": "object",
+        "properties": {
+            "group_name": {"type": "string", "minLength": 1},
+        },
+        "required": ["group_name"],
+        "additionalProperties": False,
+    }
 
     def handle(self, handler: ConnectionHandler):
 
@@ -343,12 +380,28 @@ class RequestGetGroupInfoHandler(RequestHandler):
                 handler.conclude_request(**response)
 
         except Exception as e:
-            handler.logger.error(f"Error detected when handling requests.", exc_info=True)
+            handler.logger.error(
+                f"Error detected when handling requests.", exc_info=True
+            )
             handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
 
 
 class RequestChangeGroupPermissionsHandler(RequestHandler):
-    data_schema = {}
+    data_schema = {
+        "type": "object",
+        "properties": {
+            "group_name": {"type": "string", "minLength": 1},
+            "permissions": {
+                "type": "array",
+                "items": {
+                    "type": "string",
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["group_name", "permissions"],
+        "additionalProperties": False,
+    }
 
     def handle(self, handler: ConnectionHandler):
 
@@ -388,7 +441,9 @@ class RequestChangeGroupPermissionsHandler(RequestHandler):
                 new_permissions = handler.data.get("permissions", [])
 
                 # Check if all elements in new_permissions are of type str
-                if not all(isinstance(permission, str) for permission in new_permissions):
+                if not all(
+                    isinstance(permission, str) for permission in new_permissions
+                ):
                     handler.conclude_request(
                         **{
                             "code": 400,
@@ -398,7 +453,9 @@ class RequestChangeGroupPermissionsHandler(RequestHandler):
                     )
                     return
 
-                if set(new_permissions) != group.all_permissions: # 预判断，减少数据库开销
+                if (
+                    set(new_permissions) != group.all_permissions
+                ):  # 预判断，减少数据库开销
                     group.all_permissions = new_permissions
                     session.commit()
 
@@ -411,5 +468,7 @@ class RequestChangeGroupPermissionsHandler(RequestHandler):
             handler.conclude_request(**response)
 
         except Exception as e:
-            handler.logger.error(f"Error detected when handling requests.", exc_info=True)
+            handler.logger.error(
+                f"Error detected when handling requests.", exc_info=True
+            )
             handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
