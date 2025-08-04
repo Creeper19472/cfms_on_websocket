@@ -3,6 +3,7 @@ from sqlalchemy import VARCHAR, Float, ForeignKey, Table, Column, Integer, Text
 from include.database.handler import Base, Session
 from include.conf_loader import global_config
 from include.classes.auth import Token
+from include.classes.access_rule import AccessRuleBase
 from typing import List
 from typing import Optional
 from typing import Set
@@ -493,6 +494,8 @@ class BaseObject(Base):
             if not each_rule:
                 continue
 
+            each_rule: AccessRuleBase
+
             # access_type 一览：
             # 0 - 读
             # 1 - 写（删除=清空数据，重命名=写文件元数据，因此都算写）
@@ -676,7 +679,7 @@ class DocumentRevision(Base):
         )
 
 
-class DocumentAccessRule(Base):
+class DocumentAccessRule(Base, AccessRuleBase):
     __tablename__ = "document_access_rules"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     access_type: Mapped[int] = mapped_column(
@@ -700,7 +703,7 @@ class DocumentAccessRule(Base):
         return f"AccessRule(id={self.id!r}, document_id={self.document_id!r}, rule_data={self.rule_data!r})"
 
 
-class FolderAccessRule(Base):
+class FolderAccessRule(Base, AccessRuleBase):
     __tablename__ = "folder_access_rules"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     access_type: Mapped[int] = mapped_column(
@@ -716,7 +719,7 @@ class FolderAccessRule(Base):
         JSON, nullable=False
     )  # 存储单个Json格式的规则数据
 
-    folder: Mapped[Optional["Document"]] = relationship(
+    folder: Mapped[Optional["Folder"]] = relationship(
         "Folder", back_populates="access_rules"
     )
 

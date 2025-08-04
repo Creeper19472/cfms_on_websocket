@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Iterable, Optional
 from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
 from include.conf_loader import global_config
@@ -13,14 +13,16 @@ AVAILABLE_ACCESS_TYPES = [0, 1]
 
 
 def apply_directory_access_rules(
-    folder: Folder, set_access_rules: dict, user: User
+    folder: Folder, set_access_rules: dict[int, list[dict]], user: User
 ) -> bool:
+    return True
+
     for access_type in set_access_rules:
         if access_type not in AVAILABLE_ACCESS_TYPES:
             raise ValueError(f"Invalid access type: {access_type}")
 
-        this_rule_data = set_access_rules.get(access_type, None)
-        if this_rule_data is None:
+        this_type_rules: list = set_access_rules.get(access_type, [])
+        if this_type_rules is None:
             raise ValueError(
                 f"Access rule data for access type {access_type} is missing"
             )
@@ -29,12 +31,14 @@ def apply_directory_access_rules(
             for rule in folder.access_rules:
                 if rule.access_type == access_type:
                     folder.access_rules.remove(rule)
-            this_new_rule = FolderAccessRule(
-                folder_id=folder.id,
-                access_type=access_type,
-                rule_data=this_rule_data,
-            )
-            folder.access_rules.append(this_new_rule)
+
+            for new_rule_data in this_type_rules:
+                this_new_rule = FolderAccessRule(
+                    folder_id=folder.id,
+                    access_type=access_type,
+                    rule_data=new_rule_data,
+                )
+                folder.access_rules.append(this_new_rule)
 
             if folder.check_access_requirements(user, access_type):
                 session.commit()
@@ -274,7 +278,14 @@ class RequestCreateDirectoryHandler(RequestHandler):
         "properties": {
             "parent_id": {"anyOf": [{"type": "string"}, {"type": "null"}]},
             "name": {"type": "string", "minLength": 1},
-            "access_rules": {"type": "object"},
+            # "access_rules": {
+            #     "type": "object",
+            #     "properties": {},
+            #     "propertyNames": {},
+            #     "additionalProperties": {
+            #         "type": "int"
+            #     }
+            #     },
         },
         "required": ["name"],
     }
@@ -285,7 +296,7 @@ class RequestCreateDirectoryHandler(RequestHandler):
             # Parse the directory creation request
             parent_id: Optional[str] = handler.data.get("parent_id")
             name: str = handler.data["name"]
-            access_rules_to_apply: dict = handler.data.get("access_rules", {})
+            access_rules_to_apply: dict[int, list[dict]] = handler.data.get("access_rules", {})
             exists_ok = handler.data.get("exists_ok", False)
 
             with Session() as session:
@@ -373,7 +384,7 @@ class RequestCreateDirectoryHandler(RequestHandler):
 
                 folder = Folder(name=name, parent=parent)
 
-                if apply_directory_access_rules(
+                if apply_directory_access_rules( # disabled: see issue #1
                     folder, access_rules_to_apply, this_user
                 ):
                     session.add(folder)
