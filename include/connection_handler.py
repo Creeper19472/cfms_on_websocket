@@ -80,7 +80,6 @@ def handle_connection(websocket: websockets.sync.server.ServerConnection):
             if message is None:
                 break  # Connection closed
             handle_request(websocket, message)
-            print(connected_listeners)
     except (websockets.ConnectionClosed, websockets.exceptions.ConnectionClosedOK):
         logger.info("WebSocket connection closed")
     except Exception as e:
@@ -161,7 +160,6 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "refresh_token",
     ]
 
-    print(lockdown_enabled.is_set())
     if lockdown_enabled.is_set():
         if action not in whitelisted_functions:
             can_bypass_lockdown = False
