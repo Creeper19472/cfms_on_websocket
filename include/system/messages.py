@@ -22,6 +22,6 @@ ACCESS_DENIED_MOVE_DIRECTORY = _("Access denied to move directory")
 ACCESS_DENIED_WRITE_DIRECTORY = _("Access denied to write directory")
 
 NAME_DUPLICATE = _("Name duplicate")
-DOCUMENT_NAME_DUPLICATE = _("A document with the same name already exists in the target directoryx")
+DOCUMENT_NAME_DUPLICATE = _("A document with the same name already exists in the target directory")
 DIRECTORY_NAME_DUPLICATE = _("A folder with the same name already exists in the target directory")
 DOCUMENT_OR_DIRECTORY_NAME_DUPLICATE = _("A document or folder with the same name already exists in this directory")

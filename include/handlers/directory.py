@@ -159,6 +159,7 @@ class RequestListDirectoryHandler(RequestHandler):
 
             # Send the response back to the client
             handler.conclude_request(**response)
+            # handler.broadcast(r'{"code": 999, "action": "lockdown", "status": true}', raise_exceptions=True)
             return 0, folder_id, handler.username
 
         except Exception as e:

@@ -89,6 +89,8 @@ def server_init():
             {"permission": "delete_group", "start_time": 0, "end_time": None},
             {"permission": "rename_group", "start_time": 0, "end_time": None},
             {"permission": "set_group_permissions"},
+            {"permission": "bypass_lockdown"},
+            {"permission": "apply_lockdown"},
         ],
     )
     with Session() as session:

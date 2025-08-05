@@ -50,13 +50,17 @@ from include.handlers.management.group import (
     RequestListGroupsHandler,
     RequestRenameGroupHandler,
 )
+from include.handlers.management.system import RequestLockdownHandler
 from include.constants import CORE_VERSION, PROTOCOL_VERSION
+from include.shared import connected_listeners, lockdown_enabled
 
 from include.function.log import getCustomLogger
 
 logger = getCustomLogger(
     "connection_handler", filepath="./content/logs/connection_handler.log"
 )
+
+connected_listeners: set[websockets.sync.server.ServerConnection]
 
 
 def handle_connection(websocket: websockets.sync.server.ServerConnection):
@@ -76,12 +80,17 @@ def handle_connection(websocket: websockets.sync.server.ServerConnection):
             if message is None:
                 break  # Connection closed
             handle_request(websocket, message)
+            print(connected_listeners)
     except (websockets.ConnectionClosed, websockets.exceptions.ConnectionClosedOK):
         logger.info("WebSocket connection closed")
     except Exception as e:
         logger.error(f"Error handling WebSocket connection: {e}", exc_info=True)
     finally:
         websocket.close()
+        try:
+            connected_listeners.remove(websocket)
+        except KeyError:
+            ...
 
 
 def handle_request(websocket: websockets.sync.server.ServerConnection, message: Data):
@@ -101,6 +110,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
 
     available_functions: dict[str, type[RequestHandler]] = {
         "server_info": RequestServerInfoHandler,
+        "register_listener": RequestRegisterListenerHandler,
         # 认证类
         "login": RequestLoginHandler,
         "refresh_token": RequestRefreshTokenHandler,
@@ -138,7 +148,32 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "rename_group": RequestRenameGroupHandler,
         "get_group_info": RequestGetGroupInfoHandler,
         "change_group_permissions": RequestChangeGroupPermissionsHandler,
+        # 系统类
+        "lockdown": RequestLockdownHandler,
     }
+
+    # 定义白名单内的请求。这些请求即使在防范禁闭时也对所有用户可用。
+    whitelisted_functions = [
+        "echo",
+        "server_info",
+        "register_listener",
+        "login",
+        "refresh_token",
+    ]
+
+    print(lockdown_enabled.is_set())
+    if lockdown_enabled.is_set():
+        if action not in whitelisted_functions:
+            can_bypass_lockdown = False
+            if this_handler.username:
+                with Session() as session:
+                    user = session.get(User, this_handler.username)
+                    if user and ("bypass_lockdown" in user.all_permissions):
+                        can_bypass_lockdown = True
+
+            if not can_bypass_lockdown:
+                this_handler.conclude_request(999, {}, "lockdown")
+                return
 
     if action == "echo":
         # Echo the message back to the client
@@ -167,10 +202,14 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         try:
             jsonschema.validate(this_handler.data, _request_handler.data_schema)
         except jsonschema.ValidationError as error:
-            this_handler.conclude_request(400, {
-                "validator": error.validator,
-                "validator_value": error.validator_value
-            }, error.message)
+            this_handler.conclude_request(
+                400,
+                {
+                    "validator": error.validator,
+                    "validator_value": error.validator_value,
+                },
+                error.message,
+            )
             return
 
         callback: Union[
@@ -233,8 +272,25 @@ class RequestServerInfoHandler(RequestHandler):
             "server_name": global_config["server"]["name"],
             "version": CORE_VERSION.original,
             "protocol_version": PROTOCOL_VERSION,
+            "lockdown": lockdown_enabled.is_set()
         }
         handler.conclude_request(
             200, server_info, "Server information retrieved successfully"
         )
+        return
+
+
+class RequestRegisterListenerHandler(RequestHandler):
+    """
+    Register a connection as a listener.
+
+    Usually, a listener connection should not send messages to the server, in order
+    to prevent potential issues.
+    """
+
+    data_schema = {"type": "object", "additionalProperties": False}
+
+    def handle(self, handler: ConnectionHandler) -> None:
+        connected_listeners.add(handler.websocket)
+        handler.conclude_request(200, {}, "registered as a listener")
         return

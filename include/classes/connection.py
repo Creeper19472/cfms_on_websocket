@@ -1,11 +1,15 @@
 import json
+import sys
 import time
 import os
 import base64
 import hashlib
+import traceback
+from typing import Iterable
 
 import websockets
 from websockets.sync.server import ServerConnection
+from websockets.asyncio.server import broadcast
 from websockets.typing import Data
 
 from include.conf_loader import global_config
@@ -13,6 +17,8 @@ from include.database.handler import Session
 from include.database.models.general import User
 from include.database.models.file import File, FileTask
 from include.function.log import getCustomLogger
+
+from include.shared import connected_listeners
 
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
@@ -36,7 +42,7 @@ class ConnectionHandler:
     def __init__(self, websocket: ServerConnection, message: Data) -> None:
         self.websocket = websocket
         self.remote_address = websocket.remote_address[0]
-        # self.websocket.remote_address
+
         self.request = json.loads(message)
         self.logger = logger
 
@@ -64,7 +70,7 @@ class ConnectionHandler:
         self.logger.debug(f"Sending response: {response_json}")
 
         self.websocket.send(response_json)
-        
+
     # def authenticate_user(self, user: User|None) -> bool:
     #     """
     #     Authenticates the user by checking the user authentication status.
@@ -79,7 +85,7 @@ class ConnectionHandler:
     #             **{"code": 403, "message": "Invalid user or token", "data": {}}
     #         )
     #         return False
-        
+
     #     return True
 
     def send_file(self, task_id: str) -> None:
@@ -133,7 +139,7 @@ class ConnectionHandler:
             file_path = file.path  # 防止 Session 关闭后可能出现的异常
 
             ### 发送方首先发出文件信息
-            chunk_size = global_config["server"]["file_chunk_size"] # 文件分块大小
+            chunk_size = global_config["server"]["file_chunk_size"]  # 文件分块大小
             total_chunks = (file_size + chunk_size - 1) // chunk_size
 
             self.websocket.send(
@@ -141,10 +147,10 @@ class ConnectionHandler:
                     {
                         "action": "transfer_file",
                         "data": {
-                            "sha256": sha256, # 原始文件的 SHA256 哈希值
-                            "file_size": file_size, # 原始文件的大小
-                            "chunk_size": chunk_size, # 分块大小
-                            "total_chunks": total_chunks, # 文件总分块数
+                            "sha256": sha256,  # 原始文件的 SHA256 哈希值
+                            "file_size": file_size,  # 原始文件的大小
+                            "chunk_size": chunk_size,  # 分块大小
+                            "total_chunks": total_chunks,  # 文件总分块数
                         },
                     },
                     ensure_ascii=False,
@@ -181,7 +187,11 @@ class ConnectionHandler:
                             "data": {
                                 "index": chunk_index,
                                 "hash": chunk_hash,
-                                "iv": base64.b64encode(iv).decode() if chunk_index == 0 else "",
+                                "iv": (
+                                    base64.b64encode(iv).decode()
+                                    if chunk_index == 0
+                                    else ""
+                                ),
                                 "chunk": base64.b64encode(encrypted_chunk).decode(),
                             },
                         }
@@ -336,3 +346,57 @@ class ConnectionHandler:
             except Exception as e:
                 self.logger.error(f"Error receiving file: {e}", exc_info=True)
                 self.conclude_request(500, {}, f"Error receiving file: {str(e)}")
+
+    def broadcast(
+        self,
+        message: Data,
+        raise_exceptions: bool = False,
+    ):
+        
+        """
+        Adopted from websockets.asyncio.server.broadcast().
+        """
+        connections: Iterable[ServerConnection] = connected_listeners
+
+        if isinstance(message, str):
+            send_method = "send_text"
+            message = message.encode()
+        elif isinstance(message, (bytes, bytearray, memoryview)):
+            send_method = "send_binary"
+        else:
+            raise TypeError("data must be str or bytes")
+
+        if raise_exceptions:
+            if sys.version_info[:2] < (3, 11):  # pragma: no cover
+                raise ValueError("raise_exceptions requires at least Python 3.11")
+        
+        exceptions: list[Exception] = []
+
+        for connection in connections:
+            exception: Exception
+
+            if connection.protocol.state is not websockets.protocol.OPEN:
+                continue
+
+            try:
+                # Call connection.protocol.send_text or send_binary.
+                # Either way, message is already converted to bytes.
+                # getattr(connection.protocol, send_method)(message)
+                connection.send(message)
+            except Exception as write_exception:
+                if raise_exceptions:
+                    exception = RuntimeError("failed to write message")
+                    exception.__cause__ = write_exception
+                    exceptions.append(exception)
+                else:
+                    connection.logger.warning(
+                        "skipped broadcast: failed to write message: %s",
+                        traceback.format_exception_only(
+                            # Remove first argument when dropping Python 3.9.
+                            type(write_exception),
+                            write_exception,
+                        )[0].strip(),
+                    )
+
+        if raise_exceptions and exceptions:
+            raise ExceptionGroup("skipped broadcast", exceptions)
