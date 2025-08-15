@@ -158,6 +158,8 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "register_listener",
         "login",
         "refresh_token",
+        "upload_file",
+        "download_file"
     ]
 
     if lockdown_enabled.is_set():
