@@ -31,6 +31,8 @@ class RequestHandler(ABC):
 
     # This property defines the json structure of the request data.
     data_schema: dict = {}
+    # Defines whether the handler needs auth check before handling a request.
+    require_auth: bool = False
 
     @abstractmethod
     def handle(self, handler: ConnectionHandler) -> Union[

@@ -50,9 +50,13 @@ from include.handlers.management.group import (
     RequestListGroupsHandler,
     RequestRenameGroupHandler,
 )
-from include.handlers.management.system import RequestLockdownHandler
+from include.handlers.management.system import (
+    RequestLockdownHandler,
+    RequestViewAuditLogsHandler,
+)
 from include.constants import CORE_VERSION, PROTOCOL_VERSION
 from include.shared import connected_listeners, lockdown_enabled
+import include.system.messages as smsg
 
 from include.function.log import getCustomLogger
 
@@ -149,6 +153,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "change_group_permissions": RequestChangeGroupPermissionsHandler,
         # 系统类
         "lockdown": RequestLockdownHandler,
+        "view_audit_logs": RequestViewAuditLogsHandler,
     }
 
     # 定义白名单内的请求。这些请求即使在防范禁闭时也对所有用户可用。
@@ -159,7 +164,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "login",
         "refresh_token",
         "upload_file",
-        "download_file"
+        "download_file",
     ]
 
     if lockdown_enabled.is_set():
@@ -212,6 +217,11 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
             )
             return
 
+        if _request_handler.require_auth:
+            if not this_handler.username or not this_handler.token:
+                this_handler.conclude_request(401, {}, "Authentication required")
+                return
+
         callback: Union[
             int,
             tuple[int, Optional[str]],
@@ -225,18 +235,40 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
             match callback:
                 case (result, target) if len(callback) == 2:
                     # 不判断各元素类型是否正确。第二个元素是目标对象
-                    log_audit(action, result, target=target)
+                    log_audit(
+                        action,
+                        result,
+                        target=target,
+                        remote_address=this_handler.remote_address,
+                    )
                 case (result, target, data) if (
                     isinstance(data, dict) and len(callback) == 3
                 ):
-                    log_audit(action, result, target=target, data=data)
+                    log_audit(
+                        action,
+                        result,
+                        target=target,
+                        data=data,
+                        remote_address=this_handler.remote_address,
+                    )
                 case (result, target, username) if (
                     isinstance(username, str) and len(callback) == 3
                 ):
-                    log_audit(action, result, target=target, username=username)
+                    log_audit(
+                        action,
+                        result,
+                        target=target,
+                        username=username,
+                        remote_address=this_handler.remote_address,
+                    )
                 case (result, target, data, username) if len(callback) == 4:
                     log_audit(
-                        action, result, target=target, data=data, username=username
+                        action,
+                        result,
+                        target=target,
+                        data=data,
+                        username=username,
+                        remote_address=this_handler.remote_address,
                     )
                 case _:
                     raise TypeError
@@ -272,7 +304,7 @@ class RequestServerInfoHandler(RequestHandler):
             "server_name": global_config["server"]["name"],
             "version": CORE_VERSION.original,
             "protocol_version": PROTOCOL_VERSION,
-            "lockdown": lockdown_enabled.is_set()
+            "lockdown": lockdown_enabled.is_set(),
         }
         handler.conclude_request(
             200, server_info, "Server information retrieved successfully"

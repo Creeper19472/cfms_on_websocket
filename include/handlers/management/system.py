@@ -2,12 +2,12 @@ import json
 import time
 from typing import Optional
 
-from sqlalchemy import update
+from sqlalchemy import desc, update, func
 from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
 from include.database.handler import Session
 from include.database.models.file import FileTask
-from include.database.models.general import User
+from include.database.models.general import User, AuditEntry
 from include.shared import lockdown_enabled
 import include.system.messages as smsg
 
@@ -58,3 +58,65 @@ class RequestLockdownHandler(RequestHandler):
             json.dumps({"action": "lockdown", "status": lockdown_enabled.is_set()})
         )
         return 0, None, handler.username
+
+
+class RequestViewAuditLogsHandler(RequestHandler):
+    data_schema = {
+        "type": "object",
+        "properties": {
+            "offset": {"type": "integer", "minimum": 0},
+            "count": {"type": "integer", "minimum": 0, "maximum": 100},
+        },
+        "required": [],
+        "additionalProperties": False,
+    }
+    require_auth = True
+
+    def handle(self, handler: ConnectionHandler):
+        offset: int = handler.data.get("offset", 0)
+        entries_count: int = handler.data.get("count", 50)
+
+        with Session() as session:
+            user = session.get(User, handler.username)
+            if not user or not user.is_token_valid(handler.token):
+                handler.conclude_request(
+                    **{"code": 401, "message": smsg.INVALID_USER_OR_TOKEN, "data": {}}
+                )
+                return 401
+
+            if "view_audit_logs" not in user.all_permissions:
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
+                return 403, None, handler.username
+
+            queried_entries = (
+                session.query(AuditEntry)
+                .order_by(desc(AuditEntry.logged_time))
+                .offset(offset)
+                .limit(entries_count)
+                .all()
+            )
+            total_count: int = session.query(func.count(AuditEntry.id)).scalar()
+
+            result = [
+                {
+                    "id": entry.id,
+                    "action": entry.action,
+                    "username": entry.username,
+                    "target": entry.target,
+                    "data": entry.data,
+                    "result": entry.result,
+                    "remote_address": entry.remote_address,
+                    "logged_time": entry.logged_time,
+                }
+                for entry in queried_entries
+            ]
+
+        handler.conclude_request(
+            200, {"total": total_count, "entries": result}, smsg.SUCCESS
+        )
+        return (
+            0,
+            None,
+            {"offset": offset, "entries_count": entries_count},
+            handler.username,
+        )

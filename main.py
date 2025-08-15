@@ -91,6 +91,7 @@ def server_init():
             {"permission": "set_group_permissions"},
             {"permission": "bypass_lockdown"},
             {"permission": "apply_lockdown"},
+            {"permission": "view_audit_logs"},
         ],
     )
     with Session() as session:
