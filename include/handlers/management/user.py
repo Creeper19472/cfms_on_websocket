@@ -1,8 +1,14 @@
 from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
+from include.conf_loader import global_config
 from include.database.handler import Session
-from include.database.models.general import User, UserGroup
+from include.database.models.classic import User, UserGroup
 from include.function.user import create_user
+from include.function.pwd import (
+    InvaildPasswordLengthError,
+    MissingComponentsError,
+    check_passwd_requirements,
+)
 
 
 class RequestListUsersHandler(RequestHandler):
@@ -602,6 +608,24 @@ class RequestSetPasswdHandler(RequestHandler):
                             }
                         )
                         return
+
+                try:
+                    check_passwd_requirements(
+                        new_passwd,
+                        global_config["security"]["passwd_min_length"],
+                        global_config["security"]["passwd_max_length"],
+                        global_config["security"]["passwd_must_contain"],
+                    )
+                except InvaildPasswordLengthError as e:
+                    handler.conclude_request(
+                        400,
+                        {"min_length": e.min_length, "max_length": e.max_length},
+                        str(e),
+                    )
+                    return 400, target_username
+                except MissingComponentsError as e:
+                    handler.conclude_request(400, {"missing": e.missing}, str(e))
+                    return 400, target_username
 
                 user.set_password(new_passwd)
                 # session.commit()

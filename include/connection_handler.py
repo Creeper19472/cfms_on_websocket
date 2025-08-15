@@ -10,7 +10,7 @@ from include.classes.request import RequestHandler
 from include.conf_loader import global_config
 from include.classes.connection import ConnectionHandler
 from include.database.handler import Session
-from include.database.models.general import User
+from include.database.models.classic import User
 from include.function.audit import log_audit
 from include.handlers.auth import RequestLoginHandler, RequestRefreshTokenHandler
 from include.handlers.document import (

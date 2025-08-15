@@ -1,9 +1,12 @@
 from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
+from include.conf_loader import global_config
 from include.database.handler import Session
-from include.database.models.general import User
+from include.database.models.classic import User
 from include.function.audit import log_audit
 import time
+
+from include.function.pwd import check_passwd_requirements
 
 
 class RequestLoginHandler(RequestHandler):
@@ -25,10 +28,10 @@ class RequestLoginHandler(RequestHandler):
         "type": "object",
         "properties": {
             "username": {"type": "string", "minLength": 1},
-            "password": {"type": "string", "minLength": 1}
+            "password": {"type": "string", "minLength": 1},
         },
         "required": ["username", "password"],
-        "additionalProperties": False
+        "additionalProperties": False,
     }
 
     def handle(self, handler: ConnectionHandler):
@@ -49,6 +52,21 @@ class RequestLoginHandler(RequestHandler):
 
                 if user:
                     if token := user.authenticate_and_create_token(password):
+                        try:
+                            check_passwd_requirements(
+                                password,
+                                global_config["security"]["passwd_min_length"],
+                                global_config["security"]["passwd_max_length"],
+                                global_config["security"]["passwd_must_contain"],
+                            )
+                        except ValueError as e:
+                            handler.conclude_request(
+                                403,
+                                {},
+                                "Password must be changed before you can log in",
+                            )
+                            return 403, username
+
                         response = {
                             "code": 200,
                             "message": "Login successful",
@@ -60,6 +78,7 @@ class RequestLoginHandler(RequestHandler):
                                 "groups": list(user.all_groups),
                             },
                         }
+
                     else:
                         response = response_invalid
                 else:
@@ -73,7 +92,9 @@ class RequestLoginHandler(RequestHandler):
             return response["code"], username
 
         except Exception as e:
-            handler.logger.error(f"Error detected when handling requests.", exc_info=True)
+            handler.logger.error(
+                f"Error detected when handling requests.", exc_info=True
+            )
             handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
 
 
@@ -90,11 +111,7 @@ class RequestRefreshTokenHandler(RequestHandler):
         500 - Internal server error, with the exception message.
     """
 
-    data_schema = {
-        "type": "object",
-        "properties": {},
-        "additionalProperties": False
-    }
+    data_schema = {"type": "object", "properties": {}, "additionalProperties": False}
 
     def handle(self, handler: ConnectionHandler):
 
@@ -104,7 +121,11 @@ class RequestRefreshTokenHandler(RequestHandler):
 
             # Validate the token
             if not old_token or not isinstance(old_token, str):
-                response = {"code": 400, "message": "missing or invalid token", "data": {}}
+                response = {
+                    "code": 400,
+                    "message": "missing or invalid token",
+                    "data": {},
+                }
             else:
                 with Session() as session:
                     user = session.get(User, handler.username)
@@ -139,5 +160,7 @@ class RequestRefreshTokenHandler(RequestHandler):
             handler.conclude_request(**response)
 
         except Exception as e:
-            handler.logger.error(f"Error detected when handling requests.", exc_info=True)
+            handler.logger.error(
+                f"Error detected when handling requests.", exc_info=True
+            )
             handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})

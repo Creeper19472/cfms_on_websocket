@@ -7,7 +7,7 @@ from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
 from include.database.handler import Session
 from include.database.models.file import FileTask
-from include.database.models.general import User, AuditEntry
+from include.database.models.classic import User, AuditEntry
 from include.shared import lockdown_enabled
 import include.system.messages as smsg
 

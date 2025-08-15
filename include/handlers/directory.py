@@ -3,7 +3,7 @@ from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
 from include.conf_loader import global_config
 from include.database.handler import Session
-from include.database.models.general import User, Folder, Document, FolderAccessRule
+from include.database.models.classic import User, Folder, Document, FolderAccessRule
 from include.function.audit import log_audit
 import include.system.messages as smsg
 import time

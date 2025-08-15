@@ -18,6 +18,17 @@ allow_name_duplicate = false
 # 如果在允许重复后又设置为禁止重复，原有的重复文档将被保留
 # 但新上传的文档将会被拒绝
 
+[security]
+passwd_min_length = 8
+passwd_max_length = 32
+enable_passwd_force_expiration = true
+# 启用密码强制过期策略
+require_passwd_enforcement_changes = true
+# 启用不合规密码强制更改策略
+# 使用不合规的密码的用户在登录时将被强制要求修改密码
+passwd_expire_after_days = 365
+passwd_must_contain = []
+
 [database]
 type = "sqlite"
 

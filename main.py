@@ -31,7 +31,7 @@ from include.conf_loader import global_config
 from include.constants import CORE_VERSION
 from include.database.handler import engine, Base
 from include.database.handler import Session
-from include.database.models.general import User, UserGroup, Document, DocumentRevision
+from include.database.models.classic import User, UserGroup, Document, DocumentRevision
 from include.database.models.file import File
 from websockets.sync.server import serve
 from include.connection_handler import handle_connection
