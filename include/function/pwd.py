@@ -8,7 +8,7 @@ __all__ = [
 
 
 class MissingComponentsError(ValueError):
-    def __init__(self, missing: set):
+    def __init__(self, missing: set[str]):
         self.missing = missing
 
     def __str__(self):
@@ -43,15 +43,15 @@ def check_passwd_requirements(
     passwd: str,
     min_length: int,
     max_length: int,
-    must_contain: list[str] = [],
+    must_contain: list[list[str]] = [],
 ):
     length = len(passwd)
     if not (min_length <= length <= max_length):
         raise InvaildPasswordLengthError(length, min_length, max_length)
 
     pwd_set = set(passwd)
-    must_set = set(must_contain)
 
-    if not must_set.issubset(pwd_set):
-        missing = must_set - (pwd_set & must_set)
-        raise MissingComponentsError(missing)
+    for group in must_contain:
+        each_set = set(group)
+        if not pwd_set & each_set:
+            raise MissingComponentsError(each_set)

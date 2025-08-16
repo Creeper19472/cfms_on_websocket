@@ -2,7 +2,7 @@ import json
 import time
 from typing import Optional
 
-from sqlalchemy import desc, update, func
+from sqlalchemy import desc, update, func, true
 from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
 from include.database.handler import Session
@@ -66,6 +66,7 @@ class RequestViewAuditLogsHandler(RequestHandler):
         "properties": {
             "offset": {"type": "integer", "minimum": 0},
             "count": {"type": "integer", "minimum": 0, "maximum": 100},
+            "filters": {"type": "array", "items": {"type": "string"}},
         },
         "required": [],
         "additionalProperties": False,
@@ -75,6 +76,7 @@ class RequestViewAuditLogsHandler(RequestHandler):
     def handle(self, handler: ConnectionHandler):
         offset: int = handler.data.get("offset", 0)
         entries_count: int = handler.data.get("count", 50)
+        filtered_actions: list[str] = handler.data.get("filters", [])
 
         with Session() as session:
             user = session.get(User, handler.username)
@@ -91,11 +93,24 @@ class RequestViewAuditLogsHandler(RequestHandler):
             queried_entries = (
                 session.query(AuditEntry)
                 .order_by(desc(AuditEntry.logged_time))
+                .filter(
+                    AuditEntry.action.in_(filtered_actions)
+                    if filtered_actions
+                    else true()
+                )
                 .offset(offset)
                 .limit(entries_count)
                 .all()
             )
-            total_count: int = session.query(func.count(AuditEntry.id)).scalar()
+            total_count: int = (
+                session.query(func.count(AuditEntry.id))
+                .filter(
+                    AuditEntry.action.in_(filtered_actions)
+                    if filtered_actions
+                    else true()
+                )
+                .scalar()
+            )
 
             result = [
                 {
