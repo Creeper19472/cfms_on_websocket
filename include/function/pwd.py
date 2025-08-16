@@ -46,7 +46,7 @@ def check_passwd_requirements(
     must_contain: list[str] = [],
 ):
     length = len(passwd)
-    if not (min_length < length < max_length):
+    if not (min_length <= length <= max_length):
         raise InvaildPasswordLengthError(length, min_length, max_length)
 
     pwd_set = set(passwd)
