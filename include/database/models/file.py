@@ -1,5 +1,5 @@
 import secrets
-from sqlalchemy import VARCHAR, Float, ForeignKey, Integer, Text
+from sqlalchemy import VARCHAR, Float, ForeignKey, Integer, Text, Boolean
 from include.database.handler import Base
 from typing import List
 from typing import Optional
@@ -28,6 +28,7 @@ class File(Base):
         Float, nullable=False, default=lambda: time.time()
     )
     tasks: Mapped[List["FileTask"]] = relationship("FileTask", back_populates="file")
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     @property
     def size(self):
@@ -37,7 +38,7 @@ class File(Base):
             return None
 
     @property
-    def active(self):
+    def writeable(self):
         if sys.platform == "win32":
             import win32file, pywintypes
 
@@ -46,10 +47,10 @@ class File(Base):
                 if os.path.exists(self.path):
                     hFile = win32file.CreateFile(
                         self.path,
-                        win32file.GENERIC_READ,
+                        win32file.GENERIC_READ + win32file.GENERIC_WRITE,
                         win32file.FILE_SHARE_READ,
                         None,
-                        win32file.OPEN_EXISTING,
+                        win32file.OPEN_ALWAYS,  # win32file.OPEN_EXISTING,
                         0,
                         None,
                     )
@@ -68,7 +69,7 @@ class File(Base):
         #         return False
 
         # unsafe: for unknown platforms, won't check if the file is locked
-        return os.path.exists(self.path) and os.path.getsize(self.path) > 0
+        return True  # os.path.exists(self.path) and os.path.getsize(self.path) > 0
 
     def delete(self):
         session = object_session(self)
@@ -111,7 +112,9 @@ class FileTask(Base):
     id: Mapped[str] = mapped_column(
         VARCHAR(255), primary_key=True, default=lambda: secrets.token_hex(32)
     )
-    file_id: Mapped[str] = mapped_column(VARCHAR(255), ForeignKey("files.id"), nullable=False)
+    file_id: Mapped[str] = mapped_column(
+        VARCHAR(255), ForeignKey("files.id"), nullable=False
+    )
     # 0: 等待中, 1: 已完成, 2: 已取消
     status: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     mode: Mapped[int] = mapped_column(
@@ -123,9 +126,7 @@ class FileTask(Base):
     #     VARCHAR(32), nullable=True, default=None
     # )  # 加密模式，如 'AES', 'RSA'，未加密则为 None
 
-    file: Mapped["File"] = relationship(
-        "File", back_populates="tasks"
-    )
+    file: Mapped["File"] = relationship("File", back_populates="tasks")
 
     def __repr__(self) -> str:
         return (

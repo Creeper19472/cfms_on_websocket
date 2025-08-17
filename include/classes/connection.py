@@ -5,6 +5,7 @@ import os
 import base64
 import hashlib
 import traceback
+import jsonschema
 from typing import Iterable
 
 import websockets
@@ -129,8 +130,8 @@ class ConnectionHandler:
                 f"Task {file_task.id}: preparing to send file (id: {file_task.file_id})."
             )
 
-            sha256 = calculate_sha256(file.path)
             file_size = os.path.getsize(file.path)
+            sha256 = calculate_sha256(file.path) if file_size else None
 
             self.logger.info(
                 f"Calculation complete. SHA256: {sha256}, File size: {file_size}"
@@ -167,56 +168,59 @@ class ConnectionHandler:
                 self.conclude_request(400, {}, "Client not ready for file transfer")
                 return
 
-            self.logger.info("File transmission begin.")
+            if file_size != 0:
+                self.logger.info("File transmission begin.")
+                try:
+                    aes_key = get_random_bytes(32)  # AES-256
+                    iv = get_random_bytes(16)
+                    cipher = AES.new(aes_key, AES.MODE_CFB, iv=iv)
 
-            try:
-                aes_key = get_random_bytes(32)  # AES-256
-                iv = get_random_bytes(16)
-                cipher = AES.new(aes_key, AES.MODE_CFB, iv=iv)
+                    with open(file_path, "rb") as file:
+                        chunk_index = 0
+                        while True:
+                            chunk = file.read(chunk_size)
+                            if not chunk:
+                                break
+                            chunk_hash = hashlib.sha256(chunk).hexdigest()
+                            encrypted_chunk = cipher.encrypt(chunk)
+                            payload = {
+                                "action": "file_chunk",
+                                "data": {
+                                    "index": chunk_index,
+                                    "hash": chunk_hash,
+                                    "iv": (
+                                        base64.b64encode(iv).decode()
+                                        if chunk_index == 0
+                                        else ""
+                                    ),
+                                    "chunk": base64.b64encode(encrypted_chunk).decode(),
+                                },
+                            }
+                            self.websocket.send(json.dumps(payload, ensure_ascii=False))
+                            chunk_index += 1
 
-                with open(file_path, "rb") as file:
-                    chunk_index = 0
-                    while True:
-                        chunk = file.read(chunk_size)
-                        if not chunk:
-                            break
-                        chunk_hash = hashlib.sha256(chunk).hexdigest()
-                        encrypted_chunk = cipher.encrypt(chunk)
-                        payload = {
-                            "action": "file_chunk",
-                            "data": {
-                                "index": chunk_index,
-                                "hash": chunk_hash,
-                                "iv": (
-                                    base64.b64encode(iv).decode()
-                                    if chunk_index == 0
-                                    else ""
-                                ),
-                                "chunk": base64.b64encode(encrypted_chunk).decode(),
+                    # 发送密钥和IV
+                    self.websocket.send(
+                        json.dumps(
+                            {
+                                "action": "aes_key",
+                                "data": {
+                                    "key": base64.b64encode(aes_key).decode(),
+                                    # "iv": base64.b64encode(iv).decode(),
+                                },
                             },
-                        }
-                        self.websocket.send(json.dumps(payload, ensure_ascii=False))
-                        chunk_index += 1
-
-                # 发送密钥和IV
-                self.websocket.send(
-                    json.dumps(
-                        {
-                            "action": "aes_key",
-                            "data": {
-                                "key": base64.b64encode(aes_key).decode(),
-                                # "iv": base64.b64encode(iv).decode(),
-                            },
-                        },
-                        ensure_ascii=False,
+                            ensure_ascii=False,
+                        )
                     )
-                )
-                file_task.status = 1
-                session.commit()
+                    file_task.status = 1
+                    session.commit()
 
-            except Exception as e:
-                self.logger.error(f"Error sending file {file_path}: {e}")
-                self.conclude_request(500, {}, f"Error sending file: {str(e)}")
+                except Exception as e:
+                    self.logger.error(f"Error sending file {file_path}: {e}")
+                    self.conclude_request(500, {}, f"Error sending file: {str(e)}")
+
+            else:
+                self.logger.info("Empty file, no need to send")
 
         self.logger.info(f"File {file_path} sent successfully.")
 
@@ -243,17 +247,36 @@ class ConnectionHandler:
         self.logger.info("Receiving file: handshake sent")
 
         task_info = json.loads(self.websocket.recv())
-        # self.logger.info(task_info)
-        if task_info.get("action") != "transfer_file":
-            self.logger.error("Invalid flag received for file transfer.")
-            self.conclude_request(400, {}, "Invalid flag for file transfer")
-            return
-        sha256 = task_info["data"].get("sha256")
-        file_size = task_info["data"].get("file_size")
 
-        if not file_size:
-            self.websocket.send("stop")
+        try:
+            jsonschema.validate(
+                task_info,
+                {
+                    "type": "object",
+                    "properties": {
+                        "action": {"type": "string", "pattern": "^transfer_file$"},
+                        "data": {
+                            "type": "object",
+                            "properties": {
+                                "sha256": {
+                                    "anyOf": [{"type": "string"}, {"type": "null"}]
+                                },
+                                "file_size": {"type": "integer"},
+                            },
+                            "required": ["file_size"],
+                            "additionalProperties": False,
+                        },
+                    },
+                    "required": ["data"],
+                    "additionalProperties": False,
+                },
+            )
+        except jsonschema.ValidationError:
+            self.conclude_request(400, {}, "Invalid request for file transfer")
             return
+
+        sha256: str = task_info["data"].get("sha256")
+        file_size: int = task_info["data"].get("file_size")
 
         ### 获取任务与文件基本信息
         with Session() as session:
@@ -271,6 +294,14 @@ class ConnectionHandler:
             file = session.get(File, file_task.file_id)
             if not file:
                 raise ValueError(f"File not found for file_id: {file_task.file_id}")
+
+            if file_size == 0:  # 空文件
+                self.websocket.send("stop")
+                with open(file.path, "wb") as f:
+                    f.truncate(0)
+                file.active = True
+                session.commit()
+                return
 
             self.websocket.send("ready")
             try:
@@ -328,6 +359,7 @@ class ConnectionHandler:
 
                 file_task.status = 1
                 file.sha256 = sha256
+                file.active = True
                 session.commit()
 
                 self.logger.info(
@@ -352,7 +384,6 @@ class ConnectionHandler:
         message: Data,
         raise_exceptions: bool = False,
     ):
-        
         """
         Adopted from websockets.asyncio.server.broadcast().
         """
@@ -369,7 +400,7 @@ class ConnectionHandler:
         if raise_exceptions:
             if sys.version_info[:2] < (3, 11):  # pragma: no cover
                 raise ValueError("raise_exceptions requires at least Python 3.11")
-        
+
         exceptions: list[Exception] = []
 
         for connection in connections:

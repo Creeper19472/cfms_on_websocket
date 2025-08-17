@@ -652,6 +652,13 @@ class Document(BaseObject):
 
 
 class DocumentRevision(Base):
+    """
+    This class implemented a model for document revisions.
+
+    A document revision is a historical version of the document,
+    should only be written once and not changed.
+    """
+
     __tablename__ = "document_revisions"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     document_id: Mapped[str] = mapped_column(ForeignKey("documents.id"))
@@ -671,6 +678,10 @@ class DocumentRevision(Base):
     @property
     def active(self):
         return self.file.active
+
+    @property
+    def writeable(self):
+        return self.file.writeable
 
     def __repr__(self) -> str:
         return (
