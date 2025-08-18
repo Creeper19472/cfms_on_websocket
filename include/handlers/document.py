@@ -281,50 +281,52 @@ class RequestCreateDocumentHandler(RequestHandler):
                     handler.conclude_request(403, {}, "Access denied to the folder")
                     return 403, folder_id, {"title": document_title}, handler.username
 
-                if not global_config["document"]["allow_name_duplicate"]:
-                    # 检查是否有同名文件或文件夹
+            if not global_config["document"]["allow_name_duplicate"]:
+                # 检查是否有同名文件或文件夹
 
-                    # 检查同一 folder_id 下是否有同名文件
-                    existing_doc = (
-                        session.query(Document)
-                        .filter_by(folder_id=folder_id, title=document_title)
-                        .first()
+                # 检查同一 folder_id 下是否有同名文件
+                existing_doc = (
+                    session.query(Document)
+                    .filter_by(
+                        folder_id=folder_id if folder_id else None, title=document_title
                     )
-                    # 检查同一 folder_id 下是否有同名文件夹
-                    existing_folder = (
-                        session.query(Folder)
-                        .filter_by(parent_id=folder_id, name=document_title)
-                        .first()
+                    .first()
+                )
+                # 检查同一 folder_id 下是否有同名文件夹
+                existing_folder = (
+                    session.query(Folder)
+                    .filter_by(
+                        parent_id=folder_id if folder_id else None, name=document_title
                     )
+                    .first()
+                )
 
-                    if existing_doc:
-                        if existing_doc.active:
-                            handler.conclude_request(
-                                400, {}, smsg.DOCUMENT_NAME_DUPLICATE
-                            )
-                            return
-                        else:
-                            # 如果该文档尚未被激活，则先尝试删除未激活的文档
-                            if existing_doc.check_access_requirements(
-                                user, 1
-                            ):  # 如果有权删除
-                                existing_doc.delete_all_revisions()
-                                session.delete(existing_doc)
-                                session.commit()
-                            else:
-                                handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
-                                return (
-                                    403,
-                                    folder_id,
-                                    {
-                                        "title": document_title,
-                                        "duplicate_id": existing_doc.id,
-                                    },
-                                    handler.username,
-                                )
-                    elif existing_folder:
-                        handler.conclude_request(400, {}, smsg.DIRECTORY_NAME_DUPLICATE)
+                if existing_doc:
+                    if existing_doc.active:
+                        handler.conclude_request(400, {}, smsg.DOCUMENT_NAME_DUPLICATE)
                         return
+                    else:
+                        # 如果该文档尚未被激活，则先尝试删除未激活的文档
+                        if existing_doc.check_access_requirements(
+                            user, 1
+                        ):  # 如果有权删除
+                            existing_doc.delete_all_revisions()
+                            session.delete(existing_doc)
+                            session.commit()
+                        else:
+                            handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
+                            return (
+                                403,
+                                folder_id,
+                                {
+                                    "title": document_title,
+                                    "duplicate_id": existing_doc.id,
+                                },
+                                handler.username,
+                            )
+                elif existing_folder:
+                    handler.conclude_request(400, {}, smsg.DIRECTORY_NAME_DUPLICATE)
+                    return
 
             today = datetime.date.today()
             new_real_filename = secrets.token_hex(32)
@@ -528,9 +530,63 @@ class RequestRenameDocumentHandler(RequestHandler):
                         }
                     )
                     return
-                else:
-                    document.title = new_title
 
+                if not global_config["document"]["allow_name_duplicate"]:
+                    # 检查是否有同名文件或文件夹
+
+                    # 检查同一 folder_id 下是否有与目标名同名文件
+                    existing_doc = (
+                        session.query(Document)
+                        .filter_by(
+                            folder_id=(
+                                document.folder_id if document.folder_id else None
+                            ),
+                            title=new_title,
+                        )
+                        .first()
+                    )
+                    # 检查同一 folder_id 下是否有同名文件夹
+                    existing_folder = (
+                        session.query(Folder)
+                        .filter_by(
+                            parent_id=(
+                                document.folder_id if document.folder_id else None
+                            ),
+                            name=new_title,
+                        )
+                        .first()
+                    )
+
+                    if existing_doc:
+                        if existing_doc.active:
+                            handler.conclude_request(
+                                400, {}, smsg.DOCUMENT_NAME_DUPLICATE
+                            )
+                            return
+                        else:
+                            # 如果该文档尚未被激活，则先尝试删除未激活的文档
+                            if existing_doc.check_access_requirements(
+                                this_user, 1
+                            ):  # 如果有权删除
+                                existing_doc.delete_all_revisions()
+                                session.delete(existing_doc)
+                                session.commit()
+                            else:
+                                handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
+                                return (
+                                    403,
+                                    document.folder_id,
+                                    {
+                                        "title": document.title,
+                                        "duplicate_id": existing_doc.id,
+                                    },
+                                    handler.username,
+                                )
+                    elif existing_folder:
+                        handler.conclude_request(400, {}, smsg.DIRECTORY_NAME_DUPLICATE)
+                        return
+
+                document.title = new_title
                 session.commit()
 
                 handler.conclude_request(
@@ -769,6 +825,55 @@ class RequestMoveDocumentHandler(RequestHandler):
                     {"target_folder_id": target_folder_id},
                     handler.username,
                 )
+
+            if not global_config["document"]["allow_name_duplicate"]:
+                # 检查是否有同名文件或文件夹
+
+                # 检查同一 folder_id 下是否有同名文件
+                existing_doc = (
+                    session.query(Document)
+                    .filter_by(
+                        folder_id=document.folder_id if document.folder_id else None,
+                        title=document.title,
+                    )
+                    .first()
+                )
+                # 检查同一 folder_id 下是否有同名文件夹
+                existing_folder = (
+                    session.query(Folder)
+                    .filter_by(
+                        parent_id=document.folder_id if document.folder_id else None,
+                        name=document.title,
+                    )
+                    .first()
+                )
+
+                if existing_doc:
+                    if existing_doc.active:
+                        handler.conclude_request(400, {}, smsg.DOCUMENT_NAME_DUPLICATE)
+                        return
+                    else:
+                        # 如果该文档尚未被激活，则先尝试删除未激活的文档
+                        if existing_doc.check_access_requirements(
+                            user, 1
+                        ):  # 如果有权删除
+                            existing_doc.delete_all_revisions()
+                            session.delete(existing_doc)
+                            session.commit()
+                        else:
+                            handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
+                            return (
+                                403,
+                                document.folder_id,
+                                {
+                                    "title": document.title,
+                                    "duplicate_id": existing_doc.id,
+                                },
+                                handler.username,
+                            )
+                elif existing_folder:
+                    handler.conclude_request(400, {}, smsg.DIRECTORY_NAME_DUPLICATE)
+                    return
 
             if target_folder_id:
                 target_folder = session.get(Folder, target_folder_id)

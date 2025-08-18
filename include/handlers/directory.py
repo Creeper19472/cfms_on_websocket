@@ -297,7 +297,9 @@ class RequestCreateDirectoryHandler(RequestHandler):
             # Parse the directory creation request
             parent_id: Optional[str] = handler.data.get("parent_id")
             name: str = handler.data["name"]
-            access_rules_to_apply: dict[int, list[dict]] = handler.data.get("access_rules", {})
+            access_rules_to_apply: dict[int, list[dict]] = handler.data.get(
+                "access_rules", {}
+            )
             exists_ok = handler.data.get("exists_ok", False)
 
             with Session() as session:
@@ -341,12 +343,16 @@ class RequestCreateDirectoryHandler(RequestHandler):
                 if not global_config["document"]["allow_name_duplicate"]:
                     existing_folder = (
                         session.query(Folder)
-                        .filter(Folder.parent_id == parent_id, Folder.name == name)
+                        .filter_by(
+                            parent_id=parent_id if parent_id else None, name=name
+                        )
                         .first()
                     )
                     existing_document = (
                         session.query(Document)
-                        .filter(Document.folder_id == parent_id, Document.title == name)
+                        .filter_by(
+                            folder_id=parent_id if parent_id else None, title=name
+                        )
                         .first()
                     )
 
@@ -385,7 +391,7 @@ class RequestCreateDirectoryHandler(RequestHandler):
 
                 folder = Folder(name=name, parent=parent)
 
-                if apply_directory_access_rules( # disabled: see issue #1
+                if apply_directory_access_rules(  # disabled: see issue #1
                     folder, access_rules_to_apply, this_user
                 ):
                     session.add(folder)
@@ -572,9 +578,60 @@ class RequestRenameDirectoryHandler(RequestHandler):
                         }
                     )
                     return
-                else:
-                    folder.name = new_name
 
+                if not global_config["document"]["allow_name_duplicate"]:
+                    existing_folder = (
+                        session.query(Folder)
+                        .filter_by(
+                            parent_id=folder.parent_id if folder.parent_id else None,
+                            name=new_name,
+                        )
+                        .first()
+                    )
+                    existing_document = (
+                        session.query(Document)
+                        .filter_by(
+                            folder_id=folder.parent_id if folder.parent_id else None,
+                            title=new_name,
+                        )
+                        .first()
+                    )
+
+                    if existing_document:
+                        if existing_document.active:
+                            handler.conclude_request(
+                                400, {}, smsg.DOCUMENT_NAME_DUPLICATE
+                            )
+                            return
+                        else:
+                            # 如果该文档尚未被激活，则先尝试删除未激活的文档
+                            if existing_document.check_access_requirements(
+                                this_user, 1
+                            ):  # 如果有权删除
+                                existing_document.delete_all_revisions()
+                                session.delete(existing_document)
+                                session.commit()
+                            else:
+                                handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
+                                return (
+                                    403,
+                                    folder_id,
+                                    {
+                                        "title": existing_document.title,
+                                        "duplicate_id": existing_document.id,
+                                    },
+                                    handler.username,
+                                )
+
+                    elif existing_folder:  # 第二步判断有无同名文件夹
+                        handler.conclude_request(
+                            400,
+                            {},
+                            smsg.DIRECTORY_NAME_DUPLICATE,  # 第一步判断已经知道没有同名文档，则一定是同名文件夹
+                        )
+                        return
+
+                folder.name = new_name
                 session.commit()
 
                 handler.conclude_request(
@@ -637,6 +694,56 @@ class RequestMoveDirectoryHandler(RequestHandler):
             if not folder.check_access_requirements(user, 2):
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MOVE_DIRECTORY)
                 return 403, folder_id, handler.username
+
+            if not global_config["document"]["allow_name_duplicate"]:
+                existing_folder = (
+                    session.query(Folder)
+                    .filter_by(
+                        parent_id=folder.parent_id if folder.parent_id else None,
+                        name=folder.name,
+                    )
+                    .first()
+                )
+                existing_document = (
+                    session.query(Document)
+                    .filter_by(
+                        folder_id=folder.parent_id if folder.parent_id else None,
+                        title=folder.name,
+                    )
+                    .first()
+                )
+
+                if existing_document:
+                    if existing_document.active:
+                        handler.conclude_request(400, {}, smsg.DOCUMENT_NAME_DUPLICATE)
+                        return
+                    else:
+                        # 如果该文档尚未被激活，则先尝试删除未激活的文档
+                        if existing_document.check_access_requirements(
+                            user, 1
+                        ):  # 如果有权删除
+                            existing_document.delete_all_revisions()
+                            session.delete(existing_document)
+                            session.commit()
+                        else:
+                            handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
+                            return (
+                                403,
+                                folder_id,
+                                {
+                                    "title": existing_document.title,
+                                    "duplicate_id": existing_document.id,
+                                },
+                                handler.username,
+                            )
+
+                elif existing_folder:  # 第二步判断有无同名文件夹
+                    handler.conclude_request(
+                        400,
+                        {},
+                        smsg.DIRECTORY_NAME_DUPLICATE,
+                    )
+                    return
 
             if target_folder_id:
                 target_folder = session.get(Folder, target_folder_id)
