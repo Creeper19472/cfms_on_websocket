@@ -1,7 +1,10 @@
 import datetime
 import secrets
+
+import jsonschema
 from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
+from include.constants import AVAILABLE_ACCESS_TYPES
 from include.database.handler import Session
 from include.database.models.classic import (
     DocumentAccessRule,
@@ -14,6 +17,7 @@ from include.database.models.classic import (
 from include.database.models.file import File, FileTask
 from include.conf_loader import global_config
 from include.function.audit import log_audit
+from include.function.rule import validate_access_rules
 import include.system.messages as smsg
 import time
 
@@ -106,7 +110,7 @@ class RequestGetDocumentInfoHandler(RequestHandler):
                 handler.conclude_request(404, {}, "Document not found")
                 return 404, document_id, handler.username
 
-            if not document.check_access_requirements(user, access_type=0):
+            if not document.check_access_requirements(user, access_type="read"):
                 handler.conclude_request(403, {}, "Permission denied")
                 return 403, document_id, handler.username
 
@@ -137,6 +141,52 @@ class RequestGetDocumentInfoHandler(RequestHandler):
             }
 
             handler.conclude_request(200, data, "Document info retrieved successfully")
+            return 0, document_id, handler.username
+
+
+class RequestGetDocumentAccessRulesHandler(RequestHandler):
+    data_schema = {
+        "type": "object",
+        "properties": {"document_id": {"type": "string", "minLength": 1}},
+        "required": ["document_id"],
+        "additionalProperties": False,
+    }
+    require_auth = True
+
+    def handle(self, handler: ConnectionHandler):
+
+        document_id: str = handler.data["document_id"]
+
+        with Session() as session:
+            user = session.get(User, handler.username)
+            document = session.get(Document, document_id)
+
+            if user is None or not user.is_token_valid(handler.token):
+                handler.conclude_request(403, {}, "Invalid user or token")
+                return 401, document_id
+
+            if not document:
+                handler.conclude_request(404, {}, "Document not found")
+                return 404, document_id, handler.username
+
+            if (
+                not document.check_access_requirements(user, access_type="read")
+                or not "view_access_rules" in user.all_permissions
+            ):
+                handler.conclude_request(403, {}, "Permission denied")
+                return 403, document_id, handler.username
+
+            # generate access_rules
+            access_rules: dict[str, list] = {}
+
+            for each_rule in document.access_rules:
+                if each_rule.access_type not in access_rules:
+                    access_rules[each_rule.access_type] = []
+                access_rules[each_rule.access_type].append(each_rule.rule_data)
+
+            handler.conclude_request(
+                200, access_rules, "Document access rules retrieved successfully"
+            )
             return 0, document_id, handler.username
 
 
@@ -189,41 +239,45 @@ class RequestGetDocumentHandler(RequestHandler):
             return 0, document_id, handler.username
 
 
-AVAILABLE_ACCESS_TYPES = [0, 1]
-
-
 def apply_document_access_rules(
-    document_id: str, set_access_rules: dict, user: User
+    document_id: str, set_access_rules: dict[str, list[dict]], user: User
 ) -> bool:
-    for access_type in set_access_rules:
-        if access_type not in AVAILABLE_ACCESS_TYPES:
-            raise ValueError(f"Invalid access type: {access_type}")
 
-        this_rule_data = set_access_rules.get(access_type, None)
-        if this_rule_data is None:
-            raise ValueError(
-                f"Access rule data for access type {access_type} is missing"
-            )
+    with Session() as session:
+        document = session.get(Document, document_id)
+        if not document:
+            raise ValueError(f"Document not found: {document_id}")
 
-        with Session() as session:
-            document = session.get(Document, document_id)
-            if not document:
-                raise ValueError(f"Document not found: {document_id}")
+        for access_type in set_access_rules:
+            if access_type not in AVAILABLE_ACCESS_TYPES:
+                raise ValueError(f"Invalid access type: {access_type}")
+
+            this_type_rules: list[dict] = set_access_rules[access_type]
+            if this_type_rules is None:
+                raise ValueError(
+                    f"Access rule data for access type {access_type} can't be null"
+                )
+            validate_access_rules(this_type_rules)
+
             for rule in document.access_rules:
                 if rule.access_type == access_type:
                     document.access_rules.remove(rule)
-            this_new_rule = DocumentAccessRule(
-                document_id=document_id,
-                access_type=access_type,
-                rule_data=this_rule_data,
-            )
-            document.access_rules.append(this_new_rule)
 
-            if document.check_access_requirements(user, access_type):
-                session.commit()
-            else:
+            for each_rule in this_type_rules:
+                if each_rule:
+                    this_new_rule = DocumentAccessRule(
+                        document_id=document_id,
+                        access_type=access_type,
+                        rule_data=each_rule,
+                    )
+                    document.access_rules.append(this_new_rule)
+
+            if not document.check_access_requirements(user, access_type):
                 session.rollback()
                 return False
+
+        # 直到所有规则全部添加完毕再提交
+        session.commit()
 
     return True
 
@@ -275,7 +329,7 @@ class RequestCreateDocumentHandler(RequestHandler):
                     handler.conclude_request(404, {}, "Folder not found")
                     return 404, folder_id, {"title": document_title}, handler.username
                 if (
-                    not folder.check_access_requirements(user, access_type=1)
+                    not folder.check_access_requirements(user, access_type="write")
                     and not "super_create_document" in user.all_permissions
                 ):  # 创建文件肯定是写权限
                     handler.conclude_request(403, {}, "Access denied to the folder")
@@ -308,7 +362,7 @@ class RequestCreateDocumentHandler(RequestHandler):
                     else:
                         # 如果该文档尚未被激活，则先尝试删除未激活的文档
                         if existing_doc.check_access_requirements(
-                            user, 1
+                            user, "write"
                         ):  # 如果有权删除
                             existing_doc.delete_all_revisions()
                             session.delete(existing_doc)
@@ -391,7 +445,9 @@ class RequestUploadDocumentHandler(RequestHandler):
                 return 401, document_id
 
             if document:
-                if not document.check_access_requirements(this_user, access_type=1):
+                if not document.check_access_requirements(
+                    this_user, access_type="write"
+                ):
                     handler.conclude_request(403, {}, "Access denied to the document")
                     return 403, document_id, handler.username
 
@@ -457,7 +513,7 @@ class RequestDeleteDocumentHandler(RequestHandler):
 
             if (
                 "delete_document" not in user.all_permissions
-                or not document.check_access_requirements(user, access_type=1)
+                or not document.check_access_requirements(user, access_type="write")
             ):
                 handler.conclude_request(403, {}, "Access denied to the document")
                 return 403, document_id, handler.username
@@ -514,7 +570,7 @@ class RequestRenameDocumentHandler(RequestHandler):
                     return 404, document_id, handler.username
                 if (
                     "rename_document" not in this_user.all_permissions
-                    or not document.check_access_requirements(this_user, 1)
+                    or not document.check_access_requirements(this_user, "write")
                 ):
                     handler.conclude_request(
                         **{"code": 403, "message": "Access denied", "data": {}}
@@ -566,7 +622,7 @@ class RequestRenameDocumentHandler(RequestHandler):
                         else:
                             # 如果该文档尚未被激活，则先尝试删除未激活的文档
                             if existing_doc.check_access_requirements(
-                                this_user, 1
+                                this_user, "write"
                             ):  # 如果有权删除
                                 existing_doc.delete_all_revisions()
                                 session.delete(existing_doc)
@@ -696,7 +752,14 @@ class RequestSetDocumentRulesHandler(RequestHandler):
         "type": "object",
         "properties": {
             "document_id": {"type": "string", "minLength": 1},
-            "access_rules": {"type": "object"},
+            "access_rules": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": {
+                    "type": "array",
+                    "items": {}
+                },
+            },
         },
         "required": ["document_id", "access_rules"],
         "additionalProperties": False,
@@ -714,16 +777,6 @@ class RequestSetDocumentRulesHandler(RequestHandler):
                 **{"code": 401, "message": "Authentication is required", "data": {}}
             )
             return 401, document_id
-
-        if not document_id or not access_rules_to_apply:
-            handler.conclude_request(
-                **{
-                    "code": 400,
-                    "message": "Document_id and access_rules are required",
-                    "data": {},
-                }
-            )
-            return
 
         with Session() as session:
             user = session.get(User, handler.username)
@@ -743,19 +796,28 @@ class RequestSetDocumentRulesHandler(RequestHandler):
                 handler.conclude_request(403, {}, "Access denied to set access rules")
                 return 403, document_id, handler.username
 
-            if not document.check_access_requirements(user, access_type=3):
+            if not document.check_access_requirements(user, access_type="manage"):
                 handler.conclude_request(403, {}, "Access denied to the document")
                 return 403, document_id, handler.username
 
-            if apply_document_access_rules(document.id, access_rules_to_apply, user):
-                handler.conclude_request(200, {}, "Set access rules successfully")
-                return 0, document_id, handler.username
-            else:
+            try:
+                if apply_document_access_rules(
+                    document.id, access_rules_to_apply, user
+                ):
+                    handler.conclude_request(200, {}, "Set access rules successfully")
+                    return 0, document_id, handler.username
+                else:
+                    session.rollback()
+                    handler.conclude_request(
+                        403, {}, "Set access rules failed: permission denied"
+                    )
+                    return 403, document_id, handler.username
+            except (ValueError, jsonschema.ValidationError) as exc:
                 session.rollback()
                 handler.conclude_request(
-                    403, {}, "Set access rules failed: permission denied"
+                    400, {}, f"Set access rules failed: {str(exc)}"
                 )
-                return 403, document_id, handler.username
+                return 400, document_id, handler.username
 
 
 class RequestMoveDocumentHandler(RequestHandler):
@@ -817,7 +879,7 @@ class RequestMoveDocumentHandler(RequestHandler):
                     handler.username,
                 )
 
-            if not document.check_access_requirements(user, 2):
+            if not document.check_access_requirements(user, "move"):
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MOVE_DOCUMENT)
                 return (
                     403,
@@ -855,7 +917,7 @@ class RequestMoveDocumentHandler(RequestHandler):
                     else:
                         # 如果该文档尚未被激活，则先尝试删除未激活的文档
                         if existing_doc.check_access_requirements(
-                            user, 1
+                            user, "write"
                         ):  # 如果有权删除
                             existing_doc.delete_all_revisions()
                             session.delete(existing_doc)
@@ -893,7 +955,7 @@ class RequestMoveDocumentHandler(RequestHandler):
                     )
 
                 if not target_folder.check_access_requirements(
-                    user, 1
+                    user, "write"
                 ):  # 对于目标文件夹，移动可视为一种写操作
                     handler.conclude_request(
                         403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY

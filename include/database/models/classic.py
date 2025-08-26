@@ -390,7 +390,7 @@ class BaseObject(Base):
 
     access_rules: Mapped[List]
 
-    def check_access_requirements(self, user: User, access_type=0) -> bool:
+    def check_access_requirements(self, user: User, access_type: str="read") -> bool:
         """
         Checks if a given user meets the access requirements for a specific access type based on defined access rules.
         Args:
@@ -497,24 +497,30 @@ class BaseObject(Base):
             each_rule: AccessRuleBase
 
             # access_type 一览：
-            # 0 - 读
-            # 1 - 写（删除=清空数据，重命名=写文件元数据，因此都算写）
-            # 2 - 移动
-            # 3 - 管理
+            # read - 读
+            # write - 写（删除=清空数据，重命名=写文件元数据，因此都算写）
+            # move - 移动
+            # manage - 管理
 
             match access_type:
-                case 0:  # 如果要检查的是读权限
-                    if each_rule.access_type != 0:
+                case "read":  # 如果要检查的是读权限
+                    if each_rule.access_type != "read":
                         continue
-                case 1:  # 如果要检查写权限
-                    if each_rule.access_type not in [0, 1]:
+                case "write":  # 如果要检查写权限
+                    if each_rule.access_type not in ["read", "write"]:
                         continue
-                case 2:
-                    if each_rule.access_type not in [0, 2]:
+                case "move":
+                    # 取消了对读权限的要求
+                    if each_rule.access_type != "move":
                         continue
-                case 3:  # 如果要检查管理权限
-                    if each_rule.access_type not in [0, 3]:
+                case "manage":  # 如果要检查管理权限
+                    if each_rule.access_type not in ["read", "manage"]:
                         continue
+                case _:
+                    raise ValueError(f"Invaild access type for {self.__tablename__}: {access_type}")
+                
+            if not each_rule.rule_data:
+                continue
 
             if not match_primary_sub_group(each_rule.rule_data):
                 return False
@@ -693,11 +699,11 @@ class DocumentRevision(Base):
 class DocumentAccessRule(Base, AccessRuleBase):
     __tablename__ = "document_access_rules"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    access_type: Mapped[int] = mapped_column(
-        Integer,
+    access_type: Mapped[str] = mapped_column(
+        VARCHAR(64),
         nullable=False,
-        default=0,
-        comment="0: read, 1: write",  # rename is regarded as write
+        default="read",
+        # comment="0: read, 1: write",  # rename is regarded as write
     )
     document_id: Mapped[Optional[str]] = mapped_column(
         ForeignKey("documents.id"), nullable=False
@@ -717,11 +723,10 @@ class DocumentAccessRule(Base, AccessRuleBase):
 class FolderAccessRule(Base, AccessRuleBase):
     __tablename__ = "folder_access_rules"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    access_type: Mapped[int] = mapped_column(
-        Integer,
+    access_type: Mapped[str] = mapped_column(
+        VARCHAR(64),
         nullable=False,
-        default=0,
-        comment="0: read, 1: write",  # rename is regarded as write
+        default="read",
     )
     folder_id: Mapped[Optional[str]] = mapped_column(
         ForeignKey("folders.id"), nullable=True

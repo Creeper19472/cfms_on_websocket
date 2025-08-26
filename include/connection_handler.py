@@ -19,6 +19,7 @@ from include.handlers.document import (
     RequestDownloadFileHandler,
     RequestGetDocumentHandler,
     RequestGetDocumentInfoHandler,
+    RequestGetDocumentAccessRulesHandler,
     RequestMoveDocumentHandler,
     RequestRenameDocumentHandler,
     RequestSetDocumentRulesHandler,
@@ -125,6 +126,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "rename_document": RequestRenameDocumentHandler,
         "move_document": RequestMoveDocumentHandler,
         "get_document_info": RequestGetDocumentInfoHandler,
+        "get_document_access_rules": RequestGetDocumentAccessRulesHandler,
         "set_document_rules": RequestSetDocumentRulesHandler,
         # 文件类
         "download_file": RequestDownloadFileHandler,

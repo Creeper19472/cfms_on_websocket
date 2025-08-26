@@ -5,17 +5,14 @@ from include.conf_loader import global_config
 from include.database.handler import Session
 from include.database.models.classic import User, Folder, Document, FolderAccessRule
 from include.function.audit import log_audit
+from include.constants import AVAILABLE_ACCESS_TYPES
 import include.system.messages as smsg
 import time
 
 
-AVAILABLE_ACCESS_TYPES = [0, 1]
-
-
 def apply_directory_access_rules(
-    folder: Folder, set_access_rules: dict[int, list[dict]], user: User
+    folder: Folder, set_access_rules: dict[str, list[dict]], user: User
 ) -> bool:
-    return True
 
     for access_type in set_access_rules:
         if access_type not in AVAILABLE_ACCESS_TYPES:
@@ -107,7 +104,7 @@ class RequestListDirectoryHandler(RequestHandler):
                         return 404, folder_id, handler.username
                     if (
                         not "super_list_directory" in this_user.all_permissions
-                        and not folder.check_access_requirements(this_user, 0)
+                        and not folder.check_access_requirements(this_user, "read")
                     ):
                         handler.conclude_request(
                             **{"code": 403, "message": "Access denied", "data": {}}
@@ -218,7 +215,7 @@ class RequestGetDirectoryInfoHandler(RequestHandler):
                     handler.conclude_request(404, {}, "Directory not found")
                     return 404, directory_id, handler.username
 
-                if not directory.check_access_requirements(user, access_type=0):
+                if not directory.check_access_requirements(user, access_type="read"):
                     handler.conclude_request(403, {}, "Permission denied")
                     return 403, directory_id, handler.username
 
@@ -297,7 +294,7 @@ class RequestCreateDirectoryHandler(RequestHandler):
             # Parse the directory creation request
             parent_id: Optional[str] = handler.data.get("parent_id")
             name: str = handler.data["name"]
-            access_rules_to_apply: dict[int, list[dict]] = handler.data.get(
+            access_rules_to_apply: dict[str, list[dict]] = handler.data.get(
                 "access_rules", {}
             )
             exists_ok = handler.data.get("exists_ok", False)
@@ -320,7 +317,7 @@ class RequestCreateDirectoryHandler(RequestHandler):
                             }
                         )
                         return 404, parent_id, handler.username
-                    if not parent.check_access_requirements(this_user, 1):
+                    if not parent.check_access_requirements(this_user, "write"):
                         handler.conclude_request(
                             **{"code": 403, "message": "Access denied", "data": {}}
                         )
@@ -483,7 +480,7 @@ class RequestDeleteDirectoryHandler(RequestHandler):
                     return 404, folder_id, handler.username
                 if (
                     "delete_directory" not in this_user.all_permissions
-                    or not folder.check_access_requirements(this_user, 1)
+                    or not folder.check_access_requirements(this_user, "write")
                 ):
                     handler.conclude_request(
                         **{"code": 403, "message": "Access denied", "data": {}}
@@ -562,7 +559,7 @@ class RequestRenameDirectoryHandler(RequestHandler):
                     return 404, folder_id, handler.username
                 if (
                     "rename_directory" not in this_user.all_permissions
-                    or not folder.check_access_requirements(this_user, 1)
+                    or not folder.check_access_requirements(this_user, "write")
                 ):
                     handler.conclude_request(
                         **{"code": 403, "message": "Access denied", "data": {}}
@@ -606,7 +603,7 @@ class RequestRenameDirectoryHandler(RequestHandler):
                         else:
                             # 如果该文档尚未被激活，则先尝试删除未激活的文档
                             if existing_document.check_access_requirements(
-                                this_user, 1
+                                this_user, "write"
                             ):  # 如果有权删除
                                 existing_document.delete_all_revisions()
                                 session.delete(existing_document)
@@ -691,7 +688,7 @@ class RequestMoveDirectoryHandler(RequestHandler):
                 )
                 return 404, folder_id, handler.username
 
-            if not folder.check_access_requirements(user, 2):
+            if not folder.check_access_requirements(user, "move"):
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MOVE_DIRECTORY)
                 return 403, folder_id, handler.username
 
@@ -720,7 +717,7 @@ class RequestMoveDirectoryHandler(RequestHandler):
                     else:
                         # 如果该文档尚未被激活，则先尝试删除未激活的文档
                         if existing_document.check_access_requirements(
-                            user, 1
+                            user, "write"
                         ):  # 如果有权删除
                             existing_document.delete_all_revisions()
                             session.delete(existing_document)
@@ -758,7 +755,7 @@ class RequestMoveDirectoryHandler(RequestHandler):
                     return 404, folder_id, handler.username
 
                 if not target_folder.check_access_requirements(
-                    user, 1
+                    user, "write"
                 ):  # 对于目标文件夹，移动可视为一种写操作
                     handler.conclude_request(
                         403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY
