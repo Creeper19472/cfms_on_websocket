@@ -263,6 +263,52 @@ class RequestGetDirectoryInfoHandler(RequestHandler):
             handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
 
 
+class RequestGetDirectoryAccessRulesHandler(RequestHandler):
+    data_schema = {
+        "type": "object",
+        "properties": {"directory_id": {"type": "string", "minLength": 1}},
+        "required": ["directory_id"],
+        "additionalProperties": False,
+    }
+    require_auth = True
+
+    def handle(self, handler: ConnectionHandler):
+
+        directory_id: str = handler.data["directory_id"]
+
+        with Session() as session:
+            user = session.get(User, handler.username)
+            directory = session.get(Folder, directory_id)
+
+            if user is None or not user.is_token_valid(handler.token):
+                handler.conclude_request(403, {}, "Invalid user or token")
+                return 401, directory_id
+
+            if not directory:
+                handler.conclude_request(404, {}, "Document not found")
+                return 404, directory_id, handler.username
+
+            if (
+                not directory.check_access_requirements(user, access_type="read")
+                or not "view_access_rules" in user.all_permissions
+            ):
+                handler.conclude_request(403, {}, "Permission denied")
+                return 403, directory_id, handler.username
+
+            # generate access_rules
+            access_rules: dict[str, list] = {}
+
+            for each_rule in directory.access_rules:
+                if each_rule.access_type not in access_rules:
+                    access_rules[each_rule.access_type] = []
+                access_rules[each_rule.access_type].append(each_rule.rule_data)
+
+            handler.conclude_request(
+                200, access_rules, "Directory access rules retrieved successfully"
+            )
+            return 0, directory_id, handler.username
+
+
 class RequestCreateDirectoryHandler(RequestHandler):
     """
     Handles directory creation requests.

@@ -31,6 +31,7 @@ from include.handlers.directory import (
     RequestCreateDirectoryHandler,
     RequestDeleteDirectoryHandler,
     RequestGetDirectoryInfoHandler,
+    RequestGetDirectoryAccessRulesHandler,
     RequestMoveDirectoryHandler,
     RequestRenameDirectoryHandler,
     RequestSetDirectoryRulesHandler,
@@ -135,6 +136,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         # 目录类
         "list_directory": RequestListDirectoryHandler,
         "get_directory_info": RequestGetDirectoryInfoHandler,
+        "get_directory_access_rules": RequestGetDirectoryAccessRulesHandler,
         "set_directory_rules": RequestSetDirectoryRulesHandler,
         "create_directory": RequestCreateDirectoryHandler,
         "delete_directory": RequestDeleteDirectoryHandler,
