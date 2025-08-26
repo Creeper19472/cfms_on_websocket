@@ -1,4 +1,6 @@
 from typing import Iterable, Optional
+
+import jsonschema
 from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
 from include.conf_loader import global_config
@@ -6,42 +8,47 @@ from include.database.handler import Session
 from include.database.models.classic import User, Folder, Document, FolderAccessRule
 from include.function.audit import log_audit
 from include.constants import AVAILABLE_ACCESS_TYPES
+from include.function.rule import validate_access_rules
 import include.system.messages as smsg
 import time
 
 
 def apply_directory_access_rules(
-    folder: Folder, set_access_rules: dict[str, list[dict]], user: User
+    directory: Folder, set_access_rules: dict[str, list[dict]], user: User
 ) -> bool:
 
-    for access_type in set_access_rules:
-        if access_type not in AVAILABLE_ACCESS_TYPES:
-            raise ValueError(f"Invalid access type: {access_type}")
+    with Session() as session:
 
-        this_type_rules: list = set_access_rules.get(access_type, [])
-        if this_type_rules is None:
-            raise ValueError(
-                f"Access rule data for access type {access_type} is missing"
-            )
+        for access_type in set_access_rules:
+            if access_type not in AVAILABLE_ACCESS_TYPES:
+                raise ValueError(f"Invalid access type: {access_type}")
 
-        with Session() as session:
-            for rule in folder.access_rules:
-                if rule.access_type == access_type:
-                    folder.access_rules.remove(rule)
-
-            for new_rule_data in this_type_rules:
-                this_new_rule = FolderAccessRule(
-                    folder_id=folder.id,
-                    access_type=access_type,
-                    rule_data=new_rule_data,
+            this_type_rules: list[dict] = set_access_rules[access_type]
+            if this_type_rules is None:
+                raise ValueError(
+                    f"Access rule data for access type {access_type} can't be null"
                 )
-                folder.access_rules.append(this_new_rule)
+            validate_access_rules(this_type_rules)
 
-            if folder.check_access_requirements(user, access_type):
-                session.commit()
-            else:
+            for rule in directory.access_rules:
+                if rule.access_type == access_type:
+                    directory.access_rules.remove(rule)
+
+            for each_rule in this_type_rules:
+                if each_rule:
+                    this_new_rule = FolderAccessRule(
+                        folder_id=directory.id,
+                        access_type=access_type,
+                        rule_data=each_rule,
+                    )
+                    directory.access_rules.append(this_new_rule)
+
+            if not directory.check_access_requirements(user, access_type):
                 session.rollback()
                 return False
+
+        # 直到所有规则全部添加完毕再提交
+        session.commit()
 
     return True
 
@@ -276,14 +283,14 @@ class RequestCreateDirectoryHandler(RequestHandler):
         "properties": {
             "parent_id": {"anyOf": [{"type": "string"}, {"type": "null"}]},
             "name": {"type": "string", "minLength": 1},
-            # "access_rules": {
-            #     "type": "object",
-            #     "properties": {},
-            #     "propertyNames": {},
-            #     "additionalProperties": {
-            #         "type": "int"
-            #     }
-            #     },
+            "access_rules": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": {
+                    "type": "array",
+                    "items": {}
+                },
+            },
         },
         "required": ["name"],
     }
@@ -388,7 +395,7 @@ class RequestCreateDirectoryHandler(RequestHandler):
 
                 folder = Folder(name=name, parent=parent)
 
-                if apply_directory_access_rules(  # disabled: see issue #1
+                if apply_directory_access_rules(
                     folder, access_rules_to_apply, this_user
                 ):
                     session.add(folder)
@@ -771,3 +778,80 @@ class RequestMoveDirectoryHandler(RequestHandler):
 
         handler.conclude_request(200, {}, smsg.SUCCESS)
         return 0, folder_id, handler.username
+
+
+class RequestSetDirectoryRulesHandler(RequestHandler):
+    """
+    Handles the "set_directory_rules" action.
+    """
+
+    data_schema = {
+        "type": "object",
+        "properties": {
+            "directory_id": {"type": "string", "minLength": 1},
+            "access_rules": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": {
+                    "type": "array",
+                    "items": {}
+                },
+            },
+        },
+        "required": ["directory_id", "access_rules"],
+        "additionalProperties": False,
+    }
+
+    def handle(self, handler: ConnectionHandler):
+        """
+        Handles the directory access rules setting request from the client.
+        """
+        directory_id: str = handler.data["directory_id"]
+        access_rules_to_apply: dict = handler.data["access_rules"]
+
+        if not handler.username:
+            handler.conclude_request(
+                **{"code": 401, "message": "Authentication is required", "data": {}}
+            )
+            return 401, directory_id
+
+        with Session() as session:
+            user = session.get(User, handler.username)
+            if not user or not user.is_token_valid(handler.token):
+                handler.conclude_request(
+                    **{"code": 403, "message": "Invalid user or token", "data": {}}
+                )
+                return 401, directory_id
+
+            directory = session.get(Folder, directory_id)
+
+            if not directory:
+                handler.conclude_request(404, {}, "Directory not found")
+                return 404, directory_id, handler.username
+
+            if not "set_access_rules" in user.all_permissions:
+                handler.conclude_request(403, {}, "Access denied to set access rules")
+                return 403, directory_id, handler.username
+
+            if not directory.check_access_requirements(user, access_type="manage"):
+                handler.conclude_request(403, {}, "Access denied to the directory")
+                return 403, directory_id, handler.username
+
+            try:
+                if apply_directory_access_rules(
+                    directory, access_rules_to_apply, user
+                ):
+                    handler.conclude_request(200, {}, "Set access rules successfully")
+                    return 0, directory_id, handler.username
+                else:
+                    session.rollback()
+                    handler.conclude_request(
+                        403, {}, "Set access rules failed: permission denied"
+                    )
+                    return 403, directory_id, handler.username
+            except (ValueError, jsonschema.ValidationError) as exc:
+                session.rollback()
+                handler.conclude_request(
+                    400, {}, f"Set access rules failed: {str(exc)}"
+                )
+                return 400, directory_id, handler.username

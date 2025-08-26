@@ -33,6 +33,7 @@ from include.handlers.directory import (
     RequestGetDirectoryInfoHandler,
     RequestMoveDirectoryHandler,
     RequestRenameDirectoryHandler,
+    RequestSetDirectoryRulesHandler,
 )
 from include.handlers.management.user import (
     RequestChangeUserGroupsHandler,
@@ -134,6 +135,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         # 目录类
         "list_directory": RequestListDirectoryHandler,
         "get_directory_info": RequestGetDirectoryInfoHandler,
+        "set_directory_rules": RequestSetDirectoryRulesHandler,
         "create_directory": RequestCreateDirectoryHandler,
         "delete_directory": RequestDeleteDirectoryHandler,
         "rename_directory": RequestRenameDirectoryHandler,
