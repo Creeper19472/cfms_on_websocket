@@ -9,6 +9,9 @@ def apply_access_rules(
     """
     只对对象进行更改，而不进行提交。
     """
+    if not set_access_rules:
+        for rule in target.access_rules.copy():
+            target.access_rules.remove(rule) # pyright: ignore[reportArgumentType]
 
     for access_type in set_access_rules:
         if access_type not in AVAILABLE_ACCESS_TYPES:
