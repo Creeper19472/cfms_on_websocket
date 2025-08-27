@@ -41,7 +41,7 @@ schema = {
                 },
             },
         },
-        "required": ["match", "match_groups"]
+        "required": ["match", "match_groups"],
     },
 }
 

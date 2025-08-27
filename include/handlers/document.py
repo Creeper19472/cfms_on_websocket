@@ -16,8 +16,7 @@ from include.database.models.classic import (
 )
 from include.database.models.file import File, FileTask
 from include.conf_loader import global_config
-from include.function.audit import log_audit
-from include.function.rule import validate_access_rules
+from include.function.rule.applying import apply_access_rules
 import include.system.messages as smsg
 import time
 
@@ -239,49 +238,6 @@ class RequestGetDocumentHandler(RequestHandler):
             return 0, document_id, handler.username
 
 
-def apply_document_access_rules(
-    document_id: str, set_access_rules: dict[str, list[dict]], user: User
-) -> bool:
-
-    with Session() as session:
-        document = session.get(Document, document_id)
-        if not document:
-            raise ValueError(f"Document not found: {document_id}")
-
-        for access_type in set_access_rules:
-            if access_type not in AVAILABLE_ACCESS_TYPES:
-                raise ValueError(f"Invalid access type: {access_type}")
-
-            this_type_rules: list[dict] = set_access_rules[access_type]
-            if this_type_rules is None:
-                raise ValueError(
-                    f"Access rule data for access type {access_type} can't be null"
-                )
-            validate_access_rules(this_type_rules)
-
-            for rule in document.access_rules:
-                if rule.access_type == access_type:
-                    document.access_rules.remove(rule)
-
-            for each_rule in this_type_rules:
-                if each_rule:
-                    this_new_rule = DocumentAccessRule(
-                        document_id=document_id,
-                        access_type=access_type,
-                        rule_data=each_rule,
-                    )
-                    document.access_rules.append(this_new_rule)
-
-            if not document.check_access_requirements(user, access_type):
-                session.rollback()
-                return False
-
-        # 直到所有规则全部添加完毕再提交
-        session.commit()
-
-    return True
-
-
 class RequestCreateDocumentHandler(RequestHandler):
     """
     Handles the "create_document" action.
@@ -397,8 +353,8 @@ class RequestCreateDocumentHandler(RequestHandler):
             new_document_revision = DocumentRevision(file_id=new_file.id)
             new_document.revisions.append(new_document_revision)
 
-            if apply_document_access_rules(
-                new_document.id, access_rules_to_apply, user
+            if apply_access_rules(
+                new_document, access_rules_to_apply, user
             ):
                 session.add(new_file)
                 session.add(new_document)
@@ -801,9 +757,10 @@ class RequestSetDocumentRulesHandler(RequestHandler):
                 return 403, document_id, handler.username
 
             try:
-                if apply_document_access_rules(
-                    document.id, access_rules_to_apply, user
-                ):
+                if apply_access_rules(
+                    document, access_rules_to_apply, user
+                ):  
+                    session.commit()
                     handler.conclude_request(200, {}, "Set access rules successfully")
                     return 0, document_id, handler.username
                 else:

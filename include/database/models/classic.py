@@ -49,7 +49,9 @@ class User(Base):
         "UserPermission", back_populates="user"
     )
 
-    audit_entries: Mapped[List["AuditEntry"]] = relationship("AuditEntry", back_populates="user")
+    audit_entries: Mapped[List["AuditEntry"]] = relationship(
+        "AuditEntry", back_populates="user"
+    )
 
     def __repr__(self) -> str:
         return (
@@ -62,9 +64,11 @@ class User(Base):
         salted = plain_password + self.salt
         password_hash = hashlib.sha256(salted.encode("utf-8")).hexdigest()
         if password_hash == self.pass_hash:
-            secret = (global_config["server"]["secret_key"]
+            secret = (
+                global_config["server"]["secret_key"]
                 if not self.secret_key
-                else self.secret_key)
+                else self.secret_key
+            )
             token = Token(secret, self.username)
             token.new(3600)
 
@@ -100,9 +104,11 @@ class User(Base):
         重新生成用户的JWT令牌。
         """
 
-        secret = (global_config["server"]["secret_key"]
-                if not self.secret_key
-                else self.secret_key)
+        secret = (
+            global_config["server"]["secret_key"]
+            if not self.secret_key
+            else self.secret_key
+        )
         new_token = Token(secret, self.username)
         new_token.new(3600)
 
@@ -390,7 +396,7 @@ class BaseObject(Base):
 
     access_rules: Mapped[List]
 
-    def check_access_requirements(self, user: User, access_type: str="read") -> bool:
+    def check_access_requirements(self, user: User, access_type: str = "read") -> bool:
         """
         Checks if a given user meets the access requirements for a specific access type based on defined access rules.
         Args:
@@ -517,8 +523,10 @@ class BaseObject(Base):
                     if each_rule.access_type not in ["read", "manage"]:
                         continue
                 case _:
-                    raise ValueError(f"Invaild access type for {self.__tablename__}: {access_type}")
-                
+                    raise ValueError(
+                        f"Invaild access type for {self.__tablename__}: {access_type}"
+                    )
+
             if not each_rule.rule_data:
                 continue
 
@@ -717,7 +725,7 @@ class DocumentAccessRule(Base, AccessRuleBase):
     )
 
     def __repr__(self) -> str:
-        return f"AccessRule(id={self.id!r}, document_id={self.document_id!r}, rule_data={self.rule_data!r})"
+        return f"DocumentAccessRule(id={self.id!r}, document_id={self.document_id!r}, rule_data={self.rule_data!r})"
 
 
 class FolderAccessRule(Base, AccessRuleBase):
@@ -750,9 +758,7 @@ class AuditEntry(Base):  # 审计条目
     )
     action: Mapped[str] = mapped_column(VARCHAR(255), nullable=False)
     username: Mapped[str] = mapped_column(ForeignKey("users.username"), nullable=True)
-    user: Mapped[User] = relationship(
-        "User", back_populates="audit_entries"
-    )
+    user: Mapped[User] = relationship("User", back_populates="audit_entries")
     target: Mapped[str] = mapped_column(VARCHAR(255), nullable=True)
     data: Mapped[dict] = mapped_column(JSON, nullable=True)
     result: Mapped[int] = mapped_column(Integer, nullable=False)

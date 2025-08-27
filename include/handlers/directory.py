@@ -7,50 +7,8 @@ from include.conf_loader import global_config
 from include.database.handler import Session
 from include.database.models.classic import User, Folder, Document, FolderAccessRule
 from include.function.audit import log_audit
-from include.constants import AVAILABLE_ACCESS_TYPES
-from include.function.rule import validate_access_rules
+from include.function.rule.applying import apply_access_rules
 import include.system.messages as smsg
-import time
-
-
-def apply_directory_access_rules(
-    directory: Folder, set_access_rules: dict[str, list[dict]], user: User
-) -> bool:
-
-    with Session() as session:
-
-        for access_type in set_access_rules:
-            if access_type not in AVAILABLE_ACCESS_TYPES:
-                raise ValueError(f"Invalid access type: {access_type}")
-
-            this_type_rules: list[dict] = set_access_rules[access_type]
-            if this_type_rules is None:
-                raise ValueError(
-                    f"Access rule data for access type {access_type} can't be null"
-                )
-            validate_access_rules(this_type_rules)
-
-            for rule in directory.access_rules:
-                if rule.access_type == access_type:
-                    directory.access_rules.remove(rule)
-
-            for each_rule in this_type_rules:
-                if each_rule:
-                    this_new_rule = FolderAccessRule(
-                        folder_id=directory.id,
-                        access_type=access_type,
-                        rule_data=each_rule,
-                    )
-                    directory.access_rules.append(this_new_rule)
-
-            if not directory.check_access_requirements(user, access_type):
-                session.rollback()
-                return False
-
-        # 直到所有规则全部添加完毕再提交
-        session.commit()
-
-    return True
 
 
 class RequestListDirectoryHandler(RequestHandler):
@@ -441,7 +399,7 @@ class RequestCreateDirectoryHandler(RequestHandler):
 
                 folder = Folder(name=name, parent=parent)
 
-                if apply_directory_access_rules(
+                if apply_access_rules(
                     folder, access_rules_to_apply, this_user
                 ):
                     session.add(folder)
@@ -884,9 +842,10 @@ class RequestSetDirectoryRulesHandler(RequestHandler):
                 return 403, directory_id, handler.username
 
             try:
-                if apply_directory_access_rules(
+                if apply_access_rules(
                     directory, access_rules_to_apply, user
                 ):
+                    session.commit()
                     handler.conclude_request(200, {}, "Set access rules successfully")
                     return 0, directory_id, handler.username
                 else:
