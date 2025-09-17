@@ -1,5 +1,6 @@
 import secrets
 from sqlalchemy import VARCHAR, Float, ForeignKey, Table, Column, Integer, Text
+from include.constants import AVAILABLE_ACCESS_TYPES, AVAILABLE_BLOCK_TYPES
 from include.database.handler import Base, Session
 from include.conf_loader import global_config
 from include.classes.auth import Token
@@ -20,6 +21,7 @@ import hashlib
 import os, sys
 
 from include.database.models.file import File
+import warnings
 
 
 class NoActiveRevisionsError(RuntimeError):
@@ -49,6 +51,9 @@ class User(Base):
         "UserPermission", back_populates="user"
     )
 
+    block_entries: Mapped[List["UserBlockEntry"]] = relationship(
+        "UserBlockEntry", back_populates="user"
+    )
     audit_entries: Mapped[List["AuditEntry"]] = relationship(
         "AuditEntry", back_populates="user"
     )
@@ -255,9 +260,7 @@ class UserMembership(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     username: Mapped[str] = mapped_column(ForeignKey("users.username"))
     group_name: Mapped[str] = mapped_column(ForeignKey("user_groups.group_name"))
-    start_time: Mapped[Optional[float]] = mapped_column(
-        Float, nullable=False
-    )  # 加入组的时间戳
+    start_time: Mapped[float] = mapped_column(Float, nullable=False)  # 加入组的时间戳
     end_time: Mapped[Optional[float]] = mapped_column(
         Float, nullable=True
     )  # 离开组的时间戳
@@ -269,6 +272,33 @@ class UserMembership(Base):
             f"group_name={self.group_name!r}, start_time={self.start_time!r}, "
             f"end_time={self.end_time!r})"
         )
+
+
+class UserBlockEntry(Base):
+    __tablename__ = "userblock_entries"
+    block_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(ForeignKey("users.username"))
+    user: Mapped["User"] = relationship("User", back_populates="block_entries")
+    sub_entries: Mapped["UserBlockSubEntry"] = relationship(
+        "UserBlockSubEntry", back_populates="parent_entry"
+    )
+    timestamp: Mapped[float] = mapped_column(Float, nullable=False)
+    expiry: Mapped[float] = mapped_column(Float, nullable=False)
+    # Due to technical issues in the implementation of ORM, target_type and target_id are
+    # stored as two separate columns, but when 'target_type' is 'all', target_id can be
+    # left empty.
+    target_type: Mapped[str] = mapped_column(VARCHAR(32), nullable=False)
+    target_id: Mapped[str] = mapped_column(VARCHAR(255), nullable=True)
+
+
+class UserBlockSubEntry(Base):
+    __tablename__ = "userblock_sub_entries"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    parent_id: Mapped[int] = mapped_column(ForeignKey("userblock_entries.block_id"))
+    parent_entry: Mapped[UserBlockEntry] = relationship(
+        "UserBlockEntry", back_populates="sub_entries"
+    )
+    block_type: Mapped[str] = mapped_column(VARCHAR(64))
 
 
 @event.listens_for(User.groups, "append", retval=True)
@@ -401,7 +431,7 @@ class BaseObject(Base):
         Checks if a given user meets the access requirements for a specific access type based on defined access rules.
         Args:
             user (User): The user object whose permissions and groups are to be checked.
-            access_type (int, optional): The type of access to check for. Defaults to 0.
+            access_type (int, optional): The type of access to check for. Defaults to `"read"`.
         Returns:
             bool: True if the user meets all access requirements for the specified access type, False otherwise.
         Raises:
@@ -508,6 +538,39 @@ class BaseObject(Base):
             # move - 移动
             # manage - 管理
 
+            if access_type not in AVAILABLE_ACCESS_TYPES:
+                raise ValueError(
+                    f"Invaild access type for {self.__tablename__}: {access_type}"
+                )
+            if access_type in AVAILABLE_BLOCK_TYPES:
+                # Get `session` from `User` object
+                _session = object_session(user)
+                if _session:  # fallback
+                    block_entries = (
+                        _session.query(UserBlockEntry)
+                        .filter(
+                            UserBlockEntry.username == user.username,
+                            UserBlockEntry.expiry >= time.time(),
+                        )
+                        .all()
+                    )
+                    for entry in block_entries:
+                        filtered_sub_entries = (
+                            _session.query(UserBlockSubEntry)
+                            .filter(
+                                UserBlockSubEntry.parent_id == entry.block_id,
+                                UserBlockSubEntry.block_type == access_type,
+                            )
+                            .all()
+                        )
+                        if filtered_sub_entries:
+                            return False
+                else:
+                    warnings.warn(
+                        "No active session found for user, skipping block entry check.",
+                        RuntimeWarning,
+                    )
+
             match access_type:
                 case "read":  # 如果要检查的是读权限
                     if each_rule.access_type != "read":
@@ -523,9 +586,7 @@ class BaseObject(Base):
                     if each_rule.access_type not in ["read", "manage"]:
                         continue
                 case _:
-                    raise ValueError(
-                        f"Invaild access type for {self.__tablename__}: {access_type}"
-                    )
+                    raise NotImplementedError("Unsupported access type")
 
             if not each_rule.rule_data:
                 continue
@@ -766,3 +827,6 @@ class AuditEntry(Base):  # 审计条目
     logged_time: Mapped[Optional[float]] = mapped_column(
         Float, nullable=False, default=time.time
     )
+
+
+class UserAccessEntry(Base): ...

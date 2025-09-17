@@ -40,6 +40,8 @@ from include.handlers.management.user import (
     RequestChangeUserGroupsHandler,
     RequestCreateUserHandler,
     RequestDeleteUserHandler,
+    RequestBlockUserHandler,
+    RequestUnblockUserHandler,
     RequestListUsersHandler,
     RequestGetUserInfoHandler,
     RequestRenameUserHandler,
@@ -143,6 +145,8 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "rename_directory": RequestRenameDirectoryHandler,
         "move_directory": RequestMoveDirectoryHandler,
         # 用户类
+        "block_user": RequestBlockUserHandler,
+        "unblock_user": RequestUnblockUserHandler,
         "list_users": RequestListUsersHandler,
         "create_user": RequestCreateUserHandler,
         "delete_user": RequestDeleteUserHandler,
@@ -228,14 +232,21 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
                 this_handler.conclude_request(401, {}, "Authentication required")
                 return
 
-        callback: Union[
-            int,
-            tuple[int, Optional[str]],
-            tuple[int, Optional[str], dict],
-            tuple[int, Optional[str], str],
-            tuple[int, Optional[str], dict, str],
-            None,
-        ] = _request_handler.handle(this_handler)
+        try:
+            callback: Union[
+                int,
+                tuple[int, Optional[str]],
+                tuple[int, Optional[str], dict],
+                tuple[int, Optional[str], str],
+                tuple[int, Optional[str], dict, str],
+                None,
+            ] = _request_handler.handle(this_handler)
+        except Exception as e:
+            this_handler.logger.error(
+                f"Error detected when handling requests.", exc_info=True
+            )
+            this_handler.conclude_request(500, {}, str(e))
+            return
 
         if type(callback) is tuple:
             match callback:

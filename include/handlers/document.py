@@ -353,9 +353,7 @@ class RequestCreateDocumentHandler(RequestHandler):
             new_document_revision = DocumentRevision(file_id=new_file.id)
             new_document.revisions.append(new_document_revision)
 
-            if apply_access_rules(
-                new_document, access_rules_to_apply, user
-            ):
+            if apply_access_rules(new_document, access_rules_to_apply, user):
                 session.add(new_file)
                 session.add(new_document)
                 session.add(new_document_revision)
@@ -506,115 +504,103 @@ class RequestRenameDocumentHandler(RequestHandler):
     }
 
     def handle(self, handler: ConnectionHandler):
-        try:
-            # Parse the directory renaming request
-            document_id: str = handler.data["document_id"]
-            new_title: str = handler.data["new_title"]
 
-            with Session() as session:
-                this_user = session.get(User, handler.username)
-                if not this_user or not this_user.is_token_valid(handler.token):
-                    handler.conclude_request(
-                        **{"code": 403, "message": "Invalid user or token", "data": {}}
-                    )
-                    return 401, document_id
-                document = session.get(Document, document_id)
-                if not document:
-                    handler.conclude_request(
-                        **{"code": 404, "message": "Document not found", "data": {}}
-                    )
-                    return 404, document_id, handler.username
-                if (
-                    "rename_document" not in this_user.all_permissions
-                    or not document.check_access_requirements(this_user, "write")
-                ):
-                    handler.conclude_request(
-                        **{"code": 403, "message": "Access denied", "data": {}}
-                    )
-                    return 403, document_id, handler.username
+        # Parse the directory renaming request
+        document_id: str = handler.data["document_id"]
+        new_title: str = handler.data["new_title"]
 
-                if document.title == new_title:
-                    handler.conclude_request(
-                        **{
-                            "code": 400,
-                            "message": "New name is the same as the current name",
-                            "data": {},
-                        }
-                    )
-                    return
+        with Session() as session:
+            this_user = session.get(User, handler.username)
+            if not this_user or not this_user.is_token_valid(handler.token):
+                handler.conclude_request(
+                    **{"code": 403, "message": "Invalid user or token", "data": {}}
+                )
+                return 401, document_id
+            document = session.get(Document, document_id)
+            if not document:
+                handler.conclude_request(
+                    **{"code": 404, "message": "Document not found", "data": {}}
+                )
+                return 404, document_id, handler.username
+            if (
+                "rename_document" not in this_user.all_permissions
+                or not document.check_access_requirements(this_user, "write")
+            ):
+                handler.conclude_request(
+                    **{"code": 403, "message": "Access denied", "data": {}}
+                )
+                return 403, document_id, handler.username
 
-                if not global_config["document"]["allow_name_duplicate"]:
-                    # 检查是否有同名文件或文件夹
-
-                    # 检查同一 folder_id 下是否有与目标名同名文件
-                    existing_doc = (
-                        session.query(Document)
-                        .filter_by(
-                            folder_id=(
-                                document.folder_id if document.folder_id else None
-                            ),
-                            title=new_title,
-                        )
-                        .first()
-                    )
-                    # 检查同一 folder_id 下是否有同名文件夹
-                    existing_folder = (
-                        session.query(Folder)
-                        .filter_by(
-                            parent_id=(
-                                document.folder_id if document.folder_id else None
-                            ),
-                            name=new_title,
-                        )
-                        .first()
-                    )
-
-                    if existing_doc:
-                        if existing_doc.active:
-                            handler.conclude_request(
-                                400, {}, smsg.DOCUMENT_NAME_DUPLICATE
-                            )
-                            return
-                        else:
-                            # 如果该文档尚未被激活，则先尝试删除未激活的文档
-                            if existing_doc.check_access_requirements(
-                                this_user, "write"
-                            ):  # 如果有权删除
-                                existing_doc.delete_all_revisions()
-                                session.delete(existing_doc)
-                                session.commit()
-                            else:
-                                handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
-                                return (
-                                    403,
-                                    document.folder_id,
-                                    {
-                                        "title": document.title,
-                                        "duplicate_id": existing_doc.id,
-                                    },
-                                    handler.username,
-                                )
-                    elif existing_folder:
-                        handler.conclude_request(400, {}, smsg.DIRECTORY_NAME_DUPLICATE)
-                        return
-
-                document.title = new_title
-                session.commit()
-
+            if document.title == new_title:
                 handler.conclude_request(
                     **{
-                        "code": 200,
-                        "message": "Document renamed successfully",
+                        "code": 400,
+                        "message": "New name is the same as the current name",
                         "data": {},
                     }
                 )
-                return 0, document_id, handler.username
+                return
 
-        except Exception as e:
-            handler.logger.error(
-                f"Error detected when handling requests.", exc_info=True
+            if not global_config["document"]["allow_name_duplicate"]:
+                # 检查是否有同名文件或文件夹
+
+                # 检查同一 folder_id 下是否有与目标名同名文件
+                existing_doc = (
+                    session.query(Document)
+                    .filter_by(
+                        folder_id=(document.folder_id if document.folder_id else None),
+                        title=new_title,
+                    )
+                    .first()
+                )
+                # 检查同一 folder_id 下是否有同名文件夹
+                existing_folder = (
+                    session.query(Folder)
+                    .filter_by(
+                        parent_id=(document.folder_id if document.folder_id else None),
+                        name=new_title,
+                    )
+                    .first()
+                )
+
+                if existing_doc:
+                    if existing_doc.active:
+                        handler.conclude_request(400, {}, smsg.DOCUMENT_NAME_DUPLICATE)
+                        return
+                    else:
+                        # 如果该文档尚未被激活，则先尝试删除未激活的文档
+                        if existing_doc.check_access_requirements(
+                            this_user, "write"
+                        ):  # 如果有权删除
+                            existing_doc.delete_all_revisions()
+                            session.delete(existing_doc)
+                            session.commit()
+                        else:
+                            handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
+                            return (
+                                403,
+                                document.folder_id,
+                                {
+                                    "title": document.title,
+                                    "duplicate_id": existing_doc.id,
+                                },
+                                handler.username,
+                            )
+                elif existing_folder:
+                    handler.conclude_request(400, {}, smsg.DIRECTORY_NAME_DUPLICATE)
+                    return
+
+            document.title = new_title
+            session.commit()
+
+            handler.conclude_request(
+                **{
+                    "code": 200,
+                    "message": "Document renamed successfully",
+                    "data": {},
+                }
             )
-            handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
+            return 0, document_id, handler.username
 
 
 class RequestDownloadFileHandler(RequestHandler):
@@ -711,10 +697,7 @@ class RequestSetDocumentRulesHandler(RequestHandler):
             "access_rules": {
                 "type": "object",
                 "properties": {},
-                "additionalProperties": {
-                    "type": "array",
-                    "items": {}
-                },
+                "additionalProperties": {"type": "array", "items": {}},
             },
         },
         "required": ["document_id", "access_rules"],
@@ -757,9 +740,7 @@ class RequestSetDocumentRulesHandler(RequestHandler):
                 return 403, document_id, handler.username
 
             try:
-                if apply_access_rules(
-                    document, access_rules_to_apply, user
-                ):  
+                if apply_access_rules(document, access_rules_to_apply, user):
                     session.commit()
                     handler.conclude_request(200, {}, "Set access rules successfully")
                     return 0, document_id, handler.username

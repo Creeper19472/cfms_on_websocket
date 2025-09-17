@@ -36,66 +36,59 @@ class RequestLoginHandler(RequestHandler):
 
     def handle(self, handler: ConnectionHandler):
 
-        try:
-            # Parse the login request
-            username: str = handler.data["username"]
-            password: str = handler.data["password"]
+        # Parse the login request
+        username: str = handler.data["username"]
+        password: str = handler.data["password"]
 
-            with Session() as session:
-                user = session.get(User, username)
+        with Session() as session:
+            user = session.get(User, username)
 
-                response_invalid = {
-                    "code": 401,
-                    "message": "Invalid credentials",
-                    "data": {},
-                }
+            response_invalid = {
+                "code": 401,
+                "message": "Invalid credentials",
+                "data": {},
+            }
 
-                if user:
-                    if token := user.authenticate_and_create_token(password):
-                        try:
-                            check_passwd_requirements(
-                                password,
-                                global_config["security"]["passwd_min_length"],
-                                global_config["security"]["passwd_max_length"],
-                                global_config["security"]["passwd_must_contain"],
-                            )
-                        except ValueError as e:
-                            handler.conclude_request(
-                                403,
-                                {},
-                                "Password must be changed before you can log in",
-                            )
-                            return 403, username
+            if user:
+                if token := user.authenticate_and_create_token(password):
+                    try:
+                        check_passwd_requirements(
+                            password,
+                            global_config["security"]["passwd_min_length"],
+                            global_config["security"]["passwd_max_length"],
+                            global_config["security"]["passwd_must_contain"],
+                        )
+                    except ValueError as e:
+                        handler.conclude_request(
+                            403,
+                            {},
+                            "Password must be changed before you can log in",
+                        )
+                        return 403, username
 
-                        response = {
-                            "code": 200,
-                            "message": "Login successful",
-                            "data": {
-                                "token": token.raw,
-                                "exp": token.exp,
-                                "nickname": user.nickname,
-                                "permissions": list(user.all_permissions),
-                                "groups": list(user.all_groups),
-                            },
-                        }
+                    response = {
+                        "code": 200,
+                        "message": "Login successful",
+                        "data": {
+                            "token": token.raw,
+                            "exp": token.exp,
+                            "nickname": user.nickname,
+                            "permissions": list(user.all_permissions),
+                            "groups": list(user.all_groups),
+                        },
+                    }
 
-                    else:
-                        response = response_invalid
                 else:
                     response = response_invalid
+            else:
+                response = response_invalid
 
-            if response == response_invalid:
-                time.sleep(3)
+        if response == response_invalid:
+            time.sleep(3)
 
-            # Send the response back to the client
-            handler.conclude_request(**response)
-            return response["code"], username
-
-        except Exception as e:
-            handler.logger.error(
-                f"Error detected when handling requests.", exc_info=True
-            )
-            handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
+        # Send the response back to the client
+        handler.conclude_request(**response)
+        return response["code"], username
 
 
 class RequestRefreshTokenHandler(RequestHandler):
@@ -115,52 +108,45 @@ class RequestRefreshTokenHandler(RequestHandler):
 
     def handle(self, handler: ConnectionHandler):
 
-        try:
-            # Parse the refresh token request
-            old_token = handler.token
+        # Parse the refresh token request
+        old_token = handler.token
 
-            # Validate the token
-            if not old_token or not isinstance(old_token, str):
-                response = {
-                    "code": 400,
-                    "message": "missing or invalid token",
-                    "data": {},
-                }
-            else:
-                with Session() as session:
-                    user = session.get(User, handler.username)
+        # Validate the token
+        if not old_token or not isinstance(old_token, str):
+            response = {
+                "code": 400,
+                "message": "missing or invalid token",
+                "data": {},
+            }
+        else:
+            with Session() as session:
+                user = session.get(User, handler.username)
 
-                    if user and user.is_token_valid(old_token):
-                        new_token = user.renew_token()
-                        response = {
-                            "code": 200,
-                            "message": "Token refreshed successfully",
-                            "data": {"token": new_token.raw, "exp": new_token.exp},
-                        }
-                        log_audit(
-                            "refresh_token",
-                            target=handler.username,
-                            result=0,
-                            remote_address=handler.remote_address,
-                        )
-                    else:
-                        response = {
-                            "code": 400,
-                            "message": "Invalid or expired token",
-                            "data": {},
-                        }
-                        log_audit(
-                            "refresh_token",
-                            target=handler.username,
-                            result=1,
-                            remote_address=handler.remote_address,
-                        )
+                if user and user.is_token_valid(old_token):
+                    new_token = user.renew_token()
+                    response = {
+                        "code": 200,
+                        "message": "Token refreshed successfully",
+                        "data": {"token": new_token.raw, "exp": new_token.exp},
+                    }
+                    log_audit(
+                        "refresh_token",
+                        target=handler.username,
+                        result=0,
+                        remote_address=handler.remote_address,
+                    )
+                else:
+                    response = {
+                        "code": 400,
+                        "message": "Invalid or expired token",
+                        "data": {},
+                    }
+                    log_audit(
+                        "refresh_token",
+                        target=handler.username,
+                        result=1,
+                        remote_address=handler.remote_address,
+                    )
 
-            # Send the response back to the client
-            handler.conclude_request(**response)
-
-        except Exception as e:
-            handler.logger.error(
-                f"Error detected when handling requests.", exc_info=True
-            )
-            handler.conclude_request(**{"code": 500, "message": str(e), "data": {}})
+        # Send the response back to the client
+        handler.conclude_request(**response)
