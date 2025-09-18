@@ -1,0 +1,2 @@
+class NoActiveRevisionsError(RuntimeError):
+    pass

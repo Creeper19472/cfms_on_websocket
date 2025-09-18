@@ -2,11 +2,13 @@ from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
 from include.database.handler import Session
 from include.database.models.classic import (
-    Document,
-    Folder,
     ObjectAccessEntry,
     User,
     UserGroup,
+)
+from include.database.models.entity import (
+    Document,
+    Folder,
 )
 import include.system.messages as smsg
 

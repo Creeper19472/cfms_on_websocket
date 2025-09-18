@@ -7,12 +7,14 @@ from include.classes.request import RequestHandler
 from include.constants import AVAILABLE_ACCESS_TYPES
 from include.database.handler import Session
 from include.database.models.classic import (
-    DocumentAccessRule,
-    DocumentRevision,
     User,
+)
+from include.database.models.entity import (
     Document,
     Folder,
     NoActiveRevisionsError,
+    DocumentAccessRule,
+    DocumentRevision,
 )
 from include.database.models.file import File, FileTask
 from include.conf_loader import global_config
@@ -731,7 +733,7 @@ class RequestSetDocumentRulesHandler(RequestHandler):
                 handler.conclude_request(404, {}, "Document not found")
                 return 404, document_id, handler.username
 
-            if not "set_access_rules" in user.all_permissions:
+            if "set_access_rules" not in user.all_permissions:
                 handler.conclude_request(403, {}, "Access denied to set access rules")
                 return 403, document_id, handler.username
 

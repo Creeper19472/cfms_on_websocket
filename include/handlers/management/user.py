@@ -1,3 +1,4 @@
+import hashlib
 import time
 from typing import Optional
 from include.constants import AVAILABLE_BLOCK_TYPES
@@ -8,6 +9,8 @@ from include.database.handler import Session
 from include.database.models.classic import (
     User,
     UserGroup,
+)
+from include.database.models.blocking import (
     UserBlockEntry,
     UserBlockSubEntry,
 )
@@ -649,7 +652,7 @@ class RequestSetPasswdHandler(RequestHandler):
 
             target_username = handler.data.get("username", None)
             old_passwd = handler.data.get("old_passwd", None)
-            new_passwd = handler.data["new_passwd"]
+            new_passwd: str = handler.data["new_passwd"]
 
             user = session.get(User, target_username)
             if not user:
@@ -739,6 +742,17 @@ class RequestSetPasswdHandler(RequestHandler):
             except MissingComponentsError as e:
                 handler.conclude_request(400, {"missing": e.missing}, str(e))
                 return 400, target_username
+
+            if (
+                hashlib.sha256((new_passwd + user.salt).encode("utf-8")).hexdigest()
+                == user.pass_hash
+            ):
+                handler.conclude_request(
+                    400,
+                    {},
+                    "New password should not be the same",
+                )
+                return
 
             user.set_password(new_passwd)
             # session.commit()

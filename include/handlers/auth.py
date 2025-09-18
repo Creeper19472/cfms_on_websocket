@@ -66,6 +66,21 @@ class RequestLoginHandler(RequestHandler):
                         )
                         return 403, username
 
+                    now = time.time()
+                    if (
+                        global_config["security"]["enable_passwd_force_expiration"]
+                        and now - user.passwd_last_modified
+                        > 3600
+                        * 24
+                        * global_config["security"]["passwd_expire_after_days"]
+                    ):
+                        handler.conclude_request(
+                            403,
+                            {},
+                            "Password should be changed because it's expired",
+                        )
+                        return 403, username
+
                     response = {
                         "code": 200,
                         "message": "Login successful",
