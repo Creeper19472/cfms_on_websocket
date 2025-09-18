@@ -55,7 +55,10 @@ from include.handlers.management.group import (
     RequestListGroupsHandler,
     RequestRenameGroupHandler,
 )
-from include.handlers.management.access import RequestGrantAccessHandler
+from include.handlers.management.access import (
+    RequestGrantAccessHandler,
+    RequestViewAccessEntriesHandler,
+)
 from include.handlers.management.system import (
     RequestLockdownHandler,
     RequestViewAuditLogsHandler,
@@ -164,7 +167,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "change_group_permissions": RequestChangeGroupPermissionsHandler,
         # 访问类
         "grant_access": RequestGrantAccessHandler,
-        # "view_access_entries": RequestViewAccessEntriesHandler,
+        "view_access_entries": RequestViewAccessEntriesHandler,
         # 系统类
         "lockdown": RequestLockdownHandler,
         "view_audit_logs": RequestViewAuditLogsHandler,

@@ -8,8 +8,12 @@ from include.database.models.classic import (
     User,
     UserGroup,
 )
+import include.system.messages as smsg
 
 __all__ = ["RequestGrantAccessHandler"]
+
+ENTITY_TYPE_MAPPING = {"user": User, "group": UserGroup}
+TARGET_TYPE_MAPPING = {"document": Document, "directory": Folder}
 
 
 class RequestGrantAccessHandler(RequestHandler):
@@ -49,20 +53,17 @@ class RequestGrantAccessHandler(RequestHandler):
 
     def handle(self, handler: ConnectionHandler):
 
-        ENTITY_TYPE_MAPPING = {"user": User, "group": UserGroup}
-        TARGET_TYPE_MAPPING = {"document": Document, "directory": Folder}
+        entity_type: str = handler.data["entity_type"]
+        entity_identifier: str = handler.data["entity_identifier"]
+
+        target_type: str = handler.data["target_type"]
+        target_identifier: str = handler.data["target_identifier"]
+
+        access_types: list[str] = handler.data["access_types"]
+        start_time: float = handler.data["start_time"]
+        end_time: float | None = handler.data.get("end_time")
 
         with Session() as session:
-
-            entity_type: str = handler.data["entity_type"]
-            entity_identifier: str = handler.data["entity_identifier"]
-
-            target_type: str = handler.data["target_type"]
-            target_identifier: str = handler.data["target_identifier"]
-
-            access_types: list[str] = handler.data["access_types"]
-            start_time: float = handler.data["start_time"]
-            end_time: float | None = handler.data.get("end_time")
 
             if end_time and not start_time <= end_time:
                 handler.conclude_request(
@@ -132,7 +133,7 @@ class RequestGrantAccessHandler(RequestHandler):
 
             session.commit()
 
-        handler.conclude_request(200, {}, "success")
+        handler.conclude_request(200, {}, smsg.SUCCESS)
         return 200, None, handler.data, handler.username
 
 
@@ -141,19 +142,77 @@ class RequestViewAccessEntriesHandler(RequestHandler):
     data_schema = {
         "type": "object",
         "properties": {
-            "entity_type": {
+            "object_type": {
                 "type": "string",
                 "minLength": 1,
-                "pattern": "^(user|group)$",
+                "pattern": "^(user|group|document|directory)$",
             },
-            "entity_identifier": {"type": "string", "minLength": 1},
+            "object_identifier": {"type": "string", "minLength": 1},
         },
         "required": [
-            "entity_type",
-            "entity_identifier",
+            "object_type",
+            "object_identifier",
         ],
         "additionalProperties": False,
     }
 
     def handle(self, handler: ConnectionHandler):
-        pass
+        object_type: str = handler.data["object_type"]
+        object_identifier: str = handler.data["object_identifier"]
+
+        with Session() as session:
+
+            operator = session.get(User, handler.username)
+
+            if not operator or not operator.is_token_valid(handler.token):
+                handler.conclude_request(403, {}, "Invalid user or token")
+                return
+
+            if "view_access_entries" not in operator.all_permissions:
+                handler.conclude_request(
+                    code=403,
+                    message="You do not have permission to view access entries",
+                    data={},
+                )
+                return 403, handler.username
+
+            if object_type in ["user", "group"]:
+                _query_result = (
+                    session.query(ObjectAccessEntry)
+                    .filter(
+                        ObjectAccessEntry.entity_type == object_type,
+                        ObjectAccessEntry.entity_identifier == object_identifier,
+                    )
+                    .all()
+                )
+            else:
+                _query_result = (
+                    session.query(ObjectAccessEntry)
+                    .filter(
+                        ObjectAccessEntry.target_type == object_type,
+                        ObjectAccessEntry.target_identifier == object_identifier,
+                    )
+                    .all()
+                )
+
+            result = [
+                {
+                    "id": each.id,
+                    "entity_type": each.entity_type,
+                    "entity_identifier": each.entity_identifier,
+                    "target_type": each.target_type,
+                    "target_identifier": each.target_identifier,
+                    "access_type": each.access_type,
+                    "start_time": each.start_time,
+                    "end_time": each.end_time,
+                }
+                for each in _query_result
+            ]
+
+        handler.conclude_request(200, {"result": result}, smsg.SUCCESS)
+        return (
+            200,
+            None,
+            {"object_type": object_type, "object_identifier": object_identifier},
+            handler.username,
+        )
