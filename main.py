@@ -15,7 +15,7 @@ Modules imported:
 - include.database.handler: Provides SQLAlchemy engine, Base, and Session.
 - include.classes.version.Version: Handles versioning.
 - include.database.models: Contains ORM models for User and UserGroup.
-- include.function.user.create_user: Function to create a new user.
+- include.util.user.create_user: Function to create a new user.
 Constants:
 - CORE_VERSION: The current version of the core application.
 """
@@ -35,7 +35,7 @@ from include.database.models.classic import User, UserGroup, Document, DocumentR
 from include.database.models.file import File
 from websockets.sync.server import serve
 from include.connection_handler import handle_connection
-from include.function.log import getCustomLogger
+from include.util.log import getCustomLogger
 import socket
 
 
@@ -51,7 +51,7 @@ def server_init():
     if os.path.exists("./ssl_key.pem"):
         os.remove("./ssl_key.pem")
 
-    from include.function.group import create_group
+    from include.util.group import create_group
 
     create_group(
         group_name="user",
@@ -105,7 +105,7 @@ def server_init():
         session.add(init_document_revision)
         session.commit()
 
-    from include.function.user import create_user
+    from include.util.user import create_user
     import secrets
     import string
 

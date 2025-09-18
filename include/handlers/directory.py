@@ -6,15 +6,15 @@ from include.classes.request import RequestHandler
 from include.conf_loader import global_config
 from include.database.handler import Session
 from include.database.models.classic import User, Folder, Document, FolderAccessRule
-from include.function.audit import log_audit
-from include.function.rule.applying import apply_access_rules
+from include.util.audit import log_audit
+from include.util.rule.applying import apply_access_rules
 import include.system.messages as smsg
 
 
 class RequestListDirectoryHandler(RequestHandler):
     """
     Handles directory listing requests.
-    This function processes a directory listing request by generating a list of files and directories in the specified directory.
+    This util processes a directory listing request by generating a list of files and directories in the specified directory.
     It sends an appropriate response back to the client, indicating success or failure.
     Args:
         handler (ConnectionHandler): The connection handler containing request data and methods for responding.
@@ -123,7 +123,7 @@ class RequestListDirectoryHandler(RequestHandler):
 class RequestGetDirectoryInfoHandler(RequestHandler):
     """
     Handles directory information requests.
-    This function processes a directory information request by retrieving information about the specified directory.
+    This util processes a directory information request by retrieving information about the specified directory.
     It sends an appropriate response back to the client, indicating success or failure.
     Args:
         handler (ConnectionHandler): The connection handler containing request data and methods for responding.
@@ -250,7 +250,7 @@ class RequestGetDirectoryAccessRulesHandler(RequestHandler):
 class RequestCreateDirectoryHandler(RequestHandler):
     """
     Handles directory creation requests.
-    This function processes a directory creation request by creating a new directory in the specified parent directory.
+    This util processes a directory creation request by creating a new directory in the specified parent directory.
     It sends an appropriate response back to the client, indicating success or failure.
     Args:
         handler (ConnectionHandler): The connection handler containing request data and methods for responding.
@@ -409,7 +409,7 @@ class RequestCreateDirectoryHandler(RequestHandler):
 class RequestDeleteDirectoryHandler(RequestHandler):
     """
     Handles directory deletion requests.
-    This function processes a directory deletion request by deleting the specified directory.
+    This util processes a directory deletion request by deleting the specified directory.
     It sends an appropriate response back to the client, indicating success or failure.
     Args:
         handler (ConnectionHandler): The connection handler containing request data and methods for responding.
@@ -482,7 +482,7 @@ class RequestDeleteDirectoryHandler(RequestHandler):
 class RequestRenameDirectoryHandler(RequestHandler):
     """
     Handles directory renaming requests.
-    This function processes a directory renaming request by updating the name of the specified directory.
+    This util processes a directory renaming request by updating the name of the specified directory.
     It sends an appropriate response back to the client, indicating success or failure.
     Args:
         handler (ConnectionHandler): The connection handler containing request data and methods for responding.

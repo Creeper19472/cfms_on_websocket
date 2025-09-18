@@ -2,7 +2,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 
 """
-Provides a utility function to create and configure a custom logger with both file and console handlers.
+Provides a utility util to create and configure a custom logger with both file and console handlers.
 Functions:
     getCustomLogger(logname, level=(logging.DEBUG, logging.INFO), filepath="default.log"):
         Creates and returns a logger with the specified name, log levels, and file path.

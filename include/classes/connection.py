@@ -17,7 +17,7 @@ from include.conf_loader import global_config
 from include.database.handler import Session
 from include.database.models.classic import User
 from include.database.models.file import File, FileTask
-from include.function.log import getCustomLogger
+from include.util.log import getCustomLogger
 
 from include.shared import connected_listeners
 

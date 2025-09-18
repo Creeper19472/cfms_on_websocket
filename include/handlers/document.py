@@ -16,7 +16,7 @@ from include.database.models.classic import (
 )
 from include.database.models.file import File, FileTask
 from include.conf_loader import global_config
-from include.function.rule.applying import apply_access_rules
+from include.util.rule.applying import apply_access_rules
 import include.system.messages as smsg
 import time
 

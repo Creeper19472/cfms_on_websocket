@@ -3,16 +3,16 @@ from include.classes.request import RequestHandler
 from include.conf_loader import global_config
 from include.database.handler import Session
 from include.database.models.classic import User
-from include.function.audit import log_audit
+from include.util.audit import log_audit
 import time
 
-from include.function.pwd import check_passwd_requirements
+from include.util.pwd import check_passwd_requirements
 
 
 class RequestLoginHandler(RequestHandler):
     """
     Handles user login requests.
-    This function processes a login request by extracting the username and password from the handler's data,
+    This util processes a login request by extracting the username and password from the handler's data,
     validates the credentials against the database, and generates an authentication token if successful.
     It sends an appropriate response back to the client, indicating success or failure.
     Args:
@@ -94,7 +94,7 @@ class RequestLoginHandler(RequestHandler):
 class RequestRefreshTokenHandler(RequestHandler):
     """
     Handles token refresh requests.
-    This function processes a token refresh request by validating the existing token and generating a new one if valid.
+    This util processes a token refresh request by validating the existing token and generating a new one if valid.
     It sends an appropriate response back to the client, indicating success or failure.
     Args:
         handler (ConnectionHandler): The connection handler containing request data and methods for responding.

@@ -11,8 +11,8 @@ from include.database.models.classic import (
     UserBlockEntry,
     UserBlockSubEntry,
 )
-from include.function.user import create_user
-from include.function.pwd import (
+from include.util.user import create_user
+from include.util.pwd import (
     InvaildPasswordLengthError,
     MissingComponentsError,
     check_passwd_requirements,

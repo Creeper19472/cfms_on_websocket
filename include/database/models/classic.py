@@ -424,6 +424,7 @@ class UserGroupPermission(Base):
 class BaseObject(Base):
     __abstract__ = True
 
+    id: Mapped[str]
     access_rules: Mapped[List]
 
     def check_access_requirements(self, user: User, access_type: str = "read") -> bool:
@@ -442,6 +443,8 @@ class BaseObject(Base):
             - Rules are grouped and evaluated according to their match modes and requirements.
             - If no access rules are defined, access is granted by default.
         """
+
+        _TARGET_TYPE_MAPPING = {"folders": "directory", "documents": "document"}
 
         def match_rights(sub_rights_group):
             if not sub_rights_group:
@@ -523,6 +526,80 @@ class BaseObject(Base):
             elif match_mode == "all":
                 return True
 
+        # Checks whether the user or the user group to which he belongs
+        # has special access rights to this object.
+
+        # Get `session` from `User` object
+        _session = object_session(user)
+        if not _session:
+            raise RuntimeError("No active session found for user")
+
+        now = time.time()
+
+        # check user blocks first
+        if access_type in AVAILABLE_BLOCK_TYPES:
+            block_entries = (
+                _session.query(UserBlockEntry)
+                .filter(
+                    UserBlockEntry.username == user.username,
+                    UserBlockEntry.expiry >= time.time(),
+                )
+                .all()
+            )
+            for entry in block_entries:
+                filtered_sub_entries = (
+                    _session.query(UserBlockSubEntry)
+                    .filter(
+                        UserBlockSubEntry.parent_id == entry.block_id,
+                        UserBlockSubEntry.block_type == access_type,
+                    )
+                    .all()
+                )
+                if filtered_sub_entries:
+                    return False
+
+        # then check special access entries
+        user_access_entries = (
+            _session.query(ObjectAccessEntry)
+            .filter(
+                ObjectAccessEntry.entity_type == "user",
+                ObjectAccessEntry.entity_identifier == user.username,
+                ObjectAccessEntry.target_type
+                == _TARGET_TYPE_MAPPING[self.__tablename__],
+                ObjectAccessEntry.target_identifier == self.id,
+                ObjectAccessEntry.access_type == access_type,
+                ObjectAccessEntry.start_time <= now,
+                (
+                    (ObjectAccessEntry.end_time == None)
+                    | (ObjectAccessEntry.end_time >= now)
+                ),
+            )
+            .all()
+        )
+        if user_access_entries:
+            return True
+
+        for group in user.groups:
+            group_access_entries = (
+                _session.query(ObjectAccessEntry)
+                .filter(
+                    ObjectAccessEntry.entity_type == "group",
+                    ObjectAccessEntry.entity_identifier == group.group_name,
+                    ObjectAccessEntry.target_type
+                    == _TARGET_TYPE_MAPPING[self.__tablename__],
+                    ObjectAccessEntry.target_identifier == self.id,
+                    ObjectAccessEntry.access_type == access_type,
+                    ObjectAccessEntry.start_time <= now,
+                    (
+                        (ObjectAccessEntry.end_time == None)
+                        | (ObjectAccessEntry.end_time >= now)
+                    ),
+                )
+                .all()
+            )
+            if group_access_entries:
+                return True
+
         if not self.access_rules:
             return True
 
@@ -542,34 +619,6 @@ class BaseObject(Base):
                 raise ValueError(
                     f"Invaild access type for {self.__tablename__}: {access_type}"
                 )
-            if access_type in AVAILABLE_BLOCK_TYPES:
-                # Get `session` from `User` object
-                _session = object_session(user)
-                if _session:  # fallback
-                    block_entries = (
-                        _session.query(UserBlockEntry)
-                        .filter(
-                            UserBlockEntry.username == user.username,
-                            UserBlockEntry.expiry >= time.time(),
-                        )
-                        .all()
-                    )
-                    for entry in block_entries:
-                        filtered_sub_entries = (
-                            _session.query(UserBlockSubEntry)
-                            .filter(
-                                UserBlockSubEntry.parent_id == entry.block_id,
-                                UserBlockSubEntry.block_type == access_type,
-                            )
-                            .all()
-                        )
-                        if filtered_sub_entries:
-                            return False
-                else:
-                    warnings.warn(
-                        "No active session found for user, skipping block entry check.",
-                        RuntimeWarning,
-                    )
 
             match access_type:
                 case "read":  # 如果要检查的是读权限
@@ -829,4 +878,24 @@ class AuditEntry(Base):  # 审计条目
     )
 
 
-class UserAccessEntry(Base): ...
+class ObjectAccessEntry(Base):
+    """
+    Model for `User`/`UserGroup` access.
+    """
+
+    __tablename__ = "object_access_entries"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    # User / UserGroup
+    entity_type: Mapped[str] = mapped_column(VARCHAR(16), nullable=False)
+    entity_identifier: Mapped[str] = mapped_column(VARCHAR(255), nullable=False)
+
+    # Document / Folder
+    target_type: Mapped[str] = mapped_column(VARCHAR(16), nullable=False)
+    target_identifier: Mapped[str] = mapped_column(VARCHAR(255), nullable=False)
+
+    # read, write, move
+    access_type: Mapped[str] = mapped_column(VARCHAR(16), nullable=False)
+
+    start_time: Mapped[Optional[float]] = mapped_column(Float, nullable=False)
+    end_time: Mapped[Optional[float]] = mapped_column(Float, nullable=True)

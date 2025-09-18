@@ -1,6 +1,6 @@
 from include.constants import AVAILABLE_ACCESS_TYPES
 from include.database.models.classic import Document, DocumentAccessRule, Folder, FolderAccessRule, User
-from include.function.rule.validation import validate_access_rules
+from include.util.rule.validation import validate_access_rules
 
 
 def apply_access_rules(

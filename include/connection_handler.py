@@ -11,7 +11,7 @@ from include.conf_loader import global_config
 from include.classes.connection import ConnectionHandler
 from include.database.handler import Session
 from include.database.models.classic import User
-from include.function.audit import log_audit
+from include.util.audit import log_audit
 from include.handlers.auth import RequestLoginHandler, RequestRefreshTokenHandler
 from include.handlers.document import (
     RequestCreateDocumentHandler,
@@ -55,6 +55,7 @@ from include.handlers.management.group import (
     RequestListGroupsHandler,
     RequestRenameGroupHandler,
 )
+from include.handlers.management.access import RequestGrantAccessHandler
 from include.handlers.management.system import (
     RequestLockdownHandler,
     RequestViewAuditLogsHandler,
@@ -63,7 +64,7 @@ from include.constants import CORE_VERSION, PROTOCOL_VERSION
 from include.shared import connected_listeners, lockdown_enabled
 import include.system.messages as smsg
 
-from include.function.log import getCustomLogger
+from include.util.log import getCustomLogger
 
 logger = getCustomLogger(
     "connection_handler", filepath="./content/logs/connection_handler.log"
@@ -161,6 +162,9 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "rename_group": RequestRenameGroupHandler,
         "get_group_info": RequestGetGroupInfoHandler,
         "change_group_permissions": RequestChangeGroupPermissionsHandler,
+        # 访问类
+        "grant_access": RequestGrantAccessHandler,
+        # "view_access_entries": RequestViewAccessEntriesHandler,
         # 系统类
         "lockdown": RequestLockdownHandler,
         "view_audit_logs": RequestViewAuditLogsHandler,
@@ -168,7 +172,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
 
     # 定义白名单内的请求。这些请求即使在防范禁闭时也对所有用户可用。
     whitelisted_functions = [
-        "echo",
+        # "echo",
         "server_info",
         "register_listener",
         "login",
@@ -190,12 +194,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
                 this_handler.conclude_request(999, {}, "lockdown")
                 return
 
-    if action == "echo":
-        # Echo the message back to the client
-        this_handler.conclude_request(
-            200, {"message": this_handler.data.get("message", "")}, "Echo response"
-        )
-    elif action == "shutdown":
+    if action == "shutdown":
         with Session() as session:
             this_user = session.get(User, this_handler.username)
             if not this_user or not this_user.is_token_valid(this_handler.token):

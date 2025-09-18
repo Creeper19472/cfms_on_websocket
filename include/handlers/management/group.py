@@ -8,7 +8,7 @@ from include.database.models.classic import (
     UserGroupPermission,
     UserMembership,
 )
-from include.function.group import create_group
+from include.util.group import create_group
 
 
 __all__ = [
