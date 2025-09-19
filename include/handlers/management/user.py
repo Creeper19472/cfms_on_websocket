@@ -23,53 +23,46 @@ from include.util.pwd import (
 
 
 class RequestListUsersHandler(RequestHandler):
-
     data_schema = {
         "type": "object",
         "additionalProperties": False,
     }
 
     def handle(self, handler: ConnectionHandler):
-
         with Session() as session:
             this_user = session.get(User, handler.username)
-
             if not this_user or not this_user.is_token_valid(handler.token):
                 handler.conclude_request(
-                    **{"code": 403, "message": "Invalid user or token", "data": {}}
+                    code=403, message="Invalid user or token", data={}
                 )
                 return
 
             if "list_users" not in this_user.all_permissions:
                 handler.conclude_request(
-                    **{
-                        "code": 403,
-                        "message": "You do not have permission to list users",
-                        "data": {},
-                    }
+                    code=403,
+                    message="You do not have permission to list users",
+                    data={},
                 )
                 return
 
             users = session.query(User).all()
-            response = {
-                "code": 200,
-                "message": "List of users",
-                "data": {
-                    "users": [
-                        {
-                            "username": user.username,
-                            "nickname": user.nickname,
-                            "created_time": user.created_time,
-                            "last_login": user.last_login,
-                            "permissions": list(user.all_permissions),
-                            "groups": list(user.all_groups),
-                        }
-                        for user in users
-                    ]
-                },
-            }
+            users_data = [
+                {
+                    "username": user.username,
+                    "nickname": user.nickname,
+                    "created_time": user.created_time,
+                    "last_login": user.last_login,
+                    "permissions": list(user.all_permissions),
+                    "groups": list(user.all_groups),
+                }
+                for user in users
+            ]
 
-            handler.conclude_request(**response)
+            handler.conclude_request(
+                code=200,
+                message="List of users",
+                data={"users": users_data},
+            )
 
 
 class RequestCreateUserHandler(RequestHandler):

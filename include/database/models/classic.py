@@ -126,6 +126,7 @@ class User(Base):
         self.pass_hash = hashlib.sha256(salted.encode("utf-8")).hexdigest()
 
         self.secret_key = os.urandom(64).hex()  # int/2
+        self.passwd_last_modified = time.time()
 
         # 写入数据库
         session = object_session(self)
