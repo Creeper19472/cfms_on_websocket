@@ -247,10 +247,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
             websockets.exceptions.ConnectionClosedOK,
             websockets.exceptions.ConnectionClosedError,
         ):
-            this_handler.logger.info(
-                "WebSocket connection closed during request handling"
-            )
-            return
+            raise
         except Exception as e:
             this_handler.logger.error(
                 f"Error detected when handling requests.", exc_info=True
