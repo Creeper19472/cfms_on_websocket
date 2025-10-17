@@ -243,6 +243,14 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
                 tuple[int, Optional[str], dict, str],
                 None,
             ] = _request_handler.handle(this_handler)
+        except (
+            websockets.exceptions.ConnectionClosedOK,
+            websockets.exceptions.ConnectionClosedError,
+        ):
+            this_handler.logger.info(
+                "WebSocket connection closed during request handling"
+            )
+            return
         except Exception as e:
             this_handler.logger.error(
                 f"Error detected when handling requests.", exc_info=True
