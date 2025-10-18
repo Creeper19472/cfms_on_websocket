@@ -7,6 +7,7 @@ import sys
 import time
 import traceback
 from typing import Iterable
+from typing import Optional
 
 import jsonschema
 import websockets
@@ -52,16 +53,20 @@ class ConnectionHandler:
         self.username: str = self.request.get("username", "")
         self.token: str = self.request.get("token", "")
 
-    def conclude_request(self, code: int, data: dict = {}, message: str = "") -> None:
+    def conclude_request(
+        self, code: int, data: Optional[dict] = None, message: str = ""
+    ) -> None:
         """
         Conclude the request by sending a response back to the client.
 
         Args:
-            message: The data/message received from the client.
+            code: HTTP status code for the response.
+            data: Data dictionary to include in the response.
+            message: Message string to include in the response.
         """
         response = {
             "code": code,
-            "data": data,
+            "data": data if data is not None else {},
             "message": message,
             "timestamp": time.time(),
         }

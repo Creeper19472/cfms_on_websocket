@@ -1,5 +1,6 @@
 import logging
 from logging.handlers import RotatingFileHandler
+from typing import Tuple
 
 """
 Provides a utility util to create and configure a custom logger with both file and console handlers.
@@ -18,8 +19,10 @@ Functions:
 
 
 def getCustomLogger(
-    logname: str, level: tuple=(logging.DEBUG, logging.INFO), filepath="default.log"
-):
+    logname: str,
+    level: Tuple[int, int] = (logging.DEBUG, logging.INFO),
+    filepath: str = "default.log"
+) -> logging.Logger:
     logger = logging.getLogger(logname)
     logger.setLevel(level=logging.DEBUG)  # This level must be 'logging.DEBUG'.
     logger.propagate = False
