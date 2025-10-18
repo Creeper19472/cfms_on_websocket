@@ -1,6 +1,9 @@
-import os, tomllib
+import os
 import secrets
-from tomlkit import parse, dumps
+import tomllib
+
+from tomlkit import dumps
+from tomlkit import parse
 
 __all__ = ["global_config"]
 

@@ -2,8 +2,10 @@
 
 """Client using the threading API."""
 
+import json
+import ssl
+
 from websockets.sync.client import connect
-import ssl, json
 
 print("Hello world! Client")
 

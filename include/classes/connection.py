@@ -1,29 +1,29 @@
-import json
-import sys
-import time
-import os
 import base64
 import hashlib
+import json
+import mmap
+import os
+import sys
+import time
 import traceback
-import jsonschema
 from typing import Iterable
+from typing import Optional
 
+import jsonschema
 import websockets
-from websockets.sync.server import ServerConnection
+from Crypto.Cipher import AES
+from Crypto.Random import get_random_bytes
 from websockets.asyncio.server import broadcast
+from websockets.sync.server import ServerConnection
 from websockets.typing import Data
 
 from include.conf_loader import global_config
+from include.constants import FILE_TRANSFER_CHUNK_SIZE
 from include.database.handler import Session
 from include.database.models.classic import User
 from include.database.models.file import File, FileTask
-from include.util.log import getCustomLogger
-
 from include.shared import connected_listeners
-
-from Crypto.Cipher import AES
-from Crypto.Random import get_random_bytes
-import mmap
+from include.util.log import getCustomLogger
 
 logger = getCustomLogger(
     "connection",
@@ -53,16 +53,20 @@ class ConnectionHandler:
         self.username: str = self.request.get("username", "")
         self.token: str = self.request.get("token", "")
 
-    def conclude_request(self, code: int, data: dict = {}, message: str = "") -> None:
+    def conclude_request(
+        self, code: int, data: Optional[dict] = None, message: str = ""
+    ) -> None:
         """
         Conclude the request by sending a response back to the client.
 
         Args:
-            message: The data/message received from the client.
+            code: HTTP status code for the response.
+            data: Data dictionary to include in the response.
+            message: Message string to include in the response.
         """
         response = {
             "code": code,
-            "data": data,
+            "data": data if data is not None else {},
             "message": message,
             "timestamp": time.time(),
         }
@@ -71,23 +75,6 @@ class ConnectionHandler:
         self.logger.debug(f"Sending response: {response_json}")
 
         self.websocket.send(response_json)
-
-    # def authenticate_user(self, user: User|None) -> bool:
-    #     """
-    #     Authenticates the user by checking the user authentication status.
-    #     Returns:
-    #         bool: True if the user is authenticated, False otherwise. If the user is not authenticated,
-    #               it concludes the request with a 403 status code and an error message indicating
-    #               an invalid user or token.
-    #     """
-
-    #     if not user or not user.is_token_valid(self.token):
-    #         self.conclude_request(
-    #             **{"code": 403, "message": "Invalid user or token", "data": {}}
-    #         )
-    #         return False
-
-    #     return True
 
     def send_file(self, task_id: str) -> None:
         """
@@ -318,7 +305,7 @@ class ConnectionHandler:
                             data = self.websocket.recv()
                             f.write(data)  # type: ignore
 
-                            if not data or len(data) < 8192:
+                            if not data or len(data) < FILE_TRANSFER_CHUNK_SIZE:
                                 break
                     except (
                         websockets.ConnectionClosed,

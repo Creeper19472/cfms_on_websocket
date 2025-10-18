@@ -1,26 +1,26 @@
 import datetime
 import secrets
+import time
 
 import jsonschema
+
 from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
+from include.conf_loader import global_config
 from include.constants import AVAILABLE_ACCESS_TYPES
+from include.constants import FILE_TASK_DEFAULT_DURATION_SECONDS
 from include.database.handler import Session
-from include.database.models.classic import (
-    User,
-)
+from include.database.models.classic import User
 from include.database.models.entity import (
     Document,
-    Folder,
-    NoActiveRevisionsError,
     DocumentAccessRule,
     DocumentRevision,
+    Folder,
+    NoActiveRevisionsError,
 )
 from include.database.models.file import File, FileTask
-from include.conf_loader import global_config
 from include.util.rule.applying import apply_access_rules
 import include.system.messages as smsg
-import time
 
 __all__ = [
     "RequestGetDocumentInfoHandler",
@@ -36,8 +36,7 @@ __all__ = [
 ]
 
 
-# def create_file_task(file_id: str, transfer_mode=0):
-def create_file_task(file: File, transfer_mode=0):
+def create_file_task(file: File, transfer_mode: int = 0):
     """
     Creates a new file processing task for the specified file.
     Args:
@@ -52,9 +51,9 @@ def create_file_task(file: File, transfer_mode=0):
     """
 
     with Session() as session:
-        # file = session.get(File, file_id)
         if not file:
             return None
+
 
         now = time.time()
         task = FileTask(
@@ -62,7 +61,7 @@ def create_file_task(file: File, transfer_mode=0):
             status=0,
             mode=transfer_mode,
             start_time=now,
-            end_time=now + 3600,
+            end_time=now + FILE_TASK_DEFAULT_DURATION_SECONDS,
         )
         session.add(task)
         session.commit()

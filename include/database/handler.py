@@ -1,8 +1,9 @@
-from sqlalchemy import create_engine, URL, MetaData
-from sqlalchemy.orm import sessionmaker
-from include.conf_loader import global_config
-
+from sqlalchemy import URL, create_engine
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import sessionmaker
+
+from include.conf_loader import global_config
+from include.constants import DEFAULT_TOKEN_EXPIRY_SECONDS
 
 __all__ = ["engine", "Session", "Base"]
 
@@ -39,13 +40,12 @@ else:
     )
     engine = create_engine(
         url,
-        pool_recycle=3600,
+        pool_recycle=DEFAULT_TOKEN_EXPIRY_SECONDS,
         echo=debug_enabled,
     )
 
 Session = sessionmaker(bind=engine)
-# metadata_obj = MetaData()
+
 
 class Base(DeclarativeBase):
-    # metadata = metadata_obj
     pass
