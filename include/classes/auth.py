@@ -1,5 +1,7 @@
+import time
 from typing import Optional
-import jwt, time
+
+import jwt
 
 __all__ = ["Token"]
 

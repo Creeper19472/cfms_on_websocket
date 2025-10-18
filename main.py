@@ -26,18 +26,21 @@ import os
 os.makedirs("./content/logs/", exist_ok=True)
 os.makedirs("./content/ssl/", exist_ok=True)
 
+import socket
 import ssl
+
+from websockets.sync.server import serve
+
 from include.conf_loader import global_config
+from include.connection_handler import handle_connection
 from include.constants import CORE_VERSION
-from include.database.handler import engine, Base
+from include.database.handler import Base
 from include.database.handler import Session
+from include.database.handler import engine
 from include.database.models.classic import User, UserGroup
 from include.database.models.entity import Document, DocumentRevision
 from include.database.models.file import File
-from websockets.sync.server import serve
-from include.connection_handler import handle_connection
 from include.util.log import getCustomLogger
-import socket
 
 
 def server_init():

@@ -1,14 +1,17 @@
+import os
 import secrets
-from sqlalchemy import VARCHAR, Float, ForeignKey, Integer, Text, Boolean
-from include.database.handler import Base
+import sys
+import time
 from typing import List
 from typing import Optional
+
+from sqlalchemy import VARCHAR, Float, ForeignKey, Integer, Text, Boolean
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
 from sqlalchemy.orm import relationship
-import time
 from sqlalchemy.orm.session import object_session
-import os, sys
+
+from include.database.handler import Base
 
 
 class File(Base):
