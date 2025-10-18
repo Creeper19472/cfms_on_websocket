@@ -1,29 +1,28 @@
-import json
-import sys
-import time
-import os
 import base64
 import hashlib
+import json
+import mmap
+import os
+import sys
+import time
 import traceback
-import jsonschema
 from typing import Iterable
 
+import jsonschema
 import websockets
-from websockets.sync.server import ServerConnection
+from Crypto.Cipher import AES
+from Crypto.Random import get_random_bytes
 from websockets.asyncio.server import broadcast
+from websockets.sync.server import ServerConnection
 from websockets.typing import Data
 
 from include.conf_loader import global_config
+from include.constants import FILE_TRANSFER_CHUNK_SIZE
 from include.database.handler import Session
 from include.database.models.classic import User
 from include.database.models.file import File, FileTask
-from include.util.log import getCustomLogger
-
 from include.shared import connected_listeners
-
-from Crypto.Cipher import AES
-from Crypto.Random import get_random_bytes
-import mmap
+from include.util.log import getCustomLogger
 
 logger = getCustomLogger(
     "connection",
@@ -318,7 +317,7 @@ class ConnectionHandler:
                             data = self.websocket.recv()
                             f.write(data)  # type: ignore
 
-                            if not data or len(data) < 8192:
+                            if not data or len(data) < FILE_TRANSFER_CHUNK_SIZE:
                                 break
                     except (
                         websockets.ConnectionClosed,

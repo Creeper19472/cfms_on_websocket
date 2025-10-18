@@ -1,24 +1,24 @@
+import hashlib
+import jwt
+import os
+import secrets
+import time
 from typing import TYPE_CHECKING
 from typing import List
 from typing import Optional
 from typing import Set
 
-import secrets
-from sqlalchemy import VARCHAR, Float, ForeignKey, Integer, Text
-from include.database.handler import Base, Session
-from include.conf_loader import global_config
-from include.classes.auth import Token
+from sqlalchemy import VARCHAR, Boolean, Float, ForeignKey, Integer, JSON, Text
+from sqlalchemy import event
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
 from sqlalchemy.orm import relationship
-from sqlalchemy import Boolean
-from sqlalchemy import event
-import time
 from sqlalchemy.orm.session import object_session
-from sqlalchemy import JSON
-import jwt
-import hashlib
-import os
+
+from include.classes.auth import Token
+from include.conf_loader import global_config
+from include.constants import DEFAULT_TOKEN_EXPIRY_SECONDS
+from include.database.handler import Base, Session
 
 
 if TYPE_CHECKING:
@@ -73,7 +73,7 @@ class User(Base):
                 else self.secret_key
             )
             token = Token(secret, self.username)
-            token.new(3600)
+            token.new(DEFAULT_TOKEN_EXPIRY_SECONDS)
 
             session = object_session(self)
             if session is not None:
@@ -113,7 +113,7 @@ class User(Base):
             else self.secret_key
         )
         new_token = Token(secret, self.username)
-        new_token.new(3600)
+        new_token.new(DEFAULT_TOKEN_EXPIRY_SECONDS)
 
         return new_token
 

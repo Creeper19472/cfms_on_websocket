@@ -34,6 +34,7 @@ from websockets.sync.server import serve
 from include.conf_loader import global_config
 from include.connection_handler import handle_connection
 from include.constants import CORE_VERSION
+from include.constants import DEFAULT_SSL_CERT_VALIDITY_DAYS
 from include.database.handler import Base
 from include.database.handler import Session
 from include.database.handler import engine
@@ -178,7 +179,7 @@ def server_init():
             .not_valid_before(datetime.datetime.now(datetime.timezone.utc))
             .not_valid_after(
                 datetime.datetime.now(datetime.timezone.utc)
-                + datetime.timedelta(days=365)
+                + datetime.timedelta(days=DEFAULT_SSL_CERT_VALIDITY_DAYS)
             )
             .add_extension(
                 x509.SubjectAlternativeName(

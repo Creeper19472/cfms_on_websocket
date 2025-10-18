@@ -1,11 +1,12 @@
+import time
+
 from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
 from include.conf_loader import global_config
+from include.constants import FAILED_LOGIN_DELAY_SECONDS
 from include.database.handler import Session
 from include.database.models.classic import User
 from include.util.audit import log_audit
-import time
-
 from include.util.pwd import check_passwd_requirements
 
 
@@ -99,7 +100,7 @@ class RequestLoginHandler(RequestHandler):
                 response = response_invalid
 
         if response == response_invalid:
-            time.sleep(3)
+            time.sleep(FAILED_LOGIN_DELAY_SECONDS)
 
         # Send the response back to the client
         handler.conclude_request(**response)
