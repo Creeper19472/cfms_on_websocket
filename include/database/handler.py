@@ -1,4 +1,4 @@
-from sqlalchemy import URL, MetaData, create_engine
+from sqlalchemy import URL, create_engine
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import sessionmaker
 
@@ -45,8 +45,7 @@ else:
     )
 
 Session = sessionmaker(bind=engine)
-# metadata_obj = MetaData()
+
 
 class Base(DeclarativeBase):
-    # metadata = metadata_obj
     pass

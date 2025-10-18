@@ -76,23 +76,6 @@ class ConnectionHandler:
 
         self.websocket.send(response_json)
 
-    # def authenticate_user(self, user: User|None) -> bool:
-    #     """
-    #     Authenticates the user by checking the user authentication status.
-    #     Returns:
-    #         bool: True if the user is authenticated, False otherwise. If the user is not authenticated,
-    #               it concludes the request with a 403 status code and an error message indicating
-    #               an invalid user or token.
-    #     """
-
-    #     if not user or not user.is_token_valid(self.token):
-    #         self.conclude_request(
-    #             **{"code": 403, "message": "Invalid user or token", "data": {}}
-    #         )
-    #         return False
-
-    #     return True
-
     def send_file(self, task_id: str) -> None:
         """
         Sends a file associated with the given task ID to the client over a websocket connection using AES encryption.

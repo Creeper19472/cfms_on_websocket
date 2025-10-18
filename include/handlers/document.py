@@ -36,8 +36,7 @@ __all__ = [
 ]
 
 
-# def create_file_task(file_id: str, transfer_mode=0):
-def create_file_task(file: File, transfer_mode=0):
+def create_file_task(file: File, transfer_mode: int = 0):
     """
     Creates a new file processing task for the specified file.
     Args:
@@ -52,9 +51,9 @@ def create_file_task(file: File, transfer_mode=0):
     """
 
     with Session() as session:
-        # file = session.get(File, file_id)
         if not file:
             return None
+
 
         now = time.time()
         task = FileTask(
