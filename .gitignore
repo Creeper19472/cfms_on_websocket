@@ -49,5 +49,7 @@ config.toml
 content/ssl/
 content/files/
 content/logs/*
+content/backups/
+content/test_files/
 
 .idea
