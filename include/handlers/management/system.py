@@ -135,3 +135,66 @@ class RequestViewAuditLogsHandler(RequestHandler):
             {"offset": offset, "entries_count": entries_count},
             handler.username,
         )
+
+
+class RequestGenerateBackupHandler(RequestHandler):
+    """
+    Handler for generating an encrypted backup of documents, folders, and files.
+
+    This handler exports all documents, folders, document revisions, access rules,
+    and their associated files into an encrypted archive. The encryption key is
+    saved in a separate file.
+    """
+
+    data_schema = {
+        "type": "object",
+        "properties": {
+            "backup_name": {"type": "string", "minLength": 1, "maxLength": 255},
+        },
+        "required": [],
+        "additionalProperties": False,
+    }
+    require_auth = True
+
+    def handle(self, handler: ConnectionHandler):
+        from include.util.backup import generate_backup
+
+        backup_name = handler.data.get("backup_name", None)
+
+        with Session() as session:
+            user = session.get(User, handler.username)
+            if not user or not user.is_token_valid(handler.token):
+                handler.conclude_request(
+                    **{"code": 401, "message": smsg.INVALID_USER_OR_TOKEN, "data": {}}
+                )
+                return 401
+
+            if "manage_system" not in user.all_permissions:
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
+                return 403, None, handler.username
+
+            try:
+                # Generate backup in the content/backups directory
+                backup_dir = "./content/backups"
+                result = generate_backup(session, backup_dir, backup_name)
+
+                handler.conclude_request(
+                    200,
+                    {
+                        "archive_path": result["archive_path"],
+                        "key_path": result["key_path"],
+                        "metadata": result["metadata"],
+                    },
+                    smsg.SUCCESS,
+                )
+                return (
+                    0,
+                    None,
+                    {"backup_name": backup_name or "auto"},
+                    handler.username,
+                )
+            except Exception as e:
+                handler.conclude_request(
+                    500, {"error": str(e)}, "Failed to generate backup"
+                )
+                return 500, None, handler.username
