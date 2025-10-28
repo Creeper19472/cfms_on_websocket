@@ -63,6 +63,9 @@ from include.handlers.management.system import (
     RequestLockdownHandler,
     RequestViewAuditLogsHandler,
     RequestGenerateBackupHandler,
+    RequestInitiateBackupImportHandler,
+    RequestStartBackupImportHandler,
+    RequestGetBackupImportStatusHandler,
 )
 from include.constants import CORE_VERSION, PROTOCOL_VERSION
 from include.shared import connected_listeners, lockdown_enabled
@@ -173,6 +176,9 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "lockdown": RequestLockdownHandler,
         "view_audit_logs": RequestViewAuditLogsHandler,
         "generate_backup": RequestGenerateBackupHandler,
+        "initiate_backup_import": RequestInitiateBackupImportHandler,
+        "start_backup_import": RequestStartBackupImportHandler,
+        "get_backup_import_status": RequestGetBackupImportStatusHandler,
     }
 
     # 定义白名单内的请求。这些请求即使在防范禁闭时也对所有用户可用。

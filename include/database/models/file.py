@@ -136,3 +136,67 @@ class FileTask(Base):
             f"FileTask(id={self.id!r}, "
             f"file_id={self.file_id!r}, status={self.status!r})"
         )
+
+
+class BackupTask(Base):
+    """
+    Track backup import/restore operations.
+    
+    Status values:
+    - pending: Waiting for files to be uploaded
+    - uploading: Files being uploaded
+    - processing: Import in progress
+    - completed: Successfully completed
+    - failed: Failed with error
+    - timeout: Timed out waiting for files
+    """
+    __tablename__ = "backup_tasks"
+    id: Mapped[str] = mapped_column(
+        VARCHAR(255), primary_key=True, default=lambda: secrets.token_hex(32)
+    )
+    username: Mapped[str] = mapped_column(VARCHAR(255), nullable=False)
+    operation: Mapped[str] = mapped_column(
+        VARCHAR(32), nullable=False, comment="export or import"
+    )
+    status: Mapped[str] = mapped_column(
+        VARCHAR(32), nullable=False, default="pending"
+    )
+    current_step: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    progress_percent: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    
+    # File references
+    archive_file_id: Mapped[Optional[str]] = mapped_column(
+        VARCHAR(255), ForeignKey("files.id"), nullable=True
+    )
+    key_file_id: Mapped[Optional[str]] = mapped_column(
+        VARCHAR(255), ForeignKey("files.id"), nullable=True
+    )
+    
+    # Progress counters
+    documents_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    folders_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    files_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    
+    # Timestamps
+    created_time: Mapped[float] = mapped_column(
+        Float, nullable=False, default=lambda: time.time()
+    )
+    started_time: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    completed_time: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    timeout_time: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    
+    # Error information
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    archive_file: Mapped[Optional["File"]] = relationship(
+        "File", foreign_keys=[archive_file_id]
+    )
+    key_file: Mapped[Optional["File"]] = relationship(
+        "File", foreign_keys=[key_file_id]
+    )
+    
+    def __repr__(self) -> str:
+        return (
+            f"BackupTask(id={self.id!r}, operation={self.operation!r}, "
+            f"status={self.status!r}, username={self.username!r})"
+        )
