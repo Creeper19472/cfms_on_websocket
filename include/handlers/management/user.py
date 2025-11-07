@@ -1,5 +1,6 @@
 import hashlib
 import time
+import filetype
 from typing import Optional
 from include.constants import AVAILABLE_BLOCK_TYPES
 from include.classes.connection import ConnectionHandler
@@ -14,6 +15,7 @@ from include.database.models.blocking import (
     UserBlockEntry,
     UserBlockSubEntry,
 )
+from include.database.models.entity import Document
 from include.util.user import create_user
 from include.util.pwd import (
     InvaildPasswordLengthError,
@@ -285,6 +287,12 @@ class RequestDeleteUserHandler(RequestHandler):
 
             for membership in user_to_delete.groups:
                 session.delete(membership)
+
+            for block_entry in user_to_delete.block_entries:
+                for sub_entry in block_entry.sub_entries:
+                    session.delete(sub_entry)
+
+                session.delete(block_entry)
 
             session.delete(user_to_delete)
             session.commit()
@@ -565,6 +573,135 @@ class RequestGetUserInfoHandler(RequestHandler):
             )
 
 
+class RequestGetUserAvatarHandler(RequestHandler):
+    """
+    Handler for action `get_user_avatar`.
+
+    This operation retrieves the avatar file ID of a specified user.
+    However, when a user successfully authenticates themselves, their avatar ID is
+    already included in the response.
+    """
+
+    data_schema = {
+        "type": "object",
+        "properties": {
+            "username": {"type": "string", "minLength": 1},
+        },
+        "required": ["username"],
+        "additionalProperties": False,
+    }
+
+    require_auth = True
+
+    def handle(self, handler: ConnectionHandler):
+        user_to_get_username = handler.data["username"]
+        if not user_to_get_username:
+            handler.conclude_request(
+                **{"code": 400, "message": "Username is required", "data": {}}
+            )
+            return
+
+        with Session() as session:
+            # when require_auth is True, user authentication has been verified
+            this_user = session.get(User, handler.username)
+            assert this_user is not None
+
+            user_to_get = session.get(User, user_to_get_username)
+            if not user_to_get:
+                handler.conclude_request(
+                    **{"code": 404, "message": "User does not exist", "data": {}}
+                )
+                return
+
+            if (
+                user_to_get_username != this_user.username
+                and "get_user_info" not in this_user.all_permissions
+            ):
+                handler.conclude_request(
+                    **{
+                        "code": 403,
+                        "message": "You do not have permission to get user information",
+                        "data": {},
+                    }
+                )
+                return
+
+            avatar_id = user_to_get.avatar_id if user_to_get.avatar_id else b""
+
+            handler.conclude_request(
+                **{"code": 200, "message": "OK", "data": {"avatar_id": avatar_id}}
+            )
+
+
+class RequestSetUserAvatarHandler(RequestHandler):
+    data_schema = {
+        "type": "object",
+        "properties": {
+            "username": {"type": "string", "minLength": 1},
+            "document_id": {"type": "string", "minLength": 1},
+        },
+        "required": ["username", "document_id"],
+        "additionalProperties": False,
+    }
+
+    require_auth = True
+
+    def handle(self, handler: ConnectionHandler):
+        target_username: str = handler.data["username"]
+        document_id: Optional[str] = handler.data["document_id"]
+
+        with Session() as session:
+            this_user = session.get(User, handler.username)
+            assert this_user is not None
+
+            if (
+                target_username != this_user.username
+                and "super_set_user_avatar" not in this_user.all_permissions
+            ):
+                handler.conclude_request(
+                    403, {}, "You do not have permission to set other user's avatar"
+                )
+                return 403, target_username, handler.username
+
+            user_to_update = session.get(User, target_username)
+            if not user_to_update:
+                handler.conclude_request(
+                    404, {}, "User does not exist"
+                )
+                return
+            
+            # judge whether the user has the right to use the document as avatar
+            document = session.get(Document, document_id)
+            if not document:
+                handler.conclude_request(
+                    404, {}, "Document does not exist"
+                )
+                return
+
+            if not document.check_access_requirements(user_to_update, "read"):
+                handler.conclude_request(
+                    403, {}, "User does not have access to the specified document"
+                )
+                return
+            
+            latest_rev_file = document.get_latest_revision().file
+            # check whether the file is an image
+            extension = filetype.guess_extension(latest_rev_file.path)
+            if extension not in ["jpg", "jpeg", "png", "gif", "bmp", "webp"]:
+                handler.conclude_request(
+                    400, {}, "The specified document is not an image file"
+                )
+                return
+
+            user_to_update.avatar_id = latest_rev_file.id
+            session.commit()
+
+        handler.conclude_request(
+            200, {}, "User avatar updated successfully"
+        )
+        return 200, target_username, handler.username
+
+
 class RequestChangeUserGroupsHandler(RequestHandler):
     data_schema = {
         "type": "object",
@@ -576,15 +713,13 @@ class RequestChangeUserGroupsHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
 
         with Session() as session:
             this_user = session.get(User, handler.username)
-            if not this_user or not this_user.is_token_valid(handler.token):
-                handler.conclude_request(
-                    **{"code": 403, "message": "Invalid user or token", "data": {}}
-                )
-                return
+            assert this_user is not None
 
             if "change_user_groups" not in this_user.all_permissions:
                 handler.conclude_request(

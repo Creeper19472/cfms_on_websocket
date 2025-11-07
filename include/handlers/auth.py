@@ -89,6 +89,7 @@ class RequestLoginHandler(RequestHandler):
                             "token": token.raw,
                             "exp": token.exp,
                             "nickname": user.nickname,
+                            "avatar_id": user.avatar_id,
                             "permissions": list(user.all_permissions),
                             "groups": list(user.all_groups),
                         },

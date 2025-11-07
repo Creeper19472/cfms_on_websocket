@@ -14,7 +14,7 @@ class UserBlockEntry(Base):
     block_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     username: Mapped[str] = mapped_column(ForeignKey("users.username"))
     user: Mapped["User"] = relationship("User", back_populates="block_entries")
-    sub_entries: Mapped["UserBlockSubEntry"] = relationship(
+    sub_entries: Mapped[list["UserBlockSubEntry"]] = relationship(
         "UserBlockSubEntry", back_populates="parent_entry"
     )
     timestamp: Mapped[float] = mapped_column(Float, nullable=False)

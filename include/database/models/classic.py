@@ -23,6 +23,7 @@ from include.database.handler import Base, Session
 
 if TYPE_CHECKING:
     from include.database.models.blocking import UserBlockEntry
+    from include.database.models.file import File
 
 
 class User(Base):
@@ -33,6 +34,10 @@ class User(Base):
     salt: Mapped[str] = mapped_column(Text)
     passwd_last_modified: Mapped[float] = mapped_column(Float, default=0, nullable=False)
     nickname: Mapped[Optional[str]] = mapped_column(VARCHAR(255), nullable=True)
+    
+    avatar_id: Mapped[Optional[str]] = mapped_column(ForeignKey("files.id"), nullable=True)
+    avatar: Mapped[Optional["File"]] = relationship("File")
+    
     last_login: Mapped[Optional[float]] = mapped_column(Float)
     created_time: Mapped[Optional[float]] = mapped_column(Float, nullable=False)
 

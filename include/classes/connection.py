@@ -13,14 +13,12 @@ import jsonschema
 import websockets
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
-from websockets.asyncio.server import broadcast
 from websockets.sync.server import ServerConnection
 from websockets.typing import Data
 
 from include.conf_loader import global_config
 from include.constants import FILE_TRANSFER_MAX_CHUNK_SIZE, FILE_TRANSFER_MIN_CHUNK_SIZE
 from include.database.handler import Session
-from include.database.models.classic import User
 from include.database.models.file import File, FileTask
 from include.shared import connected_listeners
 from include.util.log import getCustomLogger

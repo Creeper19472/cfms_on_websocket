@@ -41,6 +41,8 @@ from include.handlers.management.user import (
     RequestCreateUserHandler,
     RequestDeleteUserHandler,
     RequestBlockUserHandler,
+    RequestGetUserAvatarHandler,
+    RequestSetUserAvatarHandler,
     RequestUnblockUserHandler,
     RequestListUsersHandler,
     RequestGetUserInfoHandler,
@@ -156,6 +158,8 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "delete_user": RequestDeleteUserHandler,
         "rename_user": RequestRenameUserHandler,
         "get_user_info": RequestGetUserInfoHandler,
+        "get_user_avatar": RequestGetUserAvatarHandler,
+        "set_user_avatar": RequestSetUserAvatarHandler,
         "change_user_groups": RequestChangeUserGroupsHandler,
         "set_passwd": RequestSetPasswdHandler,
         # 用户组类
@@ -233,6 +237,12 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
             if not this_handler.username or not this_handler.token:
                 this_handler.conclude_request(401, {}, "Authentication required")
                 return
+
+            with Session() as session:
+                this_user = session.get(User, this_handler.username)
+                if not this_user or not this_user.is_token_valid(this_handler.token):
+                    this_handler.conclude_request(403, {}, "Invalid user or token")
+                    return
 
         try:
             callback: Union[

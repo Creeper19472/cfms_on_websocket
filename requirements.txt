@@ -5,3 +5,4 @@ websockets
 pycryptodome
 cryptography
 jsonschema
+filetype
