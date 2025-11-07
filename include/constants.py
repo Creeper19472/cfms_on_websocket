@@ -8,11 +8,12 @@ __all__ = [
     "DEFAULT_TOKEN_EXPIRY_SECONDS",
     "FAILED_LOGIN_DELAY_SECONDS",
     "DEFAULT_SSL_CERT_VALIDITY_DAYS",
-    "FILE_TRANSFER_CHUNK_SIZE",
+    "FILE_TRANSFER_MAX_CHUNK_SIZE",
+    "FILE_TRANSFER_MIN_CHUNK_SIZE",
     "FILE_TASK_DEFAULT_DURATION_SECONDS",
 ]
 
-CORE_VERSION = Version("0.1.0.250919_alpha")
+CORE_VERSION = Version("0.1.0.251107_alpha")
 PROTOCOL_VERSION = 3
 
 AVAILABLE_ACCESS_TYPES = ["read", "write", "move", "manage"]
@@ -24,5 +25,6 @@ FAILED_LOGIN_DELAY_SECONDS = 3  # Delay after failed login attempt
 DEFAULT_SSL_CERT_VALIDITY_DAYS = 365  # 1 year
 
 # File Transfer Constants
-FILE_TRANSFER_CHUNK_SIZE = 8192  # 8KB - size threshold for determining end of transfer
+FILE_TRANSFER_MAX_CHUNK_SIZE = 1024 * 64  # 64KB - size threshold for determining end of transfer
+FILE_TRANSFER_MIN_CHUNK_SIZE = 512
 FILE_TASK_DEFAULT_DURATION_SECONDS = 3600  # 1 hour

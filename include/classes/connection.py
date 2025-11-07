@@ -18,7 +18,7 @@ from websockets.sync.server import ServerConnection
 from websockets.typing import Data
 
 from include.conf_loader import global_config
-from include.constants import FILE_TRANSFER_CHUNK_SIZE
+from include.constants import FILE_TRANSFER_MAX_CHUNK_SIZE, FILE_TRANSFER_MIN_CHUNK_SIZE
 from include.database.handler import Session
 from include.database.models.classic import User
 from include.database.models.file import File, FileTask
@@ -249,6 +249,10 @@ class ConnectionHandler:
                                     "anyOf": [{"type": "string"}, {"type": "null"}]
                                 },
                                 "file_size": {"type": "integer"},
+                                "max_chunk_size": {
+                                    "type": "integer",
+                                    "minimum": FILE_TRANSFER_MIN_CHUNK_SIZE,
+                                },
                             },
                             "required": ["file_size"],
                             "additionalProperties": False,
@@ -264,6 +268,15 @@ class ConnectionHandler:
 
         sha256: str = task_info["data"].get("sha256")
         file_size: int = task_info["data"].get("file_size")
+        max_chunk_size: int = task_info["data"].get(
+            "max_chunk_size", FILE_TRANSFER_MAX_CHUNK_SIZE
+        )
+
+        chunk_size = (
+            FILE_TRANSFER_MAX_CHUNK_SIZE
+            if max_chunk_size > FILE_TRANSFER_MAX_CHUNK_SIZE
+            else max_chunk_size
+        )
 
         ### 获取任务与文件基本信息
         with Session() as session:
@@ -290,7 +303,7 @@ class ConnectionHandler:
                 session.commit()
                 return
 
-            self.websocket.send("ready")
+            self.websocket.send(f"ready {chunk_size}")
             try:
                 # 生成保存文件的路径
                 if not file.id:
@@ -301,17 +314,17 @@ class ConnectionHandler:
                 with open(file.path, "wb") as f:
                     try:
                         while True:
-                            # Receive encrypted data from the server
+                            # Receive encrypted data from the client
                             data = self.websocket.recv()
                             f.write(data)  # type: ignore
 
-                            if not data or len(data) < FILE_TRANSFER_CHUNK_SIZE:
+                            if not data or len(data) < chunk_size:
                                 break
                     except (
                         websockets.ConnectionClosed,
                         websockets.exceptions.ConnectionClosedOK,
                     ) as exc:
-                        pass
+                        raise
 
                 # 校验文件大小
                 actual_size = os.path.getsize(file.path)
