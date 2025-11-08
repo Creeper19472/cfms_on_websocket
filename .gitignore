@@ -46,8 +46,8 @@ app*.db
 admin_password.txt
 config.toml
 
-content/ssl/
-content/files/
-content/logs/*
+src/content/ssl/
+src/content/files/
+src/content/logs/*
 
 .idea
