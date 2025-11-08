@@ -1,3 +1,3 @@
-[submodule "certtools"]
-	path = certtools
+[submodule "src/certtools"]
+	path = src/certtools
 	url = https://github.com/creeper19472/cfms_certtools

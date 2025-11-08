@@ -30,14 +30,12 @@ class RequestListUsersHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
         with Session() as session:
             this_user = session.get(User, handler.username)
-            if not this_user or not this_user.is_token_valid(handler.token):
-                handler.conclude_request(
-                    code=403, message="Invalid user or token", data={}
-                )
-                return
+            assert this_user is not None
 
             if "list_users" not in this_user.all_permissions:
                 handler.conclude_request(
@@ -106,16 +104,13 @@ class RequestCreateUserHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
 
         with Session() as session:
             this_user = session.get(User, handler.username)
-
-            if not this_user or not this_user.is_token_valid(handler.token):
-                handler.conclude_request(
-                    **{"code": 403, "message": "Invalid user or token", "data": {}}
-                )
-                return
+            assert this_user is not None
 
             # currently handle_create_user() will not judge whether the requesting
             # user is eligible to apply the given permissions for the new user.
@@ -523,6 +518,8 @@ class RequestGetUserInfoHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
         user_to_get_username = handler.data["username"]
         if not user_to_get_username:
@@ -533,11 +530,7 @@ class RequestGetUserInfoHandler(RequestHandler):
 
         with Session() as session:
             this_user = session.get(User, handler.username)
-            if not this_user or not this_user.is_token_valid(handler.token):
-                handler.conclude_request(
-                    **{"code": 403, "message": "Invalid user or token", "data": {}}
-                )
-                return
+            assert this_user is not None
 
             user_to_get = session.get(User, user_to_get_username)
             if not user_to_get:

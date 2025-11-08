@@ -1,8 +1,0 @@
-PyJwt
-sqlalchemy
-tomlkit
-websockets
-pycryptodome
-cryptography
-jsonschema
-filetype
