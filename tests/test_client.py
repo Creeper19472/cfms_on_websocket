@@ -26,7 +26,7 @@ def calculate_sha256(file_path: str) -> str:
     Returns:
         Hexadecimal SHA256 hash string
     """
-    with open(file_path, "rb") as f:
+    with open(file_path, "rb", encoding='utf-8') as f:
         # Use memory-mapped files to map directly to memory
         mmapped_file = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
         return hashlib.sha256(mmapped_file).hexdigest()
@@ -385,15 +385,9 @@ class CFMSTestClient:
         """
         Upload a file to the server over WebSocket connection.
         
-        Yields progress updates as (current_bytes, total_bytes) tuples.
-        
         Args:
-            client: Active WebSocket connection
             task_id: Server task ID for this upload
             file_path: Local path to the file to upload
-            
-        Yields:
-            Tuples of (bytes_uploaded, total_file_size) for progress tracking
             
         Raises:
             ValueError: If server response is invalid
@@ -436,12 +430,10 @@ class CFMSTestClient:
 
             try:
                 chunk_size = int(received_response.split()[1])
-                with open(file_path, "rb") as f:
+                with open(file_path, "rb", encoding='utf-8') as f:
                     while True:
                         chunk = f.read(chunk_size)
                         self.websocket.send(chunk)
-
-                        yield f.tell(), file_size
 
                         if not chunk or len(chunk) < chunk_size:
                             break

@@ -86,6 +86,14 @@ class TestDocumentOperations:
             for i in range(3):
                 response = authenticated_client.create_document(f"Test Document {i}")
                 assert response["code"] == 200
+                
+                # upload file to activate the document
+                task_id = response["data"]["task_data"]["task_id"]
+                authenticated_client.upload_file_to_server(
+                    task_id,
+                    "./pyproject.toml"
+                )
+
                 document_ids.append(response["data"]["document_id"])
             
             # Verify all documents exist

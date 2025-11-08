@@ -28,7 +28,7 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
         shutil.copy("src/config.sample.toml", src_config_file)
     
     # Modify config for testing: disable password expiration
-    with open(src_config_file, "r") as f:
+    with open(src_config_file, "r", encoding='utf-8') as f:
         config_content = f.read()
     
     # Disable password expiration for tests
@@ -45,7 +45,7 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
         "dualstack_ipv6 = false"
     )
     
-    with open(src_config_file, "w") as f:
+    with open(src_config_file, "w", encoding='utf-8') as f:
         f.write(config_content)
     
     # Clean up any previous test artifacts (in src/ where server runs)
@@ -57,10 +57,10 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
     # Ensure necessary directories exist in src/ (where server runs from)
     os.makedirs("src/content/ssl", exist_ok=True)
     os.makedirs("src/content/logs", exist_ok=True)
-    
+        
     # Start the server (run from src/ directory)
     process = subprocess.Popen(
-        ["python", "main.py"],
+        ["uv", "run", "python", "main.py"],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -137,7 +137,16 @@ def client(server_process) -> Generator[CFMSTestClient, None, None]:
     After the test completes, it disconnects the client.
     """
     client = CFMSTestClient()
-    client.connect()
+    # reconnect if needed
+    for _attempt in range(5):
+        try:
+            client.connect()
+            break
+        except ConnectionRefusedError, TimeoutError:
+            if _attempt == 4:
+                raise
+            continue
+
     yield client
     client.disconnect()
 
@@ -167,11 +176,12 @@ def test_document(authenticated_client: CFMSTestClient) -> Generator[dict, None,
     assert response["code"] == 200, f"Failed to create test document: {response}"
     
     document_id = response["data"]["document_id"]
+    task_id = response["data"]["task_data"]["task_id"]
 
     # upload the file
     authenticated_client.upload_file_to_server(
-        document_id,
-        "./__init__.py"
+        task_id,
+        "./pyproject.toml"
     )
     
     yield {
