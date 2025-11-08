@@ -17,6 +17,23 @@ comments as the primary reference.
 
 [doc-url]: https://cfms-server-doc.readthedocs.io/zh_CN/latest
 
+## Testing
+
+This repository includes an automated test suite built with pytest. To run the tests:
+
+```bash
+# Install test dependencies
+pip install -r requirements-test.txt
+
+# Run all tests
+pytest
+
+# Run specific test files
+pytest tests/test_basic.py
+```
+
+For more information about the test suite, see [tests/README.md](tests/README.md).
+
 ## Alpha Test
 
 This is a project that is under active development and we are looking 
