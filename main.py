@@ -56,6 +56,9 @@ def server_init():
     if os.path.exists("./ssl_key.pem"):
         os.remove("./ssl_key.pem")
 
+    # Create database tables before inserting data
+    Base.metadata.create_all(engine)
+
     from include.util.group import create_group
 
     create_group(
@@ -227,12 +230,15 @@ def main():
     # Always create tables that do not exist
     Base.metadata.create_all(engine)
 
+    # Determine socket family based on dualstack setting
+    socket_family = socket.AF_INET6 if global_config["server"]["dualstack_ipv6"] else socket.AF_INET
+
     with serve(
         handle_connection,
         global_config["server"]["host"],
         global_config["server"]["port"],
         ssl=ssl_context,
-        family=socket.AF_INET6,
+        family=socket_family,
         dualstack_ipv6=global_config["server"]["dualstack_ipv6"],
     ) as server:
         logger.info(

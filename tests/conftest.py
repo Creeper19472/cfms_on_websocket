@@ -27,6 +27,36 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
         import shutil
         shutil.copy("config.sample.toml", config_file)
     
+    # Modify config for testing: disable password expiration
+    with open(config_file, "r") as f:
+        config_content = f.read()
+    
+    # Disable password expiration for tests
+    config_content = config_content.replace(
+        "enable_passwd_force_expiration = true",
+        "enable_passwd_force_expiration = false"
+    )
+    config_content = config_content.replace(
+        "require_passwd_enforcement_changes = true",
+        "require_passwd_enforcement_changes = false"
+    )
+    config_content = config_content.replace(
+        "dualstack_ipv6 = true",
+        "dualstack_ipv6 = false"
+    )
+    
+    with open(config_file, "w") as f:
+        f.write(config_content)
+    
+    # Clean up any previous test artifacts
+    for artifact in ["init", "app.db", "admin_password.txt"]:
+        if os.path.exists(artifact):
+            os.remove(artifact)
+    
+    # Ensure necessary directories exist
+    os.makedirs("content/ssl", exist_ok=True)
+    os.makedirs("content/logs", exist_ok=True)
+    
     # Start the server
     process = subprocess.Popen(
         ["python", "main.py"],
@@ -36,12 +66,27 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
     )
     
     # Wait for server to be ready (give it time to initialize)
-    time.sleep(5)
+    max_wait = 15
+    wait_time = 0
+    while wait_time < max_wait:
+        time.sleep(1)
+        wait_time += 1
+        
+        # Check if process crashed
+        if process.poll() is not None:
+            stdout, stderr = process.communicate()
+            pytest.fail(f"Server failed to start.\nSTDOUT: {stdout}\nSTDERR: {stderr}")
+        
+        # Check if initialization is complete
+        if os.path.exists("admin_password.txt"):
+            # Give it one more second to fully start
+            time.sleep(1)
+            break
     
-    # Check if process is still running
-    if process.poll() is not None:
+    if not os.path.exists("admin_password.txt"):
+        process.terminate()
         stdout, stderr = process.communicate()
-        pytest.fail(f"Server failed to start.\nSTDOUT: {stdout}\nSTDERR: {stderr}")
+        pytest.fail(f"Server initialization timed out.\nSTDOUT: {stdout}\nSTDERR: {stderr}")
     
     yield process
     
@@ -55,24 +100,22 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
 
 
 @pytest.fixture(scope="session")
-def admin_credentials() -> dict:
+def admin_credentials(server_process) -> dict:
     """
     Get admin credentials from the generated password file.
+    
+    Args:
+        server_process: The server process fixture (dependency to ensure server is started)
     
     Returns:
         Dictionary with 'username' and 'password' keys
     """
-    # Wait a moment for the password file to be created
+    # The server_process fixture has already started the server and waited
+    # for admin_password.txt to be created, so we can just read it
     password_file = "admin_password.txt"
-    max_retries = 10
-    retry_count = 0
-    
-    while not os.path.exists(password_file) and retry_count < max_retries:
-        time.sleep(1)
-        retry_count += 1
     
     if not os.path.exists(password_file):
-        pytest.fail("Admin password file not found")
+        pytest.fail("Admin password file not found after server started")
     
     with open(password_file, "r", encoding="utf-8") as f:
         password = f.read().strip()
