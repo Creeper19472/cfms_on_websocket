@@ -28,10 +28,10 @@ class TestDirectoryOperations:
         
         if response["code"] == 200:
             # Cleanup if created successfully
-            folder_id = response["data"].get("folder_id")
-            if folder_id:
+            directory_id = response["data"].get("id")
+            if directory_id:
                 try:
-                    authenticated_client.delete_directory(folder_id)
+                    authenticated_client.delete_directory(directory_id)
                 except Exception:
                     pass
     
@@ -48,10 +48,10 @@ class TestDirectoryOperations:
         create_response = authenticated_client.create_directory("Directory to Delete")
         
         if create_response["code"] == 200:
-            folder_id = create_response["data"]["folder_id"]
+            directory_id = create_response["data"]["id"]
             
             # Delete it
-            delete_response = authenticated_client.delete_directory(folder_id)
+            delete_response = authenticated_client.delete_directory(directory_id)
             
             # Should get a response (success or failure is implementation-dependent)
             assert "code" in delete_response
@@ -68,18 +68,18 @@ class TestDirectoryOperations:
         dir_response = authenticated_client.create_directory("Test List Dir")
         
         if dir_response["code"] == 200:
-            folder_id = dir_response["data"]["folder_id"]
+            directory_id = dir_response["data"]["id"]
             
             try:
                 # Create a document in the directory
                 doc_response = authenticated_client.create_document(
                     "Test Doc in Dir",
-                    folder_id=folder_id
+                    folder_id=directory_id
                 )
                 
                 if doc_response["code"] == 200:
                     # List the directory
-                    list_response = authenticated_client.list_directory(folder_id)
+                    list_response = authenticated_client.list_directory(directory_id)
                     
                     assert list_response["code"] == 200
                     assert "data" in list_response
@@ -94,7 +94,7 @@ class TestDirectoryOperations:
             finally:
                 # Cleanup directory
                 try:
-                    authenticated_client.delete_directory(folder_id)
+                    authenticated_client.delete_directory(directory_id)
                 except Exception:
                     pass
 

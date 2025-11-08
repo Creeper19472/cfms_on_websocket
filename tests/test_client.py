@@ -227,8 +227,8 @@ class CFMSTestClient:
             Directory listing
         """
         data = {}
-        if folder_id is not None:
-            data["folder_id"] = folder_id
+        data["folder_id"] = folder_id
+
         return self.send_request("list_directory", data)
     
     def create_directory(self, name: str, parent_id: Optional[str] = None) -> Dict[str, Any]:
@@ -278,7 +278,7 @@ class CFMSTestClient:
         Returns:
             Response with created user information
         """
-        data = {
+        data: dict[str, Any] = {
             "username": username,
             "password": password
         }
@@ -332,7 +332,7 @@ class CFMSTestClient:
         Returns:
             Response with created group information
         """
-        data = {"group_name": group_name}
+        data: dict[str, Any] = {"group_name": group_name}
         if permissions is not None:
             data["permissions"] = permissions
         return self.send_request("create_group", data)
