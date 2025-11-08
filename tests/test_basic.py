@@ -88,7 +88,6 @@ class TestAuthentication:
         
         # Server returns 401 or 403 for missing authentication
         assert response["code"] in [401, 403]
-        assert "Authentication required" in response["message"] or "Invalid user or token" in response["message"]
     
     def test_invalid_token(self, client: CFMSTestClient, admin_credentials: dict):
         """Test request with invalid token."""

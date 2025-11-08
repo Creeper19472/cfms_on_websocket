@@ -54,7 +54,6 @@ def create_file_task(file: File, transfer_mode: int = 0):
         if not file:
             return None
 
-
         now = time.time()
         task = FileTask(
             file_id=file.id,
@@ -363,7 +362,9 @@ class RequestCreateDocumentHandler(RequestHandler):
                     new_document_revision.file, transfer_mode=1
                 )
                 handler.conclude_request(
-                    200, {"task_data": task_data}, "Task successfully created"
+                    200,
+                    {"document_id": new_document.id, "task_data": task_data},
+                    "Task successfully created",
                 )
                 return 0, folder_id, {"title": document_title}, handler.username
             else:
