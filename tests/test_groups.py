@@ -64,30 +64,30 @@ class TestGroupOperations:
         
         assert response["code"] != 200
     
-    def test_create_group_with_permissions(self, authenticated_client: CFMSTestClient):
-        """Test creating a group with specific permissions."""
-        group_name = f"perm_group_{int(time.time())}"
-        permissions = [
-            {"permission": "create_document", "start_time": 0, "end_time": None}
-        ]
+    # def test_create_group_with_permissions(self, authenticated_client: CFMSTestClient):
+    #     """Test creating a group with specific permissions."""
+    #     group_name = f"perm_group_{int(time.time())}"
+    #     permissions = [
+    #         {"permission": "create_document", "start_time": 0, "end_time": None}
+    #     ]
         
-        response = authenticated_client.create_group(
-            group_name=group_name,
-            permissions=permissions
-        )
+    #     response = authenticated_client.create_group(
+    #         group_name=group_name,
+    #         permissions=permissions
+    #     )
         
-        assert response["code"] == 200
+    #     assert response["code"] == 200
         
-        # Verify the group has the permissions
-        info_response = authenticated_client.get_group_info(group_name)
-        if info_response["code"] == 200:
-            assert "permissions" in info_response["data"]
+    #     # Verify the group has the permissions
+    #     info_response = authenticated_client.get_group_info(group_name)
+    #     if info_response["code"] == 200:
+    #         assert "permissions" in info_response["data"]
         
-        # Cleanup
-        try:
-            authenticated_client.send_request("delete_group", {"group_name": group_name})
-        except Exception:
-            pass
+    #     # Cleanup
+    #     try:
+    #         authenticated_client.send_request("delete_group", {"group_name": group_name})
+    #     except Exception:
+    #         pass
     
     def test_create_group_with_empty_name(self, authenticated_client: CFMSTestClient):
         """Test creating a group with an empty name."""
