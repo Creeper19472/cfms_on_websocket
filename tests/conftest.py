@@ -20,15 +20,15 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
     This fixture starts the server in a subprocess and waits for it to be ready.
     After all tests complete, it gracefully shuts down the server.
     """
-    # Ensure config file exists
-    config_file = "config.toml"
-    if not os.path.exists(config_file):
+    # Ensure config file exists in src/ directory (server runs from there)
+    src_config_file = "src/config.toml"
+    if not os.path.exists(src_config_file):
         # Copy sample config if config doesn't exist
         import shutil
-        shutil.copy("config.sample.toml", config_file)
+        shutil.copy("src/config.sample.toml", src_config_file)
     
     # Modify config for testing: disable password expiration
-    with open(config_file, "r") as f:
+    with open(src_config_file, "r") as f:
         config_content = f.read()
     
     # Disable password expiration for tests
@@ -45,20 +45,18 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
         "dualstack_ipv6 = false"
     )
     
-    with open(config_file, "w") as f:
+    with open(src_config_file, "w") as f:
         f.write(config_content)
     
-    # Clean up any previous test artifacts (in both root and src/)
+    # Clean up any previous test artifacts (in src/ where server runs)
     for artifact in ["init", "app.db", "admin_password.txt"]:
-        if os.path.exists(artifact):
-            os.remove(artifact)
         src_artifact = os.path.join("src", artifact)
         if os.path.exists(src_artifact):
             os.remove(src_artifact)
     
-    # Ensure necessary directories exist
-    os.makedirs("content/ssl", exist_ok=True)
-    os.makedirs("content/logs", exist_ok=True)
+    # Ensure necessary directories exist in src/ (where server runs from)
+    os.makedirs("src/content/ssl", exist_ok=True)
+    os.makedirs("src/content/logs", exist_ok=True)
     
     # Start the server (run from src/ directory)
     process = subprocess.Popen(
