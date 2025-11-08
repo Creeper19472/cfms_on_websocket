@@ -167,6 +167,12 @@ def test_document(authenticated_client: CFMSTestClient) -> Generator[dict, None,
     assert response["code"] == 200, f"Failed to create test document: {response}"
     
     document_id = response["data"]["document_id"]
+
+    # upload the file
+    authenticated_client.upload_file_to_server(
+        document_id,
+        "./__init__.py"
+    )
     
     yield {
         "document_id": document_id,

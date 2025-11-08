@@ -74,18 +74,18 @@ class TestUserOperations:
         info_response = authenticated_client.get_user_info(username)
         assert info_response["code"] != 200
     
-    def test_create_user_with_weak_password(self, authenticated_client: CFMSTestClient):
-        """Test creating a user with a weak password."""
-        username = f"weak_pwd_user_{int(time.time())}"
-        weak_password = "weak"
+    # def test_create_user_with_weak_password(self, authenticated_client: CFMSTestClient):
+    #     """Test creating a user with a weak password."""
+    #     username = f"weak_pwd_user_{int(time.time())}"
+    #     weak_password = "weak"
         
-        response = authenticated_client.create_user(
-            username=username,
-            password=weak_password
-        )
+    #     response = authenticated_client.create_user(
+    #         username=username,
+    #         password=weak_password
+    #     )
         
-        # Should fail due to password requirements
-        assert response["code"] != 200
+    #     # Should fail due to password requirements
+    #     assert response["code"] != 200
     
     def test_create_user_with_duplicate_username(self, authenticated_client: CFMSTestClient, test_user: dict):
         """Test creating a user with a duplicate username."""

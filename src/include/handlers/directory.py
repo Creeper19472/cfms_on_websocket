@@ -34,6 +34,8 @@ class RequestListDirectoryHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
 
         # Parse the directory listing request
@@ -41,11 +43,8 @@ class RequestListDirectoryHandler(RequestHandler):
 
         with Session() as session:
             this_user = session.get(User, handler.username)
-            if not this_user or not this_user.is_token_valid(handler.token):
-                handler.conclude_request(
-                    **{"code": 401, "message": "Invalid user or token", "data": {}}
-                )
-                return 401, folder_id
+            assert this_user is not None
+
             if not folder_id:
                 parent = None
                 children = (
@@ -277,6 +276,8 @@ class RequestCreateDirectoryHandler(RequestHandler):
         "required": ["name"],
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
 
         # Parse the directory creation request
@@ -289,11 +290,8 @@ class RequestCreateDirectoryHandler(RequestHandler):
 
         with Session() as session:
             this_user = session.get(User, handler.username)
-            if not this_user or not this_user.is_token_valid(handler.token):
-                handler.conclude_request(
-                    **{"code": 403, "message": "Invalid user or token", "data": {}}
-                )
-                return 401, parent_id, handler.username
+            assert this_user is not None  # require_auth ensures this
+
             if parent_id:
                 parent = session.get(Folder, parent_id)
                 if not parent:

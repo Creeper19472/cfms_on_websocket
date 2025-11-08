@@ -30,14 +30,12 @@ class RequestListUsersHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
         with Session() as session:
             this_user = session.get(User, handler.username)
-            if not this_user or not this_user.is_token_valid(handler.token):
-                handler.conclude_request(
-                    code=403, message="Invalid user or token", data={}
-                )
-                return
+            assert this_user is not None
 
             if "list_users" not in this_user.all_permissions:
                 handler.conclude_request(

@@ -106,7 +106,7 @@ class TestDirectoryWithoutAuth:
         """Test that listing directories requires authentication."""
         response = client.send_request(
             "list_directory",
-            {},
+            {"folder_id": None},
             include_auth=False
         )
         
