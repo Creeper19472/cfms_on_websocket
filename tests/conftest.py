@@ -48,21 +48,25 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
     with open(config_file, "w") as f:
         f.write(config_content)
     
-    # Clean up any previous test artifacts
+    # Clean up any previous test artifacts (in both root and src/)
     for artifact in ["init", "app.db", "admin_password.txt"]:
         if os.path.exists(artifact):
             os.remove(artifact)
+        src_artifact = os.path.join("src", artifact)
+        if os.path.exists(src_artifact):
+            os.remove(src_artifact)
     
     # Ensure necessary directories exist
     os.makedirs("content/ssl", exist_ok=True)
     os.makedirs("content/logs", exist_ok=True)
     
-    # Start the server
+    # Start the server (run from src/ directory)
     process = subprocess.Popen(
         ["python", "main.py"],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True
+        text=True,
+        cwd=os.path.join(os.getcwd(), "src")
     )
     
     # Wait for server to be ready (give it time to initialize)
@@ -77,13 +81,13 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
             stdout, stderr = process.communicate()
             pytest.fail(f"Server failed to start.\nSTDOUT: {stdout}\nSTDERR: {stderr}")
         
-        # Check if initialization is complete
-        if os.path.exists("admin_password.txt"):
+        # Check if initialization is complete (admin_password.txt is in src/)
+        if os.path.exists("src/admin_password.txt"):
             # Give it one more second to fully start
             time.sleep(1)
             break
     
-    if not os.path.exists("admin_password.txt"):
+    if not os.path.exists("src/admin_password.txt"):
         process.terminate()
         stdout, stderr = process.communicate()
         pytest.fail(f"Server initialization timed out.\nSTDOUT: {stdout}\nSTDERR: {stderr}")
@@ -111,8 +115,8 @@ def admin_credentials(server_process) -> dict:
         Dictionary with 'username' and 'password' keys
     """
     # The server_process fixture has already started the server and waited
-    # for admin_password.txt to be created, so we can just read it
-    password_file = "admin_password.txt"
+    # for admin_password.txt to be created in src/, so we can just read it
+    password_file = "src/admin_password.txt"
     
     if not os.path.exists(password_file):
         pytest.fail("Admin password file not found after server started")
