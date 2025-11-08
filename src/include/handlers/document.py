@@ -203,16 +203,15 @@ class RequestGetDocumentHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
         document_id: str = handler.data["document_id"]
 
         with Session() as session:
             user = session.get(User, handler.username)
             document = session.get(Document, document_id)
-
-            if user is None or not user.is_token_valid(handler.token):
-                handler.conclude_request(403, {}, "Invalid user or token")
-                return 401, document_id
+            assert user is not None
 
             if not document:
                 handler.conclude_request(404, {}, "Document not found")
@@ -256,6 +255,8 @@ class RequestCreateDocumentHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
 
         folder_id: str = handler.data.get("folder_id", "")
@@ -267,14 +268,11 @@ class RequestCreateDocumentHandler(RequestHandler):
 
         with Session() as session:
             user = session.get(User, handler.username)
+            assert user is not None
 
             if not document_title:
                 handler.conclude_request(400, {}, "Document title is required")
                 return
-
-            if not user or not user.is_token_valid(handler.token):
-                handler.conclude_request(403, {}, "Invalid user or token")
-                return 401, folder_id
 
             # 由于之后的逻辑可能提前结束，必须在实质性操作发生前鉴权
             if not "create_document" in user.all_permissions:

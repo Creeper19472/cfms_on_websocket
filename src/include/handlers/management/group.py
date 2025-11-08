@@ -20,16 +20,13 @@ __all__ = [
 class RequestListGroupsHandler(RequestHandler):
     data_schema = {"type": "object", "additionalProperties": False}
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
 
         with Session() as session:
             user = session.get(User, handler.username)  # 执行操作的用户
-
-            if not user or not user.is_token_valid(handler.token):
-                handler.conclude_request(
-                    **{"code": 403, "message": "Invalid user or token", "data": {}}
-                )
-                return
+            assert user is not None
 
             if "list_groups" not in user.all_permissions:
                 handler.conclude_request(
@@ -85,16 +82,13 @@ class RequestCreateGroupHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
 
         with Session() as session:
             user = session.get(User, handler.username)
-
-            if not user or not user.is_token_valid(handler.token):
-                handler.conclude_request(
-                    **{"code": 403, "message": "Invalid user or token", "data": {}}
-                )
-                return
+            assert user is not None
 
             # currently handle_create_group() will not judge whether the requesting
             # user is eligible to apply the given permissions for the new group.
@@ -303,16 +297,13 @@ class RequestGetGroupInfoHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
 
         with Session() as session:
             user = session.get(User, handler.username)  # 执行操作的用户
-
-            if not user or not user.is_token_valid(handler.token):
-                handler.conclude_request(
-                    **{"code": 403, "message": "Invalid user or token", "data": {}}
-                )
-                return
+            assert user is not None
 
             if not handler.data["group_name"]:
                 handler.conclude_request(
