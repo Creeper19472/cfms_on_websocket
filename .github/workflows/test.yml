@@ -25,13 +25,13 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install -r src/requirements.txt
         pip install -r requirements-test.txt
     
     - name: Create necessary directories
       run: |
-        mkdir -p content/ssl
-        mkdir -p content/logs
+        mkdir -p src/content/ssl
+        mkdir -p src/content/logs
     
     - name: Run tests with pytest
       run: |
@@ -45,5 +45,5 @@ jobs:
         name: test-results-py${{ matrix.python-version }}
         path: |
           .pytest_cache/
-          content/logs/
+          src/content/logs/
         retention-days: 7
