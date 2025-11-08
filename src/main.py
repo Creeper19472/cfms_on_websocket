@@ -108,7 +108,7 @@ def server_init():
         ],
     )
     with Session() as session:
-        init_file = File(id="init", path="./content/hello")
+        init_file = File(id="init", path="./content/hello", active=True)
         session.add(init_file)
 
         init_document = Document(id="hello", title="Hello World")
