@@ -38,7 +38,7 @@ jobs:
     
     - name: Run tests with pytest
       run: |
-        pytest tests/ -v --tb=short
+        uv run pytest tests/ -v --tb=short
       timeout-minutes: 10
     
     - name: Upload test results
