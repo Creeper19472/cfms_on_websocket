@@ -26,7 +26,7 @@ def calculate_sha256(file_path: str) -> str:
     Returns:
         Hexadecimal SHA256 hash string
     """
-    with open(file_path, "rb", encoding='utf-8') as f:
+    with open(file_path, "rb") as f:
         # Use memory-mapped files to map directly to memory
         mmapped_file = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
         return hashlib.sha256(mmapped_file).hexdigest()
@@ -430,7 +430,7 @@ class CFMSTestClient:
 
             try:
                 chunk_size = int(received_response.split()[1])
-                with open(file_path, "rb", encoding='utf-8') as f:
+                with open(file_path, "rb") as f:
                     while True:
                         chunk = f.read(chunk_size)
                         self.websocket.send(chunk)
