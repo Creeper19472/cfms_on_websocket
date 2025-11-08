@@ -142,7 +142,7 @@ def client(server_process) -> Generator[CFMSTestClient, None, None]:
         try:
             client.connect()
             break
-        except ConnectionRefusedError, TimeoutError:
+        except (ConnectionRefusedError, TimeoutError):
             if _attempt == 4:
                 raise
             continue
