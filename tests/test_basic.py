@@ -86,8 +86,8 @@ class TestAuthentication:
         """Test that protected endpoints require authentication."""
         response = client.send_request("list_users", include_auth=False)
         
-        # Server returns 401 or 403 for missing authentication
-        assert response["code"] in [401, 403]
+        # Server returns 401 for missing authentication
+        assert response["code"] == 401
     
     def test_invalid_token(self, client: CFMSTestClient, admin_credentials: dict):
         """Test request with invalid token."""
@@ -101,4 +101,4 @@ class TestAuthentication:
             token="invalid_token_12345"
         )
         
-        assert response["code"] == 403
+        assert response["code"] == 401
