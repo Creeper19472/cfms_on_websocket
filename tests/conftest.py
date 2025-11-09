@@ -24,7 +24,7 @@ def log_server_output(process: subprocess.Popen, log_dir: str = "test_logs"):
         log_dir: Directory to save log files (default: "test_logs")
     
     Returns:
-        Tuple of (stdout_thread, stderr_thread, stdout_file, stderr_file)
+        Tuple of (stdout_thread, stderr_thread, stdout_file, stderr_file, stop_event)
     """
     # Create log directory if it doesn't exist
     os.makedirs(log_dir, exist_ok=True)
@@ -41,36 +41,47 @@ def log_server_output(process: subprocess.Popen, log_dir: str = "test_logs"):
     print(f"\n[TEST SETUP] Server stdout logging to: {stdout_path}", file=sys.stderr)
     print(f"[TEST SETUP] Server stderr logging to: {stderr_path}", file=sys.stderr)
     
+    # Create a stop event for graceful shutdown
+    stop_event = threading.Event()
+    
     def read_stream(stream, output_file, stream_name):
         try:
-            for line in iter(stream.readline, ''):
-                if line:
+            while not stop_event.is_set():
+                line = stream.readline()
+                if not line:
+                    break
+                try:
                     output_file.write(line)
                     output_file.flush()
-                else:
+                except (ValueError, OSError):
+                    # File was closed, exit gracefully
                     break
         except Exception as e:
-            error_msg = f"Error reading {stream_name}: {e}\n"
-            output_file.write(error_msg)
-            output_file.flush()
-            print(f"[SERVER LOG] {error_msg}", file=sys.stderr)
+            # Only log if file is still open
+            try:
+                error_msg = f"Error reading {stream_name}: {e}\n"
+                output_file.write(error_msg)
+                output_file.flush()
+            except:
+                pass
+            print(f"[SERVER LOG] Error in {stream_name}: {e}", file=sys.stderr)
     
-    # Start threads for both stdout and stderr
+    # Start threads for both stdout and stderr (not daemon to ensure proper cleanup)
     stdout_thread = threading.Thread(
         target=read_stream, 
         args=(process.stdout, stdout_file, "STDOUT"),
-        daemon=True
+        daemon=False
     )
     stderr_thread = threading.Thread(
         target=read_stream,
         args=(process.stderr, stderr_file, "STDERR"),
-        daemon=True
+        daemon=False
     )
     
     stdout_thread.start()
     stderr_thread.start()
     
-    return stdout_thread, stderr_thread, stdout_file, stderr_file
+    return stdout_thread, stderr_thread, stdout_file, stderr_file, stop_event
 
 
 @pytest.fixture(scope="session")
@@ -143,7 +154,7 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
         pytest.fail(f"Failed to start server process: {e}")
     
     # Start logging server output in background threads
-    stdout_thread, stderr_thread, stdout_file, stderr_file = log_server_output(process, "test_logs")
+    stdout_thread, stderr_thread, stdout_file, stderr_file, stop_event = log_server_output(process, "test_logs")
     
     # Wait for server to be ready
     max_wait = 20  # Increased timeout
@@ -157,7 +168,10 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
         
         # Check if process crashed
         if process.poll() is not None:
+            stop_event.set()  # Signal threads to stop
             time.sleep(0.5)  # Give logging threads time to catch up
+            stdout_thread.join(timeout=1)
+            stderr_thread.join(timeout=1)
             stdout_file.close()
             stderr_file.close()
             pytest.fail(
@@ -179,7 +193,10 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
             process.wait(timeout=5)
         except:
             process.kill()
+        stop_event.set()  # Signal threads to stop
         time.sleep(0.5)  # Give logging threads time to catch up
+        stdout_thread.join(timeout=1)
+        stderr_thread.join(timeout=1)
         stdout_file.close()
         stderr_file.close()
         pytest.fail(
@@ -189,7 +206,8 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
     
     print("[TEST SETUP] Server started successfully!", file=sys.stderr)
     
-    # Store log files in process object for cleanup
+    # Store log files and threads in process object for cleanup
+    process._log_threads = (stdout_thread, stderr_thread, stop_event)
     process._log_files = (stdout_file, stderr_file)
     
     yield process
@@ -208,16 +226,22 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
         except:
             pass
     
-    # Give logging threads time to finish
-    time.sleep(0.5)
-    
-    # Close log files
+    # Signal logging threads to stop and wait for them
     try:
+        stdout_thread, stderr_thread, stop_event = process._log_threads
+        stdout_file, stderr_file = process._log_files
+        
+        stop_event.set()  # Signal threads to stop
+        print("[TEST CLEANUP] Waiting for log threads to finish...", file=sys.stderr)
+        stdout_thread.join(timeout=2)
+        stderr_thread.join(timeout=2)
+        
+        # Close log files
         stdout_file.close()
         stderr_file.close()
         print("[TEST CLEANUP] Log files closed.", file=sys.stderr)
     except Exception as e:
-        print(f"[TEST CLEANUP] Error closing log files: {e}", file=sys.stderr)
+        print(f"[TEST CLEANUP] Error during log cleanup: {e}", file=sys.stderr)
     
     print("[TEST CLEANUP] Server cleanup complete.", file=sys.stderr)
 
