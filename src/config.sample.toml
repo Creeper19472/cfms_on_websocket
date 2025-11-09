@@ -2,7 +2,7 @@ debug = false
 
 [server]
 name = "CFMS WebSocket Server"
-host = "127.0.0.1"
+host = "localhost"
 port = 5104
 dualstack_ipv6 = true
 secret_key = ""
