@@ -1,5 +1,5 @@
 """
-Tests for document management operations.
+Tests for document management operations - Rewritten with improved robustness.
 """
 
 import pytest
@@ -7,101 +7,169 @@ from tests.test_client import CFMSTestClient
 
 
 class TestDocumentOperations:
-    """Test document CRUD operations."""
+    """Test document CRUD operations with comprehensive validation."""
     
     def test_create_document(self, authenticated_client: CFMSTestClient):
-        """Test creating a new document."""
-        response = authenticated_client.create_document("Test Document")
+        """Test creating a new document and verify response structure."""
+        try:
+            response = authenticated_client.create_document("Test Document")
+        except Exception as e:
+            pytest.fail(f"create_document() raised an exception: {e}")
         
-        assert response["code"] == 200
-        assert "data" in response
-        assert "document_id" in response["data"]
+        assert isinstance(response, dict), "Response should be a dictionary"
+        assert "code" in response, "Response missing 'code' field"
+        assert response["code"] == 200, \
+            f"Document creation failed: {response.get('message', '')}"
+        
+        assert "data" in response, "Response missing 'data'"
+        assert "document_id" in response["data"], "Response missing 'document_id'"
+        assert isinstance(response["data"]["document_id"], str), "document_id should be a string"
+        assert len(response["data"]["document_id"]) > 0, "document_id should not be empty"
         
         # Cleanup
         document_id = response["data"]["document_id"]
-        authenticated_client.delete_document(document_id)
+        try:
+            authenticated_client.delete_document(document_id)
+        except Exception:
+            pass
     
     def test_get_document(self, authenticated_client: CFMSTestClient, test_document: dict):
-        """Test retrieving a document."""
-        response = authenticated_client.get_document(test_document["document_id"])
+        """Test retrieving a document by ID."""
+        try:
+            response = authenticated_client.get_document(test_document["document_id"])
+        except Exception as e:
+            pytest.fail(f"get_document() raised an exception: {e}")
         
-        assert response["code"] == 200
-        assert "data" in response
+        assert isinstance(response, dict), "Response should be a dictionary"
+        assert "code" in response, "Response missing 'code' field"
+        assert response["code"] == 200, \
+            f"Failed to get document: {response.get('message', '')}"
+        
+        assert "data" in response, "Response missing 'data'"
     
     def test_get_nonexistent_document(self, authenticated_client: CFMSTestClient):
-        """Test retrieving a document that doesn't exist."""
-        response = authenticated_client.get_document("nonexistent_doc_id")
+        """Test retrieving a document that doesn't exist returns appropriate error."""
+        try:
+            response = authenticated_client.get_document("nonexistent_doc_id_xyz_123")
+        except Exception as e:
+            pytest.fail(f"get_document() raised an exception: {e}")
         
-        assert response["code"] != 200
+        assert isinstance(response, dict), "Response should be a dictionary"
+        assert "code" in response, "Response missing 'code' field"
+        assert response["code"] != 200, \
+            "Getting nonexistent document should not return 200"
+        assert response["code"] in [400, 404], \
+            f"Expected 400 or 404 for nonexistent document, got {response.get('code')}"
     
     def test_get_document_info(self, authenticated_client: CFMSTestClient, test_document: dict):
-        """Test getting document information."""
-        response = authenticated_client.get_document_info(test_document["document_id"])
+        """Test getting document metadata."""
+        try:
+            response = authenticated_client.get_document_info(test_document["document_id"])
+        except Exception as e:
+            pytest.fail(f"get_document_info() raised an exception: {e}")
         
-        assert response["code"] == 200
-        assert "data" in response
+        assert isinstance(response, dict), "Response should be a dictionary"
+        assert "code" in response, "Response missing 'code' field"
+        assert response["code"] == 200, \
+            f"Failed to get document info: {response.get('message', '')}"
+        
+        assert "data" in response, "Response missing 'data'"
+        assert isinstance(response["data"], dict), "'data' should be a dictionary"
     
     def test_rename_document(self, authenticated_client: CFMSTestClient, test_document: dict):
-        """Test renaming a document."""
-        new_title = "Renamed Test Document"
-        response = authenticated_client.rename_document(
-            test_document["document_id"],
-            new_title
-        )
+        """Test renaming a document and verifying the change."""
+        new_title = "Renamed Test Document XYZ"
         
-        assert response["code"] == 200
+        try:
+            response = authenticated_client.rename_document(
+                test_document["document_id"],
+                new_title
+            )
+        except Exception as e:
+            pytest.fail(f"rename_document() raised an exception: {e}")
+        
+        assert isinstance(response, dict), "Response should be a dictionary"
+        assert "code" in response, "Response missing 'code' field"
+        assert response["code"] == 200, \
+            f"Failed to rename document: {response.get('message', '')}"
         
         # Verify the rename
-        info_response = authenticated_client.get_document_info(test_document["document_id"])
-        assert info_response["code"] == 200
-        assert info_response["data"]["title"] == new_title
+        try:
+            info_response = authenticated_client.get_document_info(test_document["document_id"])
+        except Exception as e:
+            pytest.fail(f"get_document_info() raised an exception: {e}")
+        
+        assert info_response.get("code") == 200, "Failed to verify document rename"
+        assert info_response["data"]["title"] == new_title, \
+            f"Document title not updated: expected '{new_title}', got '{info_response['data'].get('title')}'"
     
     def test_delete_document(self, authenticated_client: CFMSTestClient):
-        """Test deleting a document."""
-        # Create a document
-        create_response = authenticated_client.create_document("Document to Delete")
-        assert create_response["code"] == 200
+        """Test deleting a document and verify it's removed."""
+        # Create a document to delete
+        try:
+            create_response = authenticated_client.create_document("Document to Delete")
+        except Exception as e:
+            pytest.fail(f"Failed to create document for deletion test: {e}")
+        
+        assert create_response.get("code") == 200, "Failed to create test document"
         document_id = create_response["data"]["document_id"]
         
         # Delete it
-        delete_response = authenticated_client.delete_document(document_id)
-        assert delete_response["code"] == 200
+        try:
+            delete_response = authenticated_client.delete_document(document_id)
+        except Exception as e:
+            pytest.fail(f"delete_document() raised an exception: {e}")
+        
+        assert isinstance(delete_response, dict), "Response should be a dictionary"
+        assert "code" in delete_response, "Response missing 'code'"
+        assert delete_response["code"] == 200, \
+            f"Failed to delete document: {delete_response.get('message', '')}"
         
         # Verify it's gone
-        get_response = authenticated_client.get_document(document_id)
-        assert get_response["code"] != 200
+        try:
+            get_response = authenticated_client.get_document(document_id)
+        except Exception as e:
+            pytest.fail(f"get_document() raised an exception during verification: {e}")
+        
+        assert get_response.get("code") != 200, \
+            "Document should not be retrievable after deletion"
     
     def test_create_document_with_empty_title(self, authenticated_client: CFMSTestClient):
-        """Test creating a document with an empty title."""
-        response = authenticated_client.create_document("")
+        """Test that creating a document with empty title fails validation."""
+        try:
+            response = authenticated_client.create_document("")
+        except Exception as e:
+            pytest.fail(f"create_document() raised an exception: {e}")
         
-        # Should fail validation
-        assert response["code"] == 400
+        assert isinstance(response, dict), "Response should be a dictionary"
+        assert "code" in response, "Response missing 'code'"
+        assert response["code"] == 400, \
+            f"Expected 400 for empty title, got {response.get('code')}"
     
     def test_create_multiple_documents(self, authenticated_client: CFMSTestClient):
-        """Test creating multiple documents."""
+        """Test creating multiple documents successfully."""
         document_ids = []
+        num_documents = 3
         
         try:
-            for i in range(3):
+            for i in range(num_documents):
                 response = authenticated_client.create_document(f"Test Document {i}")
-                assert response["code"] == 200
+                assert response.get("code") == 200, \
+                    f"Failed to create document {i}: {response}"
                 
-                # upload file to activate the document
+                # Upload file to activate the document
                 task_id = response["data"]["task_data"]["task_id"]
-                authenticated_client.upload_file_to_server(
-                    task_id,
-                    "./pyproject.toml"
-                )
-
+                authenticated_client.upload_file_to_server(task_id, "./pyproject.toml")
+                
                 document_ids.append(response["data"]["document_id"])
             
             # Verify all documents exist
             for doc_id in document_ids:
                 response = authenticated_client.get_document_info(doc_id)
-                assert response["code"] == 200
+                assert response.get("code") == 200, \
+                    f"Document {doc_id} not found after creation"
         finally:
-            # Cleanup
+            # Cleanup all documents
             for doc_id in document_ids:
                 try:
                     authenticated_client.delete_document(doc_id)
@@ -110,24 +178,36 @@ class TestDocumentOperations:
 
 
 class TestDocumentWithoutAuth:
-    """Test that document operations require authentication."""
+    """Test that document operations properly require authentication."""
     
     def test_create_document_without_auth(self, client: CFMSTestClient):
         """Test that creating a document requires authentication."""
-        response = client.send_request(
-            "create_document",
-            {"title": "Test"},
-            include_auth=False
-        )
+        try:
+            response = client.send_request(
+                "create_document",
+                {"title": "Test Document"},
+                include_auth=False
+            )
+        except Exception as e:
+            pytest.fail(f"send_request() raised an exception: {e}")
         
-        assert response["code"] == 401
+        assert isinstance(response, dict), "Response should be a dictionary"
+        assert "code" in response, "Response missing 'code'"
+        assert response["code"] == 401, \
+            f"Expected 401 for unauthenticated request, got {response.get('code')}"
     
     def test_get_document_without_auth(self, client: CFMSTestClient):
         """Test that getting a document requires authentication."""
-        response = client.send_request(
-            "get_document",
-            {"document_id": "hello"},
-            include_auth=False
-        )
+        try:
+            response = client.send_request(
+                "get_document",
+                {"document_id": "test_doc_id"},
+                include_auth=False
+            )
+        except Exception as e:
+            pytest.fail(f"send_request() raised an exception: {e}")
         
-        assert response["code"] == 401
+        assert isinstance(response, dict), "Response should be a dictionary"
+        assert "code" in response, "Response missing 'code'"
+        assert response["code"] == 401, \
+            f"Expected 401 for unauthenticated request, got {response.get('code')}"

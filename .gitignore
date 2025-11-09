@@ -51,4 +51,4 @@ src/content/files/
 src/content/logs/*
 
 .idea
-uv.lock
+uv.locktests/*_old.py
