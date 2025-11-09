@@ -258,7 +258,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
                     data=this_handler.data,
                     remote_address=this_handler.remote_address,
                 )
-            return
+                return
 
         try:
             callback: Union[
