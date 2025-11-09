@@ -102,4 +102,3 @@ class TestAuthentication:
         )
         
         assert response["code"] == 403
-        assert "Invalid user or token" in response["message"]

@@ -105,6 +105,7 @@ def server_init():
             {"permission": "block"},
             {"permission": "unblock"},
             {"permission": "super_set_user_avatar"},
+            {"permission": "debugging"},
         ],
     )
     with Session() as session:

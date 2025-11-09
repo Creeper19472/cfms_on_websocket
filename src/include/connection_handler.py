@@ -240,15 +240,25 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
             return
 
         if _request_handler.require_auth:
-            if not this_handler.username or not this_handler.token:
-                this_handler.conclude_request(401, {}, "Authentication required")
-                return
+            auth_error: Optional[str] = None
 
-            with Session() as session:
-                this_user = session.get(User, this_handler.username)
-                if not this_user or not this_user.is_token_valid(this_handler.token):
-                    this_handler.conclude_request(403, {}, "Invalid user or token")
-                    return
+            if not this_handler.username or not this_handler.token:
+                auth_error = "Authentication required"
+            else:
+                with Session() as session:
+                    this_user = session.get(User, this_handler.username)
+                    if not this_user or not this_user.is_token_valid(this_handler.token):
+                        auth_error = "Invalid user or token"
+
+            if auth_error is not None:
+                this_handler.conclude_request(401, {}, auth_error)
+                log_audit(
+                    action,
+                    401,
+                    data=this_handler.data,
+                    remote_address=this_handler.remote_address,
+                )
+            return
 
         try:
             callback: Union[

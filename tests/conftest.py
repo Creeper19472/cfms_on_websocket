@@ -31,6 +31,11 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
     with open(src_config_file, "r", encoding='utf-8') as f:
         config_content = f.read()
     
+    # enable debug mode for tests
+    config_content = config_content.replace(
+        "debug = false",
+        "debug = true"
+    )
     # Disable password expiration for tests
     config_content = config_content.replace(
         "enable_passwd_force_expiration = true",

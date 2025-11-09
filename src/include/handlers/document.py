@@ -389,16 +389,15 @@ class RequestUploadDocumentHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
         document_id = handler.data["document_id"]
 
         with Session() as session:
             document = session.get(Document, document_id)
             this_user = session.get(User, handler.username)
-
-            if not this_user or not this_user.is_token_valid(handler.token):
-                handler.conclude_request(403, {}, "Invalid user or token")
-                return 401, document_id
+            assert this_user is not None
 
             if document:
                 if not document.check_access_requirements(
@@ -452,16 +451,15 @@ class RequestDeleteDocumentHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
         document_id = handler.data["document_id"]
 
         with Session() as session:
             user = session.get(User, handler.username)
             document = session.get(Document, document_id)
-
-            if not user or not user.is_token_valid(handler.token):
-                handler.conclude_request(403, {}, "Invalid user or token")
-                return 401, document_id
+            assert user is not None
 
             if not document:
                 handler.conclude_request(404, {}, "Document not found")
@@ -505,6 +503,8 @@ class RequestRenameDocumentHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
 
         # Parse the directory renaming request
@@ -513,12 +513,9 @@ class RequestRenameDocumentHandler(RequestHandler):
 
         with Session() as session:
             this_user = session.get(User, handler.username)
-            if not this_user or not this_user.is_token_valid(handler.token):
-                handler.conclude_request(
-                    **{"code": 403, "message": "Invalid user or token", "data": {}}
-                )
-                return 401, document_id
             document = session.get(Document, document_id)
+            assert this_user is not None
+
             if not document:
                 handler.conclude_request(
                     **{"code": 404, "message": "Document not found", "data": {}}
