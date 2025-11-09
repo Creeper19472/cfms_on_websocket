@@ -6,8 +6,45 @@ import os
 import pytest
 import subprocess
 import time
+import threading
+import sys
 from typing import Generator
 from tests.test_client import CFMSTestClient
+
+
+def log_server_output(process: subprocess.Popen, prefix: str = "SERVER"):
+    """
+    Continuously read and log server output to console.
+    
+    This function runs in a separate thread to capture the server's
+    stdout and stderr and print them with a prefix for easy identification.
+    """
+    def read_stream(stream, stream_name):
+        try:
+            for line in iter(stream.readline, ''):
+                if line:
+                    print(f"[{prefix} {stream_name}] {line.rstrip()}", file=sys.stderr)
+                else:
+                    break
+        except Exception as e:
+            print(f"[{prefix}] Error reading {stream_name}: {e}", file=sys.stderr)
+    
+    # Start threads for both stdout and stderr
+    stdout_thread = threading.Thread(
+        target=read_stream, 
+        args=(process.stdout, "STDOUT"),
+        daemon=True
+    )
+    stderr_thread = threading.Thread(
+        target=read_stream,
+        args=(process.stderr, "STDERR"),
+        daemon=True
+    )
+    
+    stdout_thread.start()
+    stderr_thread.start()
+    
+    return stdout_thread, stderr_thread
 
 
 @pytest.fixture(scope="session")
@@ -15,7 +52,8 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
     """
     Start the CFMS server for testing and tear it down after tests complete.
     
-    This fixture starts the server in a subprocess with improved error handling.
+    This fixture starts the server in a subprocess with improved error handling
+    and continuous logging of server output.
     """
     # Ensure config file exists
     src_config_file = "src/config.toml"
@@ -65,38 +103,45 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
         os.makedirs(directory, exist_ok=True)
     
     # Start the server
+    print("\n[TEST SETUP] Starting CFMS server...", file=sys.stderr)
     try:
         process = subprocess.Popen(
             ["uv", "run", "python", "main.py"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            bufsize=1,  # Line buffered
             cwd=os.path.join(os.getcwd(), "src")
         )
     except Exception as e:
         pytest.fail(f"Failed to start server process: {e}")
+    
+    # Start logging server output in background threads
+    print("[TEST SETUP] Starting server output logging...", file=sys.stderr)
+    stdout_thread, stderr_thread = log_server_output(process, "SERVER")
     
     # Wait for server to be ready
     max_wait = 20  # Increased timeout
     wait_interval = 0.5
     waited = 0
     
+    print(f"[TEST SETUP] Waiting up to {max_wait} seconds for server to initialize...", file=sys.stderr)
     while waited < max_wait:
         time.sleep(wait_interval)
         waited += wait_interval
         
         # Check if process crashed
         if process.poll() is not None:
-            stdout, stderr = process.communicate()
+            time.sleep(0.5)  # Give logging threads time to catch up
             pytest.fail(
                 f"Server failed to start (exit code: {process.returncode}).\n"
-                f"STDOUT: {stdout}\n"
-                f"STDERR: {stderr}"
+                f"Check the [SERVER STDOUT] and [SERVER STDERR] output above for details."
             )
         
         # Check if initialization is complete
         if os.path.exists("src/admin_password.txt"):
             # Give server additional time to fully start
+            print("[TEST SETUP] Server initialization detected, waiting for full startup...", file=sys.stderr)
             time.sleep(2)
             break
     
@@ -104,28 +149,35 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
     if not os.path.exists("src/admin_password.txt"):
         try:
             process.terminate()
-            stdout, stderr = process.communicate(timeout=5)
+            process.wait(timeout=5)
         except:
             process.kill()
-            stdout, stderr = "", ""
+        time.sleep(0.5)  # Give logging threads time to catch up
         pytest.fail(
             f"Server initialization timed out after {max_wait} seconds.\n"
-            f"STDOUT: {stdout}\n"
-            f"STDERR: {stderr}"
+            f"Check the [SERVER STDOUT] and [SERVER STDERR] output above for details."
         )
     
+    print("[TEST SETUP] Server started successfully!", file=sys.stderr)
     yield process
     
     # Cleanup: terminate the server
+    print("\n[TEST CLEANUP] Shutting down server...", file=sys.stderr)
     try:
         process.terminate()
         process.wait(timeout=5)
+        print("[TEST CLEANUP] Server terminated gracefully.", file=sys.stderr)
     except subprocess.TimeoutExpired:
+        print("[TEST CLEANUP] Server did not terminate gracefully, forcing kill...", file=sys.stderr)
         process.kill()
         try:
             process.wait(timeout=2)
         except:
             pass
+    
+    # Give logging threads time to finish
+    time.sleep(0.5)
+    print("[TEST CLEANUP] Server cleanup complete.", file=sys.stderr)
 
 
 @pytest.fixture(scope="session")
