@@ -230,8 +230,8 @@ def main():
     # Always create tables that do not exist
     Base.metadata.create_all(engine)
 
-    # Determine socket family based on dualstack setting
-    socket_family = socket.AF_INET6 if global_config["server"]["dualstack_ipv6"] else socket.AF_INET
+    # DO NOT MODIFY socket family setting unless you know what you are doing
+    socket_family = socket.AF_INET6
 
     with serve(
         handle_connection,

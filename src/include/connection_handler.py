@@ -65,6 +65,8 @@ from include.handlers.management.system import (
     RequestLockdownHandler,
     RequestViewAuditLogsHandler,
 )
+from include.handlers.debugging.throw import RequestThrowExceptionHandler
+
 from include.constants import CORE_VERSION, PROTOCOL_VERSION
 from include.shared import connected_listeners, lockdown_enabled
 import include.system.messages as smsg
@@ -176,6 +178,10 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "lockdown": RequestLockdownHandler,
         "view_audit_logs": RequestViewAuditLogsHandler,
     }
+
+    # Debugging
+    if global_config["debug"]:
+        available_functions["throw_exception"] = RequestThrowExceptionHandler
 
     # 定义白名单内的请求。这些请求即使在防范禁闭时也对所有用户可用。
     whitelisted_functions = [
