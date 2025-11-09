@@ -59,22 +59,40 @@ class CFMSTestClient:
         
     def connect(self) -> None:
         """
-        Establish a WebSocket connection to the server.
+        Establish a WebSocket connection to the server with retry/backoff logic.
         """
         if self.websocket is not None:
             return
-            
+
         protocol = "wss" if self.use_ssl else "ws"
         uri = f"{protocol}://{self.host}:{self.port}"
-        
+
         if self.use_ssl:
             ssl_context = ssl.create_default_context()
             ssl_context.check_hostname = False
             ssl_context.verify_mode = ssl.CERT_NONE
         else:
             ssl_context = None
-            
-        self.websocket = connect(uri, ssl=ssl_context)
+
+        max_retries = 5
+        delay = 0.5
+        backoff = 2.0
+        last_exc: Optional[BaseException] = None
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                # connect(...) returns a sync context manager / connection object
+                self.websocket = connect(uri, ssl=ssl_context)
+                return
+            except Exception as exc:
+                last_exc = exc
+                if attempt == max_retries:
+                    break
+                time.sleep(delay)
+                delay *= backoff
+
+        # If we reach here, all attempts failed
+        raise RuntimeError(f"Failed to connect to {uri} after {max_retries} attempts") from last_exc
         
     def disconnect(self) -> None:
         """

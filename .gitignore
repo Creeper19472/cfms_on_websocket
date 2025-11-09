@@ -32,6 +32,7 @@ nosetests.xml
 coverage.xml
 *.cover
 .hypothesis/
+test_logs/
 
 # Jupyter Notebook
 .ipynb_checkpoints
@@ -52,3 +53,4 @@ src/content/logs/*
 
 .idea
 uv.lock
+tests/*_old.py
