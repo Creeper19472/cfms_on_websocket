@@ -12,39 +12,65 @@ from typing import Generator
 from tests.test_client import CFMSTestClient
 
 
-def log_server_output(process: subprocess.Popen, prefix: str = "SERVER"):
+def log_server_output(process: subprocess.Popen, log_dir: str = "test_logs"):
     """
-    Continuously read and log server output to console.
+    Continuously read and log server output to individual files.
     
-    This function runs in a separate thread to capture the server's
-    stdout and stderr and print them with a prefix for easy identification.
+    This function runs in separate threads to capture the server's
+    stdout and stderr and save them to individual files for clarity.
+    
+    Args:
+        process: The subprocess.Popen object for the server
+        log_dir: Directory to save log files (default: "test_logs")
+    
+    Returns:
+        Tuple of (stdout_thread, stderr_thread, stdout_file, stderr_file)
     """
-    def read_stream(stream, stream_name):
+    # Create log directory if it doesn't exist
+    os.makedirs(log_dir, exist_ok=True)
+    
+    # Create timestamped log files
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    stdout_path = os.path.join(log_dir, f"server_stdout_{timestamp}.log")
+    stderr_path = os.path.join(log_dir, f"server_stderr_{timestamp}.log")
+    
+    # Open log files
+    stdout_file = open(stdout_path, 'w', encoding='utf-8', buffering=1)
+    stderr_file = open(stderr_path, 'w', encoding='utf-8', buffering=1)
+    
+    print(f"\n[TEST SETUP] Server stdout logging to: {stdout_path}", file=sys.stderr)
+    print(f"[TEST SETUP] Server stderr logging to: {stderr_path}", file=sys.stderr)
+    
+    def read_stream(stream, output_file, stream_name):
         try:
             for line in iter(stream.readline, ''):
                 if line:
-                    print(f"[{prefix} {stream_name}] {line.rstrip()}", file=sys.stderr)
+                    output_file.write(line)
+                    output_file.flush()
                 else:
                     break
         except Exception as e:
-            print(f"[{prefix}] Error reading {stream_name}: {e}", file=sys.stderr)
+            error_msg = f"Error reading {stream_name}: {e}\n"
+            output_file.write(error_msg)
+            output_file.flush()
+            print(f"[SERVER LOG] {error_msg}", file=sys.stderr)
     
     # Start threads for both stdout and stderr
     stdout_thread = threading.Thread(
         target=read_stream, 
-        args=(process.stdout, "STDOUT"),
+        args=(process.stdout, stdout_file, "STDOUT"),
         daemon=True
     )
     stderr_thread = threading.Thread(
         target=read_stream,
-        args=(process.stderr, "STDERR"),
+        args=(process.stderr, stderr_file, "STDERR"),
         daemon=True
     )
     
     stdout_thread.start()
     stderr_thread.start()
     
-    return stdout_thread, stderr_thread
+    return stdout_thread, stderr_thread, stdout_file, stderr_file
 
 
 @pytest.fixture(scope="session")
@@ -117,8 +143,7 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
         pytest.fail(f"Failed to start server process: {e}")
     
     # Start logging server output in background threads
-    print("[TEST SETUP] Starting server output logging...", file=sys.stderr)
-    stdout_thread, stderr_thread = log_server_output(process, "SERVER")
+    stdout_thread, stderr_thread, stdout_file, stderr_file = log_server_output(process, "test_logs")
     
     # Wait for server to be ready
     max_wait = 20  # Increased timeout
@@ -133,9 +158,11 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
         # Check if process crashed
         if process.poll() is not None:
             time.sleep(0.5)  # Give logging threads time to catch up
+            stdout_file.close()
+            stderr_file.close()
             pytest.fail(
                 f"Server failed to start (exit code: {process.returncode}).\n"
-                f"Check the [SERVER STDOUT] and [SERVER STDERR] output above for details."
+                f"Check the server log files in test_logs/ directory for details."
             )
         
         # Check if initialization is complete
@@ -153,12 +180,18 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
         except:
             process.kill()
         time.sleep(0.5)  # Give logging threads time to catch up
+        stdout_file.close()
+        stderr_file.close()
         pytest.fail(
             f"Server initialization timed out after {max_wait} seconds.\n"
-            f"Check the [SERVER STDOUT] and [SERVER STDERR] output above for details."
+            f"Check the server log files in test_logs/ directory for details."
         )
     
     print("[TEST SETUP] Server started successfully!", file=sys.stderr)
+    
+    # Store log files in process object for cleanup
+    process._log_files = (stdout_file, stderr_file)
+    
     yield process
     
     # Cleanup: terminate the server
@@ -177,6 +210,15 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
     
     # Give logging threads time to finish
     time.sleep(0.5)
+    
+    # Close log files
+    try:
+        stdout_file.close()
+        stderr_file.close()
+        print("[TEST CLEANUP] Log files closed.", file=sys.stderr)
+    except Exception as e:
+        print(f"[TEST CLEANUP] Error closing log files: {e}", file=sys.stderr)
+    
     print("[TEST CLEANUP] Server cleanup complete.", file=sys.stderr)
 
 
