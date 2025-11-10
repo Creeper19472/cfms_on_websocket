@@ -11,7 +11,7 @@ import os
 import ssl
 import asyncio
 from typing import Any, Dict, Optional
-from websockets.client import connect, WebSocketClientProtocol
+from websockets.asyncio.client import connect, ClientConnection
 
 
 def calculate_sha256(file_path: str) -> str:
@@ -53,7 +53,7 @@ class CFMSTestClient:
         self.host = host
         self.port = port
         self.use_ssl = use_ssl
-        self.websocket: Optional[WebSocketClientProtocol] = None
+        self.websocket: Optional[ClientConnection] = None
         self.username: Optional[str] = None
         self.token: Optional[str] = None
         
