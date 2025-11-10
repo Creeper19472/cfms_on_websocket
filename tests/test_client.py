@@ -9,9 +9,9 @@ import json
 import mmap
 import os
 import ssl
-import time
+import asyncio
 from typing import Any, Dict, Optional
-from websockets.sync.client import connect, ClientConnection
+from websockets.asyncio.client import connect, ClientConnection
 
 
 def calculate_sha256(file_path: str) -> str:
@@ -57,7 +57,7 @@ class CFMSTestClient:
         self.username: Optional[str] = None
         self.token: Optional[str] = None
         
-    def connect(self) -> None:
+    async def connect(self) -> None:
         """
         Establish a WebSocket connection to the server with retry/backoff logic.
         """
@@ -81,30 +81,30 @@ class CFMSTestClient:
 
         for attempt in range(1, max_retries + 1):
             try:
-                # connect(...) returns a sync context manager / connection object
-                self.websocket = connect(uri, ssl=ssl_context)
+                # connect(...) returns an async connection object
+                self.websocket = await connect(uri, ssl=ssl_context)
                 return
             except Exception as exc:
                 last_exc = exc
                 if attempt == max_retries:
                     break
-                time.sleep(delay)
+                await asyncio.sleep(delay)
                 delay *= backoff
 
         # If we reach here, all attempts failed
         raise RuntimeError(f"Failed to connect to {uri} after {max_retries} attempts") from last_exc
         
-    def disconnect(self) -> None:
+    async def disconnect(self) -> None:
         """
         Close the WebSocket connection.
         """
         if self.websocket is not None:
-            self.websocket.close()
+            await self.websocket.close()
             self.websocket = None
         self.username = None
         self.token = None
     
-    def send_request(
+    async def send_request(
         self,
         action: str,
         data: Optional[Dict[str, Any]] = None,
@@ -137,11 +137,11 @@ class CFMSTestClient:
             request["username"] = username if username is not None else self.username
             request["token"] = token if token is not None else self.token
         
-        self.websocket.send(json.dumps(request, ensure_ascii=False))
-        response_text = self.websocket.recv()
+        await self.websocket.send(json.dumps(request, ensure_ascii=False))
+        response_text = await self.websocket.recv()
         return json.loads(response_text)
     
-    def login(self, username: str, password: str) -> Dict[str, Any]:
+    async def login(self, username: str, password: str) -> Dict[str, Any]:
         """
         Authenticate with the server.
         
@@ -152,7 +152,7 @@ class CFMSTestClient:
         Returns:
             The login response from the server
         """
-        response = self.send_request(
+        response = await self.send_request(
             "login",
             {"username": username, "password": password},
             include_auth=False
@@ -164,30 +164,30 @@ class CFMSTestClient:
         
         return response
     
-    def server_info(self) -> Dict[str, Any]:
+    async def server_info(self) -> Dict[str, Any]:
         """
         Get server information.
         
         Returns:
             Server information including version and protocol version
         """
-        return self.send_request("server_info", include_auth=False)
+        return await self.send_request("server_info", include_auth=False)
     
-    def refresh_token(self) -> Dict[str, Any]:
+    async def refresh_token(self) -> Dict[str, Any]:
         """
         Refresh the authentication token.
         
         Returns:
             Response with new token
         """
-        response = self.send_request("refresh_token")
+        response = await self.send_request("refresh_token")
         
         if response.get("code") == 200:
             self.token = response.get("data", {}).get("token")
         
         return response
     
-    def get_document(self, document_id: str) -> Dict[str, Any]:
+    async def get_document(self, document_id: str) -> Dict[str, Any]:
         """
         Get a document by ID.
         
@@ -197,9 +197,9 @@ class CFMSTestClient:
         Returns:
             The document data
         """
-        return self.send_request("get_document", {"document_id": document_id})
+        return await self.send_request("get_document", {"document_id": document_id})
     
-    def create_document(self, title: str, folder_id: Optional[str] = None) -> Dict[str, Any]:
+    async def create_document(self, title: str, folder_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Create a new document.
         
@@ -213,9 +213,9 @@ class CFMSTestClient:
         data = {"title": title}
         if folder_id is not None:
             data["folder_id"] = folder_id
-        return self.send_request("create_document", data)
+        return await self.send_request("create_document", data)
     
-    def delete_document(self, document_id: str) -> Dict[str, Any]:
+    async def delete_document(self, document_id: str) -> Dict[str, Any]:
         """
         Delete a document.
         
@@ -225,9 +225,9 @@ class CFMSTestClient:
         Returns:
             Response indicating success or failure
         """
-        return self.send_request("delete_document", {"document_id": document_id})
+        return await self.send_request("delete_document", {"document_id": document_id})
     
-    def rename_document(self, document_id: str, new_title: str) -> Dict[str, Any]:
+    async def rename_document(self, document_id: str, new_title: str) -> Dict[str, Any]:
         """
         Rename a document.
         
@@ -238,12 +238,12 @@ class CFMSTestClient:
         Returns:
             Response indicating success or failure
         """
-        return self.send_request("rename_document", {
+        return await self.send_request("rename_document", {
             "document_id": document_id,
             "new_title": new_title
         })
     
-    def get_document_info(self, document_id: str) -> Dict[str, Any]:
+    async def get_document_info(self, document_id: str) -> Dict[str, Any]:
         """
         Get information about a document.
         
@@ -253,9 +253,9 @@ class CFMSTestClient:
         Returns:
             Document information
         """
-        return self.send_request("get_document_info", {"document_id": document_id})
+        return await self.send_request("get_document_info", {"document_id": document_id})
     
-    def list_directory(self, folder_id: Optional[str] = None) -> Dict[str, Any]:
+    async def list_directory(self, folder_id: Optional[str] = None) -> Dict[str, Any]:
         """
         List contents of a directory.
         
@@ -268,9 +268,9 @@ class CFMSTestClient:
         data = {}
         data["folder_id"] = folder_id
 
-        return self.send_request("list_directory", data)
+        return await self.send_request("list_directory", data)
     
-    def create_directory(self, name: str, parent_id: Optional[str] = None) -> Dict[str, Any]:
+    async def create_directory(self, name: str, parent_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Create a new directory.
         
@@ -284,9 +284,9 @@ class CFMSTestClient:
         data = {"name": name}
         if parent_id is not None:
             data["parent_id"] = parent_id
-        return self.send_request("create_directory", data)
+        return await self.send_request("create_directory", data)
     
-    def delete_directory(self, folder_id: str) -> Dict[str, Any]:
+    async def delete_directory(self, folder_id: str) -> Dict[str, Any]:
         """
         Delete a directory.
         
@@ -296,9 +296,9 @@ class CFMSTestClient:
         Returns:
             Response indicating success or failure
         """
-        return self.send_request("delete_directory", {"folder_id": folder_id})
+        return await self.send_request("delete_directory", {"folder_id": folder_id})
     
-    def create_user(
+    async def create_user(
         self,
         username: str,
         password: str,
@@ -325,9 +325,9 @@ class CFMSTestClient:
             data["nickname"] = nickname
         if groups is not None:
             data["groups"] = groups
-        return self.send_request("create_user", data)
+        return await self.send_request("create_user", data)
     
-    def delete_user(self, username: str) -> Dict[str, Any]:
+    async def delete_user(self, username: str) -> Dict[str, Any]:
         """
         Delete a user.
         
@@ -337,9 +337,9 @@ class CFMSTestClient:
         Returns:
             Response indicating success or failure
         """
-        return self.send_request("delete_user", {"username": username})
+        return await self.send_request("delete_user", {"username": username})
     
-    def get_user_info(self, username: str) -> Dict[str, Any]:
+    async def get_user_info(self, username: str) -> Dict[str, Any]:
         """
         Get information about a user.
         
@@ -349,18 +349,18 @@ class CFMSTestClient:
         Returns:
             User information
         """
-        return self.send_request("get_user_info", {"username": username})
+        return await self.send_request("get_user_info", {"username": username})
     
-    def list_users(self) -> Dict[str, Any]:
+    async def list_users(self) -> Dict[str, Any]:
         """
         List all users.
         
         Returns:
             List of users
         """
-        return self.send_request("list_users", {})
+        return await self.send_request("list_users", {})
     
-    def create_group(self, group_name: str, permissions: Optional[list] = None) -> Dict[str, Any]:
+    async def create_group(self, group_name: str, permissions: Optional[list] = None) -> Dict[str, Any]:
         """
         Create a new user group.
         
@@ -374,18 +374,18 @@ class CFMSTestClient:
         data: dict[str, Any] = {"group_name": group_name}
         if permissions is not None:
             data["permissions"] = permissions
-        return self.send_request("create_group", data)
+        return await self.send_request("create_group", data)
     
-    def list_groups(self) -> Dict[str, Any]:
+    async def list_groups(self) -> Dict[str, Any]:
         """
         List all user groups.
         
         Returns:
             List of groups
         """
-        return self.send_request("list_groups", {})
+        return await self.send_request("list_groups", {})
     
-    def get_group_info(self, group_name: str) -> Dict[str, Any]:
+    async def get_group_info(self, group_name: str) -> Dict[str, Any]:
         """
         Get information about a group.
         
@@ -395,9 +395,9 @@ class CFMSTestClient:
         Returns:
             Group information
         """
-        return self.send_request("get_group_info", {"group_name": group_name})
+        return await self.send_request("get_group_info", {"group_name": group_name})
     
-    def upload_file_to_server(
+    async def upload_file_to_server(
         self, task_id: str, file_path: str
     ):
         """
@@ -413,7 +413,7 @@ class CFMSTestClient:
         """
 
         # Receive file metadata from the server
-        response = self.send_request(
+        response = await self.send_request(
             "upload_file",
             {"task_id": task_id},
             include_auth=True
@@ -434,8 +434,8 @@ class CFMSTestClient:
         }
 
         assert self.websocket
-        self.websocket.send(json.dumps(task_info, ensure_ascii=False))
-        received_response = str(self.websocket.recv())
+        await self.websocket.send(json.dumps(task_info, ensure_ascii=False))
+        received_response = str(await self.websocket.recv())
 
         if received_response.startswith("ready"):
             ready = True
@@ -451,13 +451,13 @@ class CFMSTestClient:
                 with open(file_path, "rb") as f:
                     while True:
                         chunk = f.read(chunk_size)
-                        self.websocket.send(chunk)
+                        await self.websocket.send(chunk)
 
                         if not chunk or len(chunk) < chunk_size:
                             break
 
                 # need to wait for server confirmation
-                server_response = json.loads(self.websocket.recv())
+                server_response = json.loads(await self.websocket.recv())
 
             except Exception:
                 raise
@@ -619,11 +619,11 @@ class CFMSTestClient:
     #         await aiofiles.os.remove(file_path)
     #         raise
     
-    def __enter__(self):
-        """Context manager entry."""
-        self.connect()
+    async def __aenter__(self):
+        """Async context manager entry."""
+        await self.connect()
         return self
     
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit."""
-        self.disconnect()
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        await self.disconnect()

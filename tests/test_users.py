@@ -10,10 +10,11 @@ from tests.test_client import CFMSTestClient
 class TestUserOperations:
     """Test user management operations with comprehensive validation."""
     
-    def test_list_users(self, authenticated_client: CFMSTestClient):
+    @pytest.mark.asyncio
+    async def test_list_users(self, authenticated_client: CFMSTestClient):
         """Test listing all users with proper structure validation."""
         try:
-            response = authenticated_client.list_users()
+            response = await authenticated_client.list_users()
         except Exception as e:
             pytest.fail(f"list_users() raised an exception: {e}")
         
@@ -30,13 +31,14 @@ class TestUserOperations:
         usernames = [user.get("username") for user in response["data"]["users"]]
         assert "admin" in usernames, "Admin user should be in users list"
     
-    def test_create_user(self, authenticated_client: CFMSTestClient):
+    @pytest.mark.asyncio
+    async def test_create_user(self, authenticated_client: CFMSTestClient):
         """Test creating a new user with unique username."""
         username = f"test_user_{int(time.time() * 1000)}"
         password = "TestPassword123!"
         
         try:
-            response = authenticated_client.create_user(
+            response = await authenticated_client.create_user(
                 username=username,
                 password=password,
                 nickname="Test User"
@@ -51,14 +53,15 @@ class TestUserOperations:
         
         # Cleanup
         try:
-            authenticated_client.delete_user(username)
+            await authenticated_client.delete_user(username)
         except Exception:
             pass
     
-    def test_get_user_info(self, authenticated_client: CFMSTestClient, test_user: dict):
+    @pytest.mark.asyncio
+    async def test_get_user_info(self, authenticated_client: CFMSTestClient, test_user: dict):
         """Test retrieving user information."""
         try:
-            response = authenticated_client.get_user_info(test_user["username"])
+            response = await authenticated_client.get_user_info(test_user["username"])
         except Exception as e:
             pytest.fail(f"get_user_info() raised an exception: {e}")
         
@@ -71,10 +74,11 @@ class TestUserOperations:
         assert response["data"]["username"] == test_user["username"], \
             f"Username mismatch: expected {test_user['username']}, got {response['data'].get('username')}"
     
-    def test_get_nonexistent_user_info(self, authenticated_client: CFMSTestClient):
+    @pytest.mark.asyncio
+    async def test_get_nonexistent_user_info(self, authenticated_client: CFMSTestClient):
         """Test retrieving info for non-existent user returns error."""
         try:
-            response = authenticated_client.get_user_info("nonexistent_user_xyz_12345")
+            response = await authenticated_client.get_user_info("nonexistent_user_xyz_12345")
         except Exception as e:
             pytest.fail(f"get_user_info() raised an exception: {e}")
         
@@ -85,13 +89,14 @@ class TestUserOperations:
         assert response["code"] in [400, 404], \
             f"Expected 400 or 404 for nonexistent user, got {response.get('code')}"
     
-    def test_delete_user(self, authenticated_client: CFMSTestClient):
+    @pytest.mark.asyncio
+    async def test_delete_user(self, authenticated_client: CFMSTestClient):
         """Test deleting a user and verify removal."""
         # Create a user to delete
         username = f"user_to_delete_{int(time.time() * 1000)}"
         
         try:
-            create_response = authenticated_client.create_user(
+            create_response = await authenticated_client.create_user(
                 username=username,
                 password="TestPassword123!"
             )
@@ -102,7 +107,7 @@ class TestUserOperations:
         
         # Delete it
         try:
-            delete_response = authenticated_client.delete_user(username)
+            delete_response = await authenticated_client.delete_user(username)
         except Exception as e:
             pytest.fail(f"delete_user() raised an exception: {e}")
         
@@ -113,17 +118,18 @@ class TestUserOperations:
         
         # Verify it's gone
         try:
-            info_response = authenticated_client.get_user_info(username)
+            info_response = await authenticated_client.get_user_info(username)
         except Exception as e:
             pytest.fail(f"get_user_info() raised an exception during verification: {e}")
         
         assert info_response.get("code") != 200, \
             "User should not be retrievable after deletion"
     
-    def test_create_user_with_duplicate_username(self, authenticated_client: CFMSTestClient, test_user: dict):
+    @pytest.mark.asyncio
+    async def test_create_user_with_duplicate_username(self, authenticated_client: CFMSTestClient, test_user: dict):
         """Test that creating a user with duplicate username fails."""
         try:
-            response = authenticated_client.create_user(
+            response = await authenticated_client.create_user(
                 username=test_user["username"],
                 password="AnotherPassword123!"
             )
@@ -137,10 +143,11 @@ class TestUserOperations:
         assert response["code"] in [400, 409], \
             f"Expected 400 or 409 for duplicate username, got {response.get('code')}"
     
-    def test_create_user_with_empty_username(self, authenticated_client: CFMSTestClient):
+    @pytest.mark.asyncio
+    async def test_create_user_with_empty_username(self, authenticated_client: CFMSTestClient):
         """Test that creating a user with empty username fails validation."""
         try:
-            response = authenticated_client.create_user(
+            response = await authenticated_client.create_user(
                 username="",
                 password="TestPassword123!"
             )
@@ -152,10 +159,11 @@ class TestUserOperations:
         assert response["code"] == 400, \
             f"Expected 400 for empty username, got {response.get('code')}"
     
-    def test_get_admin_user_info(self, authenticated_client: CFMSTestClient):
+    @pytest.mark.asyncio
+    async def test_get_admin_user_info(self, authenticated_client: CFMSTestClient):
         """Test retrieving admin user information."""
         try:
-            response = authenticated_client.get_user_info("admin")
+            response = await authenticated_client.get_user_info("admin")
         except Exception as e:
             pytest.fail(f"get_user_info() raised an exception: {e}")
         
@@ -172,10 +180,11 @@ class TestUserOperations:
 class TestUserWithoutAuth:
     """Test that user operations properly require authentication."""
     
-    def test_list_users_without_auth(self, client: CFMSTestClient):
+    @pytest.mark.asyncio
+    async def test_list_users_without_auth(self, client: CFMSTestClient):
         """Test that listing users requires authentication."""
         try:
-            response = client.send_request(
+            response = await client.send_request(
                 "list_users",
                 {},
                 include_auth=False
@@ -188,10 +197,11 @@ class TestUserWithoutAuth:
         assert response["code"] == 401, \
             f"Expected 401 for unauthenticated request, got {response.get('code')}"
     
-    def test_create_user_without_auth(self, client: CFMSTestClient):
+    @pytest.mark.asyncio
+    async def test_create_user_without_auth(self, client: CFMSTestClient):
         """Test that creating a user requires authentication."""
         try:
-            response = client.send_request(
+            response = await client.send_request(
                 "create_user",
                 {
                     "username": "testuser",
@@ -207,10 +217,11 @@ class TestUserWithoutAuth:
         assert response["code"] == 401, \
             f"Expected 401 for unauthenticated request, got {response.get('code')}"
     
-    def test_get_user_info_without_auth(self, client: CFMSTestClient):
+    @pytest.mark.asyncio
+    async def test_get_user_info_without_auth(self, client: CFMSTestClient):
         """Test that getting user info requires authentication."""
         try:
-            response = client.send_request(
+            response = await client.send_request(
                 "get_user_info",
                 {"username": "admin"},
                 include_auth=False

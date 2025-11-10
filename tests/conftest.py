@@ -4,11 +4,13 @@ Pytest configuration and fixtures for CFMS test suite - Rewritten for robustness
 
 import os
 import pytest
+import pytest_asyncio
 import subprocess
 import time
 import threading
 import sys
-from typing import Generator
+import asyncio
+from typing import Generator, AsyncGenerator
 from tests.test_client import CFMSTestClient
 
 
@@ -271,8 +273,8 @@ def admin_credentials(server_process) -> dict:
     }
 
 
-@pytest.fixture
-def client(server_process) -> Generator[CFMSTestClient, None, None]:
+@pytest_asyncio.fixture
+async def client(server_process) -> AsyncGenerator[CFMSTestClient, None]:
     """
     Provide a connected test client for each test.
     """
@@ -282,29 +284,29 @@ def client(server_process) -> Generator[CFMSTestClient, None, None]:
     max_attempts = 5
     for attempt in range(max_attempts):
         try:
-            test_client.connect()
+            await test_client.connect()
             break
         except (ConnectionRefusedError, TimeoutError, OSError) as e:
             if attempt == max_attempts - 1:
                 pytest.fail(f"Failed to connect to server after {max_attempts} attempts: {e}")
-            time.sleep(1)
+            await asyncio.sleep(1)
     
     yield test_client
     
     # Cleanup
     try:
-        test_client.disconnect()
+        await test_client.disconnect()
     except:
         pass
 
 
-@pytest.fixture
-def authenticated_client(client: CFMSTestClient, admin_credentials: dict) -> CFMSTestClient:
+@pytest_asyncio.fixture
+async def authenticated_client(client: CFMSTestClient, admin_credentials: dict) -> CFMSTestClient:
     """
     Provide an authenticated test client with admin credentials.
     """
     try:
-        response = client.login(
+        response = await client.login(
             admin_credentials["username"],
             admin_credentials["password"]
         )
@@ -317,13 +319,13 @@ def authenticated_client(client: CFMSTestClient, admin_credentials: dict) -> CFM
     return client
 
 
-@pytest.fixture
-def test_document(authenticated_client: CFMSTestClient) -> Generator[dict, None, None]:
+@pytest_asyncio.fixture
+async def test_document(authenticated_client: CFMSTestClient) -> AsyncGenerator[dict, None]:
     """
     Create a test document and clean it up after the test.
     """
     try:
-        response = authenticated_client.create_document("Test Document")
+        response = await authenticated_client.create_document("Test Document")
     except Exception as e:
         pytest.fail(f"Failed to create test document: {e}")
     
@@ -335,11 +337,11 @@ def test_document(authenticated_client: CFMSTestClient) -> Generator[dict, None,
     
     # Upload file to activate the document
     try:
-        authenticated_client.upload_file_to_server(task_id, "./pyproject.toml")
+        await authenticated_client.upload_file_to_server(task_id, "./pyproject.toml")
     except Exception as e:
         # Try to cleanup before failing
         try:
-            authenticated_client.delete_document(document_id)
+            await authenticated_client.delete_document(document_id)
         except:
             pass
         pytest.fail(f"Failed to upload file to document: {e}")
@@ -351,13 +353,13 @@ def test_document(authenticated_client: CFMSTestClient) -> Generator[dict, None,
     
     # Cleanup
     try:
-        authenticated_client.delete_document(document_id)
+        await authenticated_client.delete_document(document_id)
     except Exception:
         pass  # Ignore cleanup errors
 
 
-@pytest.fixture
-def test_user(authenticated_client: CFMSTestClient) -> Generator[dict, None, None]:
+@pytest_asyncio.fixture
+async def test_user(authenticated_client: CFMSTestClient) -> AsyncGenerator[dict, None]:
     """
     Create a test user and clean it up after the test.
     """
@@ -365,7 +367,7 @@ def test_user(authenticated_client: CFMSTestClient) -> Generator[dict, None, Non
     password = "TestPassword123!"
     
     try:
-        response = authenticated_client.create_user(
+        response = await authenticated_client.create_user(
             username=username,
             password=password,
             nickname="Test User"
@@ -384,20 +386,20 @@ def test_user(authenticated_client: CFMSTestClient) -> Generator[dict, None, Non
     
     # Cleanup
     try:
-        authenticated_client.delete_user(username)
+        await authenticated_client.delete_user(username)
     except Exception:
         pass
 
 
-@pytest.fixture
-def test_group(authenticated_client: CFMSTestClient) -> Generator[dict, None, None]:
+@pytest_asyncio.fixture
+async def test_group(authenticated_client: CFMSTestClient) -> AsyncGenerator[dict, None]:
     """
     Create a test group and clean it up after the test.
     """
     group_name = f"test_group_{int(time.time() * 1000)}"
     
     try:
-        response = authenticated_client.create_group(
+        response = await authenticated_client.create_group(
             group_name=group_name,
             permissions=[]
         )
@@ -413,6 +415,6 @@ def test_group(authenticated_client: CFMSTestClient) -> Generator[dict, None, No
     
     # Cleanup
     try:
-        authenticated_client.send_request("delete_group", {"group_name": group_name})
+        await authenticated_client.send_request("delete_group", {"group_name": group_name})
     except Exception:
         pass
