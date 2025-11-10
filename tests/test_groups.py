@@ -10,6 +10,7 @@ from tests.test_client import CFMSTestClient
 class TestGroupOperations:
     """Test group management operations with comprehensive validation."""
     
+    @pytest.mark.asyncio
     async def test_list_groups(self, authenticated_client: CFMSTestClient):
         """Test listing all groups with proper structure validation."""
         try:
@@ -31,6 +32,7 @@ class TestGroupOperations:
         assert "sysop" in group_names, "Default 'sysop' group should exist"
         assert "user" in group_names, "Default 'user' group should exist"
     
+    @pytest.mark.asyncio
     async def test_create_group(self, authenticated_client: CFMSTestClient):
         """Test creating a new group with unique name."""
         group_name = f"test_group_{int(time.time() * 1000)}"
@@ -54,6 +56,7 @@ class TestGroupOperations:
         except Exception:
             pass
     
+    @pytest.mark.asyncio
     async def test_get_group_info(self, authenticated_client: CFMSTestClient, test_group: dict):
         """Test retrieving group information."""
         try:
@@ -70,6 +73,7 @@ class TestGroupOperations:
         assert response["data"]["name"] == test_group["group_name"], \
             f"Group name mismatch: expected {test_group['group_name']}, got {response['data'].get('name')}"
     
+    @pytest.mark.asyncio
     async def test_get_sysop_group_info(self, authenticated_client: CFMSTestClient):
         """Test retrieving information for the default sysop group."""
         try:
@@ -87,6 +91,7 @@ class TestGroupOperations:
             f"Expected group name 'sysop', got '{response['data'].get('name')}'"
         assert "permissions" in response["data"], "Group info should include permissions"
     
+    @pytest.mark.asyncio
     async def test_get_nonexistent_group_info(self, authenticated_client: CFMSTestClient):
         """Test retrieving info for non-existent group returns error."""
         try:
@@ -101,6 +106,7 @@ class TestGroupOperations:
         assert response["code"] in [400, 404], \
             f"Expected 400 or 404 for nonexistent group, got {response.get('code')}"
     
+    @pytest.mark.asyncio
     async def test_create_group_with_empty_name(self, authenticated_client: CFMSTestClient):
         """Test that creating a group with empty name fails validation."""
         try:
@@ -113,6 +119,7 @@ class TestGroupOperations:
         assert response["code"] == 400, \
             f"Expected 400 for empty group name, got {response.get('code')}"
     
+    @pytest.mark.asyncio
     async def test_create_duplicate_group(self, authenticated_client: CFMSTestClient, test_group: dict):
         """Test that creating a group with duplicate name fails."""
         try:
@@ -127,6 +134,7 @@ class TestGroupOperations:
         assert response["code"] in [400, 409], \
             f"Expected 400 or 409 for duplicate group name, got {response.get('code')}"
     
+    @pytest.mark.asyncio
     async def test_delete_group(self, authenticated_client: CFMSTestClient):
         """Test deleting a group and verify removal."""
         # Create a group to delete
@@ -166,6 +174,7 @@ class TestGroupOperations:
 class TestGroupWithoutAuth:
     """Test that group operations properly require authentication."""
     
+    @pytest.mark.asyncio
     async def test_list_groups_without_auth(self, client: CFMSTestClient):
         """Test that listing groups requires authentication."""
         try:
@@ -182,6 +191,7 @@ class TestGroupWithoutAuth:
         assert response["code"] == 401, \
             f"Expected 401 for unauthenticated request, got {response.get('code')}"
     
+    @pytest.mark.asyncio
     async def test_create_group_without_auth(self, client: CFMSTestClient):
         """Test that creating a group requires authentication."""
         try:
@@ -198,6 +208,7 @@ class TestGroupWithoutAuth:
         assert response["code"] == 401, \
             f"Expected 401 for unauthenticated request, got {response.get('code')}"
     
+    @pytest.mark.asyncio
     async def test_get_group_info_without_auth(self, client: CFMSTestClient):
         """Test that getting group info requires authentication."""
         try:

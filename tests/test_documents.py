@@ -9,6 +9,7 @@ from tests.test_client import CFMSTestClient
 class TestDocumentOperations:
     """Test document CRUD operations with comprehensive validation."""
     
+    @pytest.mark.asyncio
     async def test_create_document(self, authenticated_client: CFMSTestClient):
         """Test creating a new document and verify response structure."""
         try:
@@ -33,6 +34,7 @@ class TestDocumentOperations:
         except Exception:
             pass
     
+    @pytest.mark.asyncio
     async def test_get_document(self, authenticated_client: CFMSTestClient, test_document: dict):
         """Test retrieving a document by ID."""
         try:
@@ -47,6 +49,7 @@ class TestDocumentOperations:
         
         assert "data" in response, "Response missing 'data'"
     
+    @pytest.mark.asyncio
     async def test_get_nonexistent_document(self, authenticated_client: CFMSTestClient):
         """Test retrieving a document that doesn't exist returns appropriate error."""
         try:
@@ -61,6 +64,7 @@ class TestDocumentOperations:
         assert response["code"] in [400, 404], \
             f"Expected 400 or 404 for nonexistent document, got {response.get('code')}"
     
+    @pytest.mark.asyncio
     async def test_get_document_info(self, authenticated_client: CFMSTestClient, test_document: dict):
         """Test getting document metadata."""
         try:
@@ -76,6 +80,7 @@ class TestDocumentOperations:
         assert "data" in response, "Response missing 'data'"
         assert isinstance(response["data"], dict), "'data' should be a dictionary"
     
+    @pytest.mark.asyncio
     async def test_rename_document(self, authenticated_client: CFMSTestClient, test_document: dict):
         """Test renaming a document and verifying the change."""
         new_title = "Renamed Test Document XYZ"
@@ -103,6 +108,7 @@ class TestDocumentOperations:
         assert info_response["data"]["title"] == new_title, \
             f"Document title not updated: expected '{new_title}', got '{info_response['data'].get('title')}'"
     
+    @pytest.mark.asyncio
     async def test_delete_document(self, authenticated_client: CFMSTestClient):
         """Test deleting a document and verify it's removed."""
         # Create a document to delete
@@ -134,6 +140,7 @@ class TestDocumentOperations:
         assert get_response.get("code") != 200, \
             "Document should not be retrievable after deletion"
     
+    @pytest.mark.asyncio
     async def test_create_document_with_empty_title(self, authenticated_client: CFMSTestClient):
         """Test that creating a document with empty title fails validation."""
         try:
@@ -146,6 +153,7 @@ class TestDocumentOperations:
         assert response["code"] == 400, \
             f"Expected 400 for empty title, got {response.get('code')}"
     
+    @pytest.mark.asyncio
     async def test_create_multiple_documents(self, authenticated_client: CFMSTestClient):
         """Test creating multiple documents successfully."""
         document_ids = []
@@ -180,6 +188,7 @@ class TestDocumentOperations:
 class TestDocumentWithoutAuth:
     """Test that document operations properly require authentication."""
     
+    @pytest.mark.asyncio
     async def test_create_document_without_auth(self, client: CFMSTestClient):
         """Test that creating a document requires authentication."""
         try:
@@ -196,6 +205,7 @@ class TestDocumentWithoutAuth:
         assert response["code"] == 401, \
             f"Expected 401 for unauthenticated request, got {response.get('code')}"
     
+    @pytest.mark.asyncio
     async def test_get_document_without_auth(self, client: CFMSTestClient):
         """Test that getting a document requires authentication."""
         try:

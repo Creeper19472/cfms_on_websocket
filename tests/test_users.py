@@ -10,6 +10,7 @@ from tests.test_client import CFMSTestClient
 class TestUserOperations:
     """Test user management operations with comprehensive validation."""
     
+    @pytest.mark.asyncio
     async def test_list_users(self, authenticated_client: CFMSTestClient):
         """Test listing all users with proper structure validation."""
         try:
@@ -30,6 +31,7 @@ class TestUserOperations:
         usernames = [user.get("username") for user in response["data"]["users"]]
         assert "admin" in usernames, "Admin user should be in users list"
     
+    @pytest.mark.asyncio
     async def test_create_user(self, authenticated_client: CFMSTestClient):
         """Test creating a new user with unique username."""
         username = f"test_user_{int(time.time() * 1000)}"
@@ -55,6 +57,7 @@ class TestUserOperations:
         except Exception:
             pass
     
+    @pytest.mark.asyncio
     async def test_get_user_info(self, authenticated_client: CFMSTestClient, test_user: dict):
         """Test retrieving user information."""
         try:
@@ -71,6 +74,7 @@ class TestUserOperations:
         assert response["data"]["username"] == test_user["username"], \
             f"Username mismatch: expected {test_user['username']}, got {response['data'].get('username')}"
     
+    @pytest.mark.asyncio
     async def test_get_nonexistent_user_info(self, authenticated_client: CFMSTestClient):
         """Test retrieving info for non-existent user returns error."""
         try:
@@ -85,6 +89,7 @@ class TestUserOperations:
         assert response["code"] in [400, 404], \
             f"Expected 400 or 404 for nonexistent user, got {response.get('code')}"
     
+    @pytest.mark.asyncio
     async def test_delete_user(self, authenticated_client: CFMSTestClient):
         """Test deleting a user and verify removal."""
         # Create a user to delete
@@ -120,6 +125,7 @@ class TestUserOperations:
         assert info_response.get("code") != 200, \
             "User should not be retrievable after deletion"
     
+    @pytest.mark.asyncio
     async def test_create_user_with_duplicate_username(self, authenticated_client: CFMSTestClient, test_user: dict):
         """Test that creating a user with duplicate username fails."""
         try:
@@ -137,6 +143,7 @@ class TestUserOperations:
         assert response["code"] in [400, 409], \
             f"Expected 400 or 409 for duplicate username, got {response.get('code')}"
     
+    @pytest.mark.asyncio
     async def test_create_user_with_empty_username(self, authenticated_client: CFMSTestClient):
         """Test that creating a user with empty username fails validation."""
         try:
@@ -152,6 +159,7 @@ class TestUserOperations:
         assert response["code"] == 400, \
             f"Expected 400 for empty username, got {response.get('code')}"
     
+    @pytest.mark.asyncio
     async def test_get_admin_user_info(self, authenticated_client: CFMSTestClient):
         """Test retrieving admin user information."""
         try:
@@ -172,6 +180,7 @@ class TestUserOperations:
 class TestUserWithoutAuth:
     """Test that user operations properly require authentication."""
     
+    @pytest.mark.asyncio
     async def test_list_users_without_auth(self, client: CFMSTestClient):
         """Test that listing users requires authentication."""
         try:
@@ -188,6 +197,7 @@ class TestUserWithoutAuth:
         assert response["code"] == 401, \
             f"Expected 401 for unauthenticated request, got {response.get('code')}"
     
+    @pytest.mark.asyncio
     async def test_create_user_without_auth(self, client: CFMSTestClient):
         """Test that creating a user requires authentication."""
         try:
@@ -207,6 +217,7 @@ class TestUserWithoutAuth:
         assert response["code"] == 401, \
             f"Expected 401 for unauthenticated request, got {response.get('code')}"
     
+    @pytest.mark.asyncio
     async def test_get_user_info_without_auth(self, client: CFMSTestClient):
         """Test that getting user info requires authentication."""
         try:

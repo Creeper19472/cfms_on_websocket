@@ -9,11 +9,13 @@ from tests.test_client import CFMSTestClient
 class TestServerBasics:
     """Test basic server functionality with improved assertions."""
     
+    @pytest.mark.asyncio
     async def test_server_connection(self, client: CFMSTestClient):
         """Test that we can establish and maintain a WebSocket connection."""
         assert client.websocket is not None, "WebSocket connection was not established"
         assert hasattr(client.websocket, 'id'), "WebSocket missing id attribute"
     
+    @pytest.mark.asyncio
     async def test_server_info(self, client: CFMSTestClient):
         """Test getting server information without authentication."""
         try:
@@ -34,6 +36,7 @@ class TestServerBasics:
             assert field in response["data"], \
                 f"Server info missing required field '{field}'"
     
+    @pytest.mark.asyncio
     async def test_unknown_action(self, client: CFMSTestClient):
         """Test that server properly rejects unknown action types."""
         try:
@@ -55,6 +58,7 @@ class TestServerBasics:
 class TestAuthentication:
     """Test authentication functionality with comprehensive scenarios."""
     
+    @pytest.mark.asyncio
     async def test_login_success(self, client: CFMSTestClient, admin_credentials: dict):
         """Test successful login with valid admin credentials."""
         try:
@@ -80,6 +84,7 @@ class TestAuthentication:
         assert client.username == admin_credentials["username"], \
             f"Client username mismatch: expected {admin_credentials['username']}, got {client.username}"
     
+    @pytest.mark.asyncio
     async def test_login_invalid_credentials(self, client: CFMSTestClient):
         """Test login fails with invalid credentials."""
         try:
@@ -97,6 +102,7 @@ class TestAuthentication:
         assert any(keyword in message for keyword in ["invalid", "credentials", "authentication"]), \
             f"Error message doesn't indicate auth failure: {response['message']}"
     
+    @pytest.mark.asyncio
     async def test_login_missing_username(self, client: CFMSTestClient):
         """Test login fails when username is missing."""
         try:
@@ -113,6 +119,7 @@ class TestAuthentication:
         assert response["code"] == 400, \
             f"Expected 400 for missing username, got {response.get('code')}"
     
+    @pytest.mark.asyncio
     async def test_login_missing_password(self, client: CFMSTestClient):
         """Test login fails when password is missing."""
         try:
@@ -129,6 +136,7 @@ class TestAuthentication:
         assert response["code"] == 400, \
             f"Expected 400 for missing password, got {response.get('code')}"
     
+    @pytest.mark.asyncio
     async def test_refresh_token(self, authenticated_client: CFMSTestClient):
         """Test token refresh functionality."""
         old_token = authenticated_client.token
@@ -151,6 +159,7 @@ class TestAuthentication:
         assert new_token is not None, "Token should still be set after refresh"
         assert new_token != old_token, "Token should change after refresh"
     
+    @pytest.mark.asyncio
     async def test_authentication_required(self, client: CFMSTestClient):
         """Test that protected endpoints require authentication."""
         try:
@@ -163,6 +172,7 @@ class TestAuthentication:
         assert response["code"] == 401, \
             f"Expected 401 for unauthenticated request, got {response.get('code')}"
     
+    @pytest.mark.asyncio
     async def test_invalid_token(self, client: CFMSTestClient, admin_credentials: dict):
         """Test request with an invalid authentication token."""
         # Login first to set up proper session structure

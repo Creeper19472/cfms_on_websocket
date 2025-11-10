@@ -9,6 +9,7 @@ from tests.test_client import CFMSTestClient
 class TestDirectoryOperations:
     """Test directory operations."""
     
+    @pytest.mark.asyncio
     async def test_list_directory_root(self, authenticated_client: CFMSTestClient):
         """Test listing the root directory."""
         response = await authenticated_client.list_directory()
@@ -16,6 +17,7 @@ class TestDirectoryOperations:
         assert response["code"] == 200
         assert "data" in response
     
+    @pytest.mark.asyncio
     async def test_create_directory(self, authenticated_client: CFMSTestClient):
         """Test creating a new directory."""
         dir_name = "Test Directory"
@@ -35,6 +37,7 @@ class TestDirectoryOperations:
                 except Exception:
                     pass
     
+    @pytest.mark.asyncio
     async def test_create_directory_with_empty_name(self, authenticated_client: CFMSTestClient):
         """Test creating a directory with an empty name."""
         response = await authenticated_client.create_directory("")
@@ -42,6 +45,7 @@ class TestDirectoryOperations:
         # Should fail validation
         assert response["code"] == 400
     
+    @pytest.mark.asyncio
     async def test_delete_directory(self, authenticated_client: CFMSTestClient):
         """Test deleting a directory."""
         # First create a directory
@@ -56,12 +60,14 @@ class TestDirectoryOperations:
             # Should get a response (success or failure is implementation-dependent)
             assert "code" in delete_response
     
+    @pytest.mark.asyncio
     async def test_delete_nonexistent_directory(self, authenticated_client: CFMSTestClient):
         """Test deleting a directory that doesn't exist."""
         response = await authenticated_client.delete_directory("nonexistent_folder_id")
         
         assert response["code"] != 200
     
+    @pytest.mark.asyncio
     async def test_list_directory_contents(self, authenticated_client: CFMSTestClient):
         """Test listing directory contents after creating items."""
         # Create a test directory
@@ -102,6 +108,7 @@ class TestDirectoryOperations:
 class TestDirectoryWithoutAuth:
     """Test that directory operations require authentication."""
     
+    @pytest.mark.asyncio
     async def test_list_directory_without_auth(self, client: CFMSTestClient):
         """Test that listing directories requires authentication."""
         response = await client.send_request(
@@ -112,6 +119,7 @@ class TestDirectoryWithoutAuth:
         
         assert response["code"] == 401
     
+    @pytest.mark.asyncio
     async def test_create_directory_without_auth(self, client: CFMSTestClient):
         """Test that creating a directory requires authentication."""
         response = await client.send_request(

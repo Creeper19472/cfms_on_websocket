@@ -4,6 +4,7 @@ Pytest configuration and fixtures for CFMS test suite - Rewritten for robustness
 
 import os
 import pytest
+import pytest_asyncio
 import subprocess
 import time
 import threading
@@ -272,7 +273,7 @@ def admin_credentials(server_process) -> dict:
     }
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def client(server_process) -> AsyncGenerator[CFMSTestClient, None]:
     """
     Provide a connected test client for each test.
@@ -299,7 +300,7 @@ async def client(server_process) -> AsyncGenerator[CFMSTestClient, None]:
         pass
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def authenticated_client(client: CFMSTestClient, admin_credentials: dict) -> CFMSTestClient:
     """
     Provide an authenticated test client with admin credentials.
@@ -318,7 +319,7 @@ async def authenticated_client(client: CFMSTestClient, admin_credentials: dict) 
     return client
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_document(authenticated_client: CFMSTestClient) -> AsyncGenerator[dict, None]:
     """
     Create a test document and clean it up after the test.
@@ -357,7 +358,7 @@ async def test_document(authenticated_client: CFMSTestClient) -> AsyncGenerator[
         pass  # Ignore cleanup errors
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_user(authenticated_client: CFMSTestClient) -> AsyncGenerator[dict, None]:
     """
     Create a test user and clean it up after the test.
@@ -390,7 +391,7 @@ async def test_user(authenticated_client: CFMSTestClient) -> AsyncGenerator[dict
         pass
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_group(authenticated_client: CFMSTestClient) -> AsyncGenerator[dict, None]:
     """
     Create a test group and clean it up after the test.
