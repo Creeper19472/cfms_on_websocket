@@ -49,4 +49,5 @@ jobs:
         path: |
           .pytest_cache/
           src/content/logs/
+          test_logs/
         retention-days: 7
