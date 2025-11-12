@@ -754,6 +754,8 @@ class RequestSetPasswdHandler(RequestHandler):
             "username": {"type": "string", "minLength": 1},
             "old_passwd": {"anyOf": [{"type": "string"}, {"type": "null"}]},
             "new_passwd": {"type": "string", "minLength": 1},
+            "force_update_after_login": {"type": "boolean"},
+            "bypass_passwd_requirements": {"type": "boolean"},
         },
         "required": ["username", "new_passwd"],
         "additionalProperties": False,
@@ -767,6 +769,13 @@ class RequestSetPasswdHandler(RequestHandler):
             target_username = handler.data.get("username", None)
             old_passwd = handler.data.get("old_passwd", None)
             new_passwd: str = handler.data["new_passwd"]
+            # sysop feature.
+            bypass_passwd_requirements: bool = handler.data.get(
+                "bypass_passwd_requirements", False
+            )
+            force_update_after_login: bool = handler.data.get(
+                "force_update_after_login", False
+            )
 
             user = session.get(User, target_username)
             if not user:
@@ -801,6 +810,23 @@ class RequestSetPasswdHandler(RequestHandler):
                 operator_user = None
 
             if old_passwd:  # 如果指定了旧密码，说明是用户更改自己的密码
+
+                # Disallow these elevated flags when a user is changing their own password
+                _flags_set = []
+                if bypass_passwd_requirements:
+                    _flags_set.append("bypass_passwd_requirements")
+                if force_update_after_login:
+                    _flags_set.append("force_update_after_login")
+
+                if _flags_set:
+                    handler.conclude_request(
+                        400,
+                        message="The following options cannot be set to True when changing your own password: "
+                        + ", ".join(_flags_set),
+                        data={flag: True for flag in _flags_set},
+                    )
+                    return
+
                 if not user.authenticate_and_create_token(old_passwd):
                     handler.conclude_request(
                         **{
@@ -810,6 +836,7 @@ class RequestSetPasswdHandler(RequestHandler):
                         }
                     )
                     return
+
                 if not ({"set_passwd", "super_set_passwd"} & user.all_permissions):
                     handler.conclude_request(
                         **{
@@ -819,6 +846,7 @@ class RequestSetPasswdHandler(RequestHandler):
                         }
                     )
                     return
+                
             else:  # 用户更改其他用户的密码
                 if not operator_user:
                     handler.conclude_request(
@@ -840,12 +868,13 @@ class RequestSetPasswdHandler(RequestHandler):
                     return
 
             try:
-                check_passwd_requirements(
-                    new_passwd,
-                    global_config["security"]["passwd_min_length"],
-                    global_config["security"]["passwd_max_length"],
-                    global_config["security"]["passwd_must_contain"],
-                )
+                if not bypass_passwd_requirements:
+                    check_passwd_requirements(
+                        new_passwd,
+                        global_config["security"]["passwd_min_length"],
+                        global_config["security"]["passwd_max_length"],
+                        global_config["security"]["passwd_must_contain"],
+                    )
             except InvaildPasswordLengthError as e:
                 handler.conclude_request(
                     400,
@@ -868,7 +897,9 @@ class RequestSetPasswdHandler(RequestHandler):
                 )
                 return
 
-            user.set_password(new_passwd)
+            user.set_password(
+                new_passwd, force_update_after_login=force_update_after_login
+            )
             # session.commit()
 
         response = {

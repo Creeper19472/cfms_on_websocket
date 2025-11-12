@@ -32,12 +32,16 @@ class User(Base):
     username: Mapped[str] = mapped_column(VARCHAR(255), primary_key=True)
     pass_hash: Mapped[str] = mapped_column(Text)
     salt: Mapped[str] = mapped_column(Text)
-    passwd_last_modified: Mapped[float] = mapped_column(Float, default=0, nullable=False)
+    passwd_last_modified: Mapped[float] = mapped_column(
+        Float, default=0, nullable=False
+    )
     nickname: Mapped[Optional[str]] = mapped_column(VARCHAR(255), nullable=True)
-    
-    avatar_id: Mapped[Optional[str]] = mapped_column(ForeignKey("files.id"), nullable=True)
+
+    avatar_id: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("files.id"), nullable=True
+    )
     avatar: Mapped[Optional["File"]] = relationship("File")
-    
+
     last_login: Mapped[Optional[float]] = mapped_column(Float)
     created_time: Mapped[Optional[float]] = mapped_column(Float, nullable=False)
 
@@ -122,7 +126,7 @@ class User(Base):
 
         return new_token
 
-    def set_password(self, plain_password: str):
+    def set_password(self, plain_password: str, force_update_after_login: bool = False):
         """
         修改用户密码，自动生成新盐并保存哈希，写入数据库。
         """
@@ -131,7 +135,7 @@ class User(Base):
         self.pass_hash = hashlib.sha256(salted.encode("utf-8")).hexdigest()
 
         self.secret_key = os.urandom(64).hex()  # int/2
-        self.passwd_last_modified = time.time()
+        self.passwd_last_modified = time.time() if not force_update_after_login else 0
 
         # 写入数据库
         session = object_session(self)
