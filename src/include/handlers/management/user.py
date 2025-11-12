@@ -658,17 +658,13 @@ class RequestSetUserAvatarHandler(RequestHandler):
 
             user_to_update = session.get(User, target_username)
             if not user_to_update:
-                handler.conclude_request(
-                    404, {}, "User does not exist"
-                )
+                handler.conclude_request(404, {}, "User does not exist")
                 return
-            
+
             # judge whether the user has the right to use the document as avatar
             document = session.get(Document, document_id)
             if not document:
-                handler.conclude_request(
-                    404, {}, "Document does not exist"
-                )
+                handler.conclude_request(404, {}, "Document does not exist")
                 return
 
             if not document.check_access_requirements(user_to_update, "read"):
@@ -676,7 +672,7 @@ class RequestSetUserAvatarHandler(RequestHandler):
                     403, {}, "User does not have access to the specified document"
                 )
                 return
-            
+
             latest_rev_file = document.get_latest_revision().file
             # check whether the file is an image
             extension = filetype.guess_extension(latest_rev_file.path)
@@ -689,9 +685,7 @@ class RequestSetUserAvatarHandler(RequestHandler):
             user_to_update.avatar_id = latest_rev_file.id
             session.commit()
 
-        handler.conclude_request(
-            200, {}, "User avatar updated successfully"
-        )
+        handler.conclude_request(200, {}, "User avatar updated successfully")
         return 200, target_username, handler.username
 
 
@@ -769,7 +763,6 @@ class RequestSetPasswdHandler(RequestHandler):
 
         with Session() as session:
             operator_username = handler.username
-            token = handler.data.get("token", None)
 
             target_username = handler.data.get("username", None)
             old_passwd = handler.data.get("old_passwd", None)
@@ -784,7 +777,7 @@ class RequestSetPasswdHandler(RequestHandler):
 
             # 初始化操作员用户，如果没有指定 operator, 则以目标用户充任
             if operator_username:
-                if not token:
+                if not handler.token:
                     handler.conclude_request(
                         **{
                             "code": 400,
@@ -795,7 +788,7 @@ class RequestSetPasswdHandler(RequestHandler):
                     return
 
                 operator_user = session.get(User, operator_username)
-                if not operator_user or not operator_user.is_token_valid(token):
+                if not operator_user or not operator_user.is_token_valid(handler.token):
                     handler.conclude_request(
                         **{
                             "code": 401,
