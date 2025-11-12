@@ -559,6 +559,7 @@ class RequestGetUserInfoHandler(RequestHandler):
                 "groups": list(user_to_get.all_groups),
                 "last_login": user_to_get.last_login,
                 "created_time": user_to_get.created_time,
+                "passwd_last_modified": user_to_get.passwd_last_modified,
             }
 
             handler.conclude_request(
