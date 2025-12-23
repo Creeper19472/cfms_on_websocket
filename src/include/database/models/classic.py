@@ -215,11 +215,13 @@ class User(Base):
         """
         Verify a TOTP token or backup code.
         Returns True if the token is valid.
+        Can be called during setup (when totp_enabled is False) or during login.
         """
         import pyotp
         import json
 
-        if not self.totp_enabled or not self.totp_secret:
+        # Check if TOTP secret exists (may not be enabled yet during setup)
+        if not self.totp_secret:
             return False
 
         # Try to verify as TOTP token first
@@ -227,8 +229,8 @@ class User(Base):
         if totp.verify(token, valid_window=1):
             return True
 
-        # Try to verify as backup code
-        if self.totp_backup_codes:
+        # Try to verify as backup code (only if 2FA is enabled)
+        if self.totp_enabled and self.totp_backup_codes:
             try:
                 hashed_codes = json.loads(self.totp_backup_codes)
                 token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
