@@ -30,6 +30,7 @@ class RequestLoginHandler(RequestHandler):
         "properties": {
             "username": {"type": "string", "minLength": 1},
             "password": {"type": "string", "minLength": 1},
+            "2fa_token": {"type": "string", "minLength": 1},
         },
         "required": ["username", "password"],
         "additionalProperties": False,
@@ -40,6 +41,7 @@ class RequestLoginHandler(RequestHandler):
         # Parse the login request
         username: str = handler.data["username"]
         password: str = handler.data["password"]
+        two_factor_auth_token: str = handler.data.get("2fa_token", "")
 
         with Session() as session:
             user = session.get(User, username)
@@ -83,13 +85,15 @@ class RequestLoginHandler(RequestHandler):
                         return 403, username
 
                     # Check if 2FA is enabled
-                    if user.totp_enabled:
+                    if user.totp_enabled and (
+                        not two_factor_auth_token
+                        or not user.verify_totp(two_factor_auth_token)
+                    ):
                         response = {
                             "code": 202,
                             "message": "Two-factor authentication required",
                             "data": {
-                                "requires_2fa": True,
-                                "username": username,
+                                "method": "totp",
                             },
                         }
                     else:

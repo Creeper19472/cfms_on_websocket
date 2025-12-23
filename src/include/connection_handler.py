@@ -19,7 +19,6 @@ from include.handlers.two_factor import (
     RequestValidate2FAHandler,
     RequestDisable2FAHandler,
     RequestGet2FAStatusHandler,
-    RequestVerify2FAHandler,
 )
 from include.handlers.document import (
     RequestCreateDocumentHandler,
@@ -144,7 +143,6 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "validate_2fa": RequestValidate2FAHandler,
         "disable_2fa": RequestDisable2FAHandler,
         "get_2fa_status": RequestGet2FAStatusHandler,
-        "verify_2fa": RequestVerify2FAHandler,
         # 文档类
         "get_document": RequestGetDocumentHandler,
         "create_document": RequestCreateDocumentHandler,
