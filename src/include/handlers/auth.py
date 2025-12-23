@@ -84,30 +84,32 @@ class RequestLoginHandler(RequestHandler):
                         )
                         return 403, username
 
-                    # Check if 2FA is enabled
-                    if user.totp_enabled and (
-                        not two_factor_auth_token
-                        or not user.verify_totp(two_factor_auth_token)
-                    ):
+                    success_data = {
+                        "token": token.raw,
+                        "exp": token.exp,
+                        "nickname": user.nickname,
+                        "avatar_id": user.avatar_id,
+                        "permissions": list(user.all_permissions),
+                        "groups": list(user.all_groups),
+                    }
+
+                    if user.totp_enabled and not two_factor_auth_token:
                         response = {
                             "code": 202,
                             "message": "Two-factor authentication required",
-                            "data": {
-                                "method": "totp",
-                            },
+                            "data": {"method": "totp"},
+                        }
+                    elif user.totp_enabled and not user.verify_totp(two_factor_auth_token):
+                        response = {
+                            "code": 401,
+                            "message": "Invalid two-factor authentication token",
+                            "data": {},
                         }
                     else:
                         response = {
                             "code": 200,
                             "message": "Login successful",
-                            "data": {
-                                "token": token.raw,
-                                "exp": token.exp,
-                                "nickname": user.nickname,
-                                "avatar_id": user.avatar_id,
-                                "permissions": list(user.all_permissions),
-                                "groups": list(user.all_groups),
-                            },
+                            "data": success_data,
                         }
 
                 else:
