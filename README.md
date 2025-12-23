@@ -17,6 +17,16 @@ comments as the primary reference.
 
 [doc-url]: https://cfms-server-doc.readthedocs.io/zh_CN/latest
 
+## Features
+
+- **Multiple Transport Protocols**: Support for both traditional WebSockets and WebSockets over QUIC (WebTransport)
+- **QUIC/WebTransport Support**: Improved performance with QUIC protocol for better handling of packet loss and reduced latency
+- Comprehensive document management system
+- User and group permission management
+- SSL/TLS encryption support
+
+For more information about QUIC/WebTransport support, see [QUIC_SUPPORT.md](QUIC_SUPPORT.md).
+
 ## Testing
 
 This repository includes an automated test suite built with pytest. To run the tests:

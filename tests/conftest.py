@@ -145,7 +145,7 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
     print("\n[TEST SETUP] Starting CFMS server...", file=sys.stderr)
     try:
         process = subprocess.Popen(
-            ["uv", "run", "python", "main.py"],
+            ["python3", "main.py"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
