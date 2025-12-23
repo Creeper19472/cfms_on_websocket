@@ -227,30 +227,23 @@ def main():
     use_quic = global_config.get("server", {}).get("use_quic", False)
     
     if use_quic:
-        # Use QUIC/WebTransport server
+        # Use QUIC/WebTransport server (synchronous)
         logger.info("Initializing CFMS QUIC/WebTransport server...")
         logger.info(f"CFMS Core Version: {CORE_VERSION}")
         
-        import asyncio
         from include.quic_server import create_quic_server
         
-        async def run_quic_server():
-            server = await create_quic_server(
-                handler=handle_connection,
-                host=global_config["server"]["host"],
-                port=global_config["server"].get("quic_port", global_config["server"]["port"]),
-                ssl_certfile=global_config["server"]["ssl_certfile"],
-                ssl_keyfile=global_config["server"]["ssl_keyfile"],
-            )
-            logger.info(
-                f"CFMS QUIC/WebTransport server started at https://{global_config['server']['host']}:{global_config['server'].get('quic_port', global_config['server']['port'])}"
-            )
-            await asyncio.Future()  # Run forever
-        
-        try:
-            asyncio.run(run_quic_server())
-        except KeyboardInterrupt:
-            logger.info("Server shutting down...")
+        server = create_quic_server(
+            handler=handle_connection,
+            host=global_config["server"]["host"],
+            port=global_config["server"].get("quic_port", global_config["server"]["port"]),
+            ssl_certfile=global_config["server"]["ssl_certfile"],
+            ssl_keyfile=global_config["server"]["ssl_keyfile"],
+        )
+        logger.info(
+            f"CFMS QUIC/WebTransport server started at https://{global_config['server']['host']}:{global_config['server'].get('quic_port', global_config['server']['port'])}"
+        )
+        server.serve_forever()
     else:
         # Use traditional WebSocket server
         logger.info("Initializing CFMS WebSocket server...")

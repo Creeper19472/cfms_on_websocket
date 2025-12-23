@@ -1,20 +1,25 @@
 """
-QUIC/WebTransport server implementation for CFMS.
+QUIC/WebTransport server implementation for CFMS using synchronous interface.
 
-This module provides a WebSocket-like interface over QUIC using aioquic.
-It wraps QUIC connections to be compatible with the existing WebSocket-based
-connection handler.
+This module provides a WebSocket-like interface over QUIC using aioquic's
+core QUIC implementation wrapped with synchronous threading patterns.
 """
 
-import asyncio
-import logging
+import socket
 import ssl
-from typing import Optional, Callable
-from collections.abc import Awaitable
+import threading
+import time
+from typing import Optional, Callable, Dict
+import struct
 
-from aioquic.asyncio import QuicConnectionProtocol, serve
 from aioquic.quic.configuration import QuicConfiguration
-from aioquic.quic.events import QuicEvent, StreamDataReceived, ConnectionTerminated
+from aioquic.quic.connection import QuicConnection
+from aioquic.quic.events import (
+    QuicEvent,
+    StreamDataReceived,
+    ConnectionTerminated,
+    StreamReset,
+)
 from aioquic.h3.connection import H3_ALPN, H3Connection
 from aioquic.h3.events import (
     H3Event,
@@ -36,11 +41,12 @@ class QuicWebSocketAdapter:
     so it can be used with the existing connection handler.
     """
     
-    def __init__(self, protocol: 'QuicServerProtocol', stream_id: int, remote_address: tuple):
-        self.protocol = protocol
+    def __init__(self, connection: 'SyncQuicConnection', stream_id: int, remote_address: tuple):
+        self.connection = connection
         self.stream_id = stream_id
         self.remote_address = remote_address
-        self._recv_queue: asyncio.Queue = asyncio.Queue()
+        self._recv_queue: list = []
+        self._recv_lock = threading.Lock()
         self._closed = False
         
     def recv(self) -> Optional[bytes]:
@@ -50,27 +56,19 @@ class QuicWebSocketAdapter:
         Returns:
             Received data as bytes, or None if connection is closed
         """
-        if self._closed:
-            return None
+        while not self._closed:
+            with self._recv_lock:
+                if self._recv_queue:
+                    return self._recv_queue.pop(0)
             
-        try:
-            # Get the current event loop
-            loop = asyncio.get_event_loop()
-            # Wait for data with a timeout
-            data = loop.run_until_complete(
-                asyncio.wait_for(self._recv_queue.get(), timeout=0.1)
-            )
-            return data
-        except asyncio.TimeoutError:
-            # Check if connection is still alive
-            if self._closed:
+            # Wait a bit for data
+            time.sleep(0.01)
+            
+            # Check if connection is closed
+            if self._closed or self.connection.is_closing:
                 return None
-            # Return empty to continue polling
-            return b""
-        except Exception as e:
-            logger.error(f"Error receiving data: {e}", exc_info=True)
-            self._closed = True
-            return None
+                
+        return None
     
     def send(self, data: bytes) -> None:
         """
@@ -83,7 +81,7 @@ class QuicWebSocketAdapter:
             raise ConnectionError("Connection is closed")
             
         try:
-            self.protocol.send_stream_data(self.stream_id, data)
+            self.connection.send_stream_data(self.stream_id, data)
         except Exception as e:
             logger.error(f"Error sending data: {e}", exc_info=True)
             self._closed = True
@@ -93,128 +91,227 @@ class QuicWebSocketAdapter:
         """Close the QUIC stream."""
         if not self._closed:
             self._closed = True
-            try:
-                self.protocol.close_stream(self.stream_id)
-            except Exception as e:
-                logger.debug(f"Error closing stream: {e}")
     
     def _enqueue_data(self, data: bytes) -> None:
         """Internal method to enqueue received data."""
         if not self._closed:
-            try:
-                loop = asyncio.get_event_loop()
-                loop.call_soon_threadsafe(self._recv_queue.put_nowait, data)
-            except Exception as e:
-                logger.error(f"Error enqueueing data: {e}", exc_info=True)
+            with self._recv_lock:
+                self._recv_queue.append(data)
 
 
-class QuicServerProtocol(QuicConnectionProtocol):
+class SyncQuicConnection:
     """
-    QUIC server protocol handler that processes WebTransport connections.
+    Synchronous QUIC connection handler.
     """
     
-    def __init__(self, *args, handler: Callable, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, quic: QuicConnection, sock: socket.socket, addr: tuple, handler: Callable):
+        self.quic = quic
+        self.socket = sock
+        self.remote_addr = addr
         self.handler = handler
-        self._h3 = H3Connection(self._quic)
-        self._streams: dict[int, QuicWebSocketAdapter] = {}
+        self.h3 = H3Connection(quic)
+        self.streams: Dict[int, QuicWebSocketAdapter] = {}
+        self.is_closing = False
+        self._lock = threading.Lock()
         
-    def quic_event_received(self, event: QuicEvent) -> None:
-        """
-        Handle QUIC events.
-        
-        Args:
-            event: The QUIC event to process
-        """
-        if isinstance(event, StreamDataReceived):
-            # Process H3 events
-            for h3_event in self._h3.handle_event(event):
-                self._h3_event_received(h3_event)
-        elif isinstance(event, ConnectionTerminated):
-            # Clean up all streams
-            for adapter in list(self._streams.values()):
-                adapter.close()
-            self._streams.clear()
+    def handle_events(self) -> None:
+        """Process all pending QUIC events."""
+        with self._lock:
+            while True:
+                event = self.quic.next_event()
+                if event is None:
+                    break
+                    
+                if isinstance(event, StreamDataReceived):
+                    # Process H3 events
+                    for h3_event in self.h3.handle_event(event):
+                        self._handle_h3_event(h3_event)
+                        
+                elif isinstance(event, ConnectionTerminated):
+                    logger.info(f"Connection terminated: {event}")
+                    self.is_closing = True
+                    for adapter in list(self.streams.values()):
+                        adapter.close()
+                    self.streams.clear()
+                    
+                elif isinstance(event, StreamReset):
+                    stream_id = event.stream_id
+                    if stream_id in self.streams:
+                        self.streams[stream_id].close()
+                        del self.streams[stream_id]
     
-    def _h3_event_received(self, event: H3Event) -> None:
-        """
-        Handle HTTP/3 events.
-        
-        Args:
-            event: The H3 event to process
-        """
+    def _handle_h3_event(self, event: H3Event) -> None:
+        """Handle HTTP/3 events."""
         if isinstance(event, HeadersReceived):
-            # New stream/connection
             stream_id = event.stream_id
             headers = dict(event.headers)
             
             # Check if this is a WebTransport request
             if headers.get(b":protocol") == b"webtransport":
                 # Create adapter for this stream
-                remote_address = self._quic._network_paths[0].addr
-                adapter = QuicWebSocketAdapter(self, stream_id, remote_address)
-                self._streams[stream_id] = adapter
+                adapter = QuicWebSocketAdapter(self, stream_id, self.remote_addr)
+                self.streams[stream_id] = adapter
                 
                 # Send acceptance response
-                self._h3.send_headers(
+                self.h3.send_headers(
                     stream_id=stream_id,
                     headers=[
                         (b":status", b"200"),
                         (b"sec-webtransport-http3-draft", b"draft02"),
                     ],
                 )
-                self.transmit()
                 
-                # Handle the connection in a separate task
-                asyncio.create_task(self._handle_connection(adapter))
+                # Send datagrams
+                datagrams = self.quic.datagrams_to_send(now=time.time())
+                for datagram, addr in datagrams:
+                    self.socket.sendto(datagram, addr)
+                
+                # Handle the connection in a separate thread
+                threading.Thread(
+                    target=self._handle_stream,
+                    args=(adapter,),
+                    daemon=True
+                ).start()
                 
         elif isinstance(event, DataReceived) or isinstance(event, WebTransportStreamDataReceived):
-            # Data received on existing stream
             stream_id = event.stream_id
-            if stream_id in self._streams:
-                self._streams[stream_id]._enqueue_data(event.data)
+            if stream_id in self.streams:
+                self.streams[stream_id]._enqueue_data(event.data)
     
-    async def _handle_connection(self, adapter: QuicWebSocketAdapter) -> None:
-        """
-        Handle a WebTransport connection using the existing handler.
-        
-        Args:
-            adapter: The QuicWebSocketAdapter wrapping the connection
-        """
+    def _handle_stream(self, adapter: QuicWebSocketAdapter) -> None:
+        """Handle a stream using the connection handler."""
         try:
-            # Run the handler in an executor to support the sync interface
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, self.handler, adapter)
+            self.handler(adapter)
         except Exception as e:
-            logger.error(f"Error handling connection: {e}", exc_info=True)
+            logger.error(f"Error handling stream: {e}", exc_info=True)
         finally:
             adapter.close()
-            if adapter.stream_id in self._streams:
-                del self._streams[adapter.stream_id]
+            if adapter.stream_id in self.streams:
+                with self._lock:
+                    del self.streams[adapter.stream_id]
     
     def send_stream_data(self, stream_id: int, data: bytes) -> None:
-        """
-        Send data on a stream.
-        
-        Args:
-            stream_id: The stream ID
-            data: Data to send
-        """
-        self._h3.send_data(stream_id=stream_id, data=data, end_stream=False)
-        self.transmit()
+        """Send data on a stream."""
+        with self._lock:
+            self.h3.send_data(stream_id=stream_id, data=data, end_stream=False)
+            
+            # Send datagrams
+            datagrams = self.quic.datagrams_to_send(now=time.time())
+            for datagram, addr in datagrams:
+                self.socket.sendto(datagram, addr)
+
+
+class SyncQuicServer:
+    """
+    Synchronous QUIC server.
+    """
     
-    def close_stream(self, stream_id: int) -> None:
-        """
-        Close a stream.
+    def __init__(
+        self,
+        handler: Callable,
+        host: str,
+        port: int,
+        ssl_certfile: str,
+        ssl_keyfile: str,
+    ):
+        self.handler = handler
+        self.host = host
+        self.port = port
+        self.ssl_certfile = ssl_certfile
+        self.ssl_keyfile = ssl_keyfile
+        self.connections: Dict[tuple, SyncQuicConnection] = {}
+        self.running = False
         
-        Args:
-            stream_id: The stream ID to close
-        """
+        # Configure QUIC
+        self.configuration = QuicConfiguration(
+            alpn_protocols=H3_ALPN,
+            is_client=False,
+            max_datagram_frame_size=65536,
+        )
+        self.configuration.load_cert_chain(ssl_certfile, ssl_keyfile)
+        
+        # Create UDP socket
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.socket.bind((host, port))
+        self.socket.settimeout(1.0)  # 1 second timeout for recv
+        
+        logger.info(f"QUIC server listening on {host}:{port}")
+    
+    def serve_forever(self) -> None:
+        """Run the server loop."""
+        self.running = True
+        logger.info("QUIC server started")
+        
         try:
-            self._h3.send_data(stream_id=stream_id, data=b"", end_stream=True)
-            self.transmit()
-        except Exception as e:
-            logger.debug(f"Error closing stream {stream_id}: {e}")
+            while self.running:
+                try:
+                    # Receive datagram
+                    data, addr = self.socket.recvfrom(65536)
+                    
+                    # Get or create connection for this address
+                    if addr not in self.connections:
+                        # Create new QUIC connection
+                        quic = QuicConnection(
+                            configuration=self.configuration,
+                            original_destination_connection_id=None,
+                        )
+                        self.connections[addr] = SyncQuicConnection(
+                            quic, self.socket, addr, self.handler
+                        )
+                    
+                    conn = self.connections[addr]
+                    
+                    # Feed data to QUIC connection
+                    conn.quic.receive_datagram(data, addr, now=time.time())
+                    
+                    # Process events
+                    conn.handle_events()
+                    
+                    # Send outgoing datagrams
+                    datagrams = conn.quic.datagrams_to_send(now=time.time())
+                    for datagram, dest_addr in datagrams:
+                        self.socket.sendto(datagram, dest_addr)
+                    
+                    # Clean up closed connections
+                    if conn.is_closing:
+                        del self.connections[addr]
+                        
+                except socket.timeout:
+                    # Timeout is normal, just continue
+                    # Clean up any timed-out connections
+                    now = time.time()
+                    to_remove = []
+                    for addr, conn in self.connections.items():
+                        # Send keep-alive if needed
+                        datagrams = conn.quic.datagrams_to_send(now=now)
+                        for datagram, dest_addr in datagrams:
+                            self.socket.sendto(datagram, dest_addr)
+                        
+                        if conn.is_closing:
+                            to_remove.append(addr)
+                    
+                    for addr in to_remove:
+                        del self.connections[addr]
+                        
+        except KeyboardInterrupt:
+            logger.info("Server interrupted")
+        finally:
+            self.close()
+    
+    def close(self) -> None:
+        """Close the server and all connections."""
+        logger.info("Closing QUIC server")
+        self.running = False
+        
+        # Close all connections
+        for conn in list(self.connections.values()):
+            conn.is_closing = True
+            for adapter in list(conn.streams.values()):
+                adapter.close()
+        
+        self.connections.clear()
+        self.socket.close()
 
 
 def create_quic_server(
@@ -223,9 +320,9 @@ def create_quic_server(
     port: int,
     ssl_certfile: str,
     ssl_keyfile: str,
-) -> Awaitable:
+) -> SyncQuicServer:
     """
-    Create and start a QUIC server.
+    Create a synchronous QUIC server.
     
     Args:
         handler: Connection handler function
@@ -235,28 +332,6 @@ def create_quic_server(
         ssl_keyfile: Path to SSL key file
         
     Returns:
-        Awaitable server task
+        SyncQuicServer instance
     """
-    # Configure QUIC
-    configuration = QuicConfiguration(
-        alpn_protocols=H3_ALPN,
-        is_client=False,
-        max_datagram_frame_size=65536,
-    )
-    
-    # Load SSL certificate and key
-    configuration.load_cert_chain(ssl_certfile, ssl_keyfile)
-    
-    logger.info(f"Starting QUIC server on {host}:{port}")
-    
-    # Create protocol factory
-    def create_protocol(*args, **kwargs):
-        return QuicServerProtocol(*args, handler=handler, **kwargs)
-    
-    # Start server
-    return serve(
-        host=host,
-        port=port,
-        configuration=configuration,
-        create_protocol=create_protocol,
-    )
+    return SyncQuicServer(handler, host, port, ssl_certfile, ssl_keyfile)
