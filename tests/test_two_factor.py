@@ -234,7 +234,7 @@ class TestTwoFactorAuthLogin:
     
     @pytest.mark.asyncio
     async def test_login_with_2fa_enabled_returns_202(self, authenticated_client: CFMSTestClient, test_user: dict, client: CFMSTestClient):
-        """Test that login returns 202 when 2FA is enabled."""
+        """Test that login returns 202 when 2FA is enabled and no token provided."""
         # Setup and enable 2FA for test user
         setup_response = await authenticated_client.setup_2fa()
         assert setup_response.get("code") == 200, "Failed to setup 2FA"
@@ -249,7 +249,7 @@ class TestTwoFactorAuthLogin:
         # Disconnect authenticated client
         await authenticated_client.disconnect()
         
-        # Try to login with new client
+        # Try to login with new client without providing 2FA token
         try:
             response = await client.login(test_user["username"], test_user["password"])
         except Exception as e:
@@ -261,9 +261,8 @@ class TestTwoFactorAuthLogin:
             f"Expected 202 (2FA required), got {response.get('code')}"
         
         assert "data" in response, "Response missing 'data'"
-        assert response["data"].get("requires_2fa") is True, \
-            "Response should indicate 2FA is required"
-        assert "username" in response["data"], "Response should include username"
+        assert response["data"].get("method") == "totp", \
+            "Response should indicate TOTP method is required"
     
     @pytest.mark.asyncio
     async def test_verify_2fa_login_with_valid_token(self, authenticated_client: CFMSTestClient, test_user: dict, client: CFMSTestClient):
@@ -282,21 +281,17 @@ class TestTwoFactorAuthLogin:
         # Disconnect authenticated client
         await authenticated_client.disconnect()
         
-        # Login and get 202 response
-        login_response = await client.login(test_user["username"], test_user["password"])
-        assert login_response.get("code") == 202, "Expected 2FA required response"
-        
-        # Generate new token and verify
+        # Login with 2FA token provided
         token = totp.now()
         try:
-            response = await client.verify_2fa_login(test_user["username"], token)
+            response = await client.login(test_user["username"], test_user["password"], two_fa_token=token)
         except Exception as e:
-            pytest.fail(f"verify_2fa_login() raised an exception: {e}")
+            pytest.fail(f"login() raised an exception: {e}")
         
         assert isinstance(response, dict), "Response should be a dictionary"
         assert "code" in response, "Response missing 'code'"
         assert response["code"] == 200, \
-            f"Failed to verify 2FA: {response.get('message', '')}"
+            f"Failed to login with 2FA: {response.get('message', '')}"
         
         assert "data" in response, "Response missing 'data'"
         assert "token" in response["data"], "Response should include token"
@@ -304,7 +299,7 @@ class TestTwoFactorAuthLogin:
     
     @pytest.mark.asyncio
     async def test_verify_2fa_login_with_invalid_token(self, authenticated_client: CFMSTestClient, test_user: dict, client: CFMSTestClient):
-        """Test that verification fails with invalid 2FA token."""
+        """Test that login fails with invalid 2FA token."""
         # Setup and enable 2FA
         setup_response = await authenticated_client.setup_2fa()
         assert setup_response.get("code") == 200, "Failed to setup 2FA"
@@ -319,15 +314,11 @@ class TestTwoFactorAuthLogin:
         # Disconnect authenticated client
         await authenticated_client.disconnect()
         
-        # Login and get 202 response
-        login_response = await client.login(test_user["username"], test_user["password"])
-        assert login_response.get("code") == 202, "Expected 2FA required response"
-        
-        # Try to verify with invalid token
+        # Try to login with invalid 2FA token
         try:
-            response = await client.verify_2fa_login(test_user["username"], "000000")
+            response = await client.login(test_user["username"], test_user["password"], two_fa_token="000000")
         except Exception as e:
-            pytest.fail(f"verify_2fa_login() raised an exception: {e}")
+            pytest.fail(f"login() raised an exception: {e}")
         
         assert isinstance(response, dict), "Response should be a dictionary"
         assert "code" in response, "Response missing 'code'"
@@ -353,16 +344,12 @@ class TestTwoFactorAuthLogin:
         # Disconnect authenticated client
         await authenticated_client.disconnect()
         
-        # Login and get 202 response
-        login_response = await client.login(test_user["username"], test_user["password"])
-        assert login_response.get("code") == 202, "Expected 2FA required response"
-        
-        # Use a backup code to verify
+        # Login with backup code
         backup_code = backup_codes[0]
         try:
-            response = await client.verify_2fa_login(test_user["username"], backup_code)
+            response = await client.login(test_user["username"], test_user["password"], two_fa_token=backup_code)
         except Exception as e:
-            pytest.fail(f"verify_2fa_login() raised an exception: {e}")
+            pytest.fail(f"login() raised an exception: {e}")
         
         assert isinstance(response, dict), "Response should be a dictionary"
         assert "code" in response, "Response missing 'code'"

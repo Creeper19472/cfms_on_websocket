@@ -141,20 +141,25 @@ class CFMSTestClient:
         response_text = await self.websocket.recv()
         return json.loads(response_text)
     
-    async def login(self, username: str, password: str) -> Dict[str, Any]:
+    async def login(self, username: str, password: str, two_fa_token: Optional[str] = None) -> Dict[str, Any]:
         """
         Authenticate with the server.
         
         Args:
             username: Username to authenticate with
             password: Password for the user
+            two_fa_token: Optional 2FA token for two-factor authentication
             
         Returns:
             The login response from the server
         """
+        data = {"username": username, "password": password}
+        if two_fa_token:
+            data["2fa_token"] = two_fa_token
+            
         response = await self.send_request(
             "login",
-            {"username": username, "password": password},
+            data,
             include_auth=False
         )
         
@@ -661,7 +666,7 @@ class CFMSTestClient:
         Returns:
             Response indicating success or failure
         """
-        return await self.send_request("cancel_2fa", {"password": password})
+        return await self.send_request("disable_2fa", {"password": password})
 
     async def get_2fa_status(self) -> Dict[str, Any]:
         """
@@ -671,26 +676,3 @@ class CFMSTestClient:
             Response with 2FA status information
         """
         return await self.send_request("get_2fa_status", {})
-
-    async def verify_2fa_login(self, username: str, token: str) -> Dict[str, Any]:
-        """
-        Verify 2FA token during login process.
-        
-        Args:
-            username: Username attempting to login
-            token: TOTP token from authenticator app
-            
-        Returns:
-            Response with authentication token if successful
-        """
-        response = await self.send_request(
-            "verify_2fa",
-            {"username": username, "token": token},
-            include_auth=False
-        )
-        
-        if response.get("code") == 200:
-            self.username = username
-            self.token = response.get("data", {}).get("token")
-        
-        return response
