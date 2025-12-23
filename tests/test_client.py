@@ -627,3 +627,70 @@ class CFMSTestClient:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit."""
         await self.disconnect()
+
+    # Two-Factor Authentication methods
+
+    async def setup_2fa(self) -> Dict[str, Any]:
+        """
+        Setup two-factor authentication for the authenticated user.
+        
+        Returns:
+            Response with TOTP secret, provisioning URI, and backup codes
+        """
+        return await self.send_request("setup_2fa", {})
+
+    async def validate_2fa(self, token: str) -> Dict[str, Any]:
+        """
+        Validate and enable two-factor authentication.
+        
+        Args:
+            token: TOTP token from authenticator app
+            
+        Returns:
+            Response indicating success or failure
+        """
+        return await self.send_request("validate_2fa", {"token": token})
+
+    async def cancel_2fa(self, password: str) -> Dict[str, Any]:
+        """
+        Cancel two-factor authentication for the authenticated user.
+        
+        Args:
+            password: User's password for verification
+            
+        Returns:
+            Response indicating success or failure
+        """
+        return await self.send_request("cancel_2fa", {"password": password})
+
+    async def get_2fa_status(self) -> Dict[str, Any]:
+        """
+        Get two-factor authentication status for the authenticated user.
+        
+        Returns:
+            Response with 2FA status information
+        """
+        return await self.send_request("get_2fa_status", {})
+
+    async def verify_2fa_login(self, username: str, token: str) -> Dict[str, Any]:
+        """
+        Verify 2FA token during login process.
+        
+        Args:
+            username: Username attempting to login
+            token: TOTP token from authenticator app
+            
+        Returns:
+            Response with authentication token if successful
+        """
+        response = await self.send_request(
+            "verify_2fa",
+            {"username": username, "token": token},
+            include_auth=False
+        )
+        
+        if response.get("code") == 200:
+            self.username = username
+            self.token = response.get("data", {}).get("token")
+        
+        return response
