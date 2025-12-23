@@ -82,18 +82,29 @@ class RequestLoginHandler(RequestHandler):
                         )
                         return 403, username
 
-                    response = {
-                        "code": 200,
-                        "message": "Login successful",
-                        "data": {
-                            "token": token.raw,
-                            "exp": token.exp,
-                            "nickname": user.nickname,
-                            "avatar_id": user.avatar_id,
-                            "permissions": list(user.all_permissions),
-                            "groups": list(user.all_groups),
-                        },
-                    }
+                    # Check if 2FA is enabled
+                    if user.totp_enabled:
+                        response = {
+                            "code": 202,
+                            "message": "Two-factor authentication required",
+                            "data": {
+                                "requires_2fa": True,
+                                "username": username,
+                            },
+                        }
+                    else:
+                        response = {
+                            "code": 200,
+                            "message": "Login successful",
+                            "data": {
+                                "token": token.raw,
+                                "exp": token.exp,
+                                "nickname": user.nickname,
+                                "avatar_id": user.avatar_id,
+                                "permissions": list(user.all_permissions),
+                                "groups": list(user.all_groups),
+                            },
+                        }
 
                 else:
                     response = response_invalid
