@@ -5,7 +5,7 @@ import os
 import pyotp
 import secrets
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 from typing import List
 from typing import Optional
 from typing import Set
@@ -181,7 +181,7 @@ class User(Base):
             session.add(self)
             session.commit()
 
-        return self.totp_secret, backup_codes
+        return cast(str, self.totp_secret), backup_codes
 
     def enable_totp(self):
         """

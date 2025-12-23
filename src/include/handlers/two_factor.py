@@ -21,11 +21,11 @@ from include.util.audit import log_audit
 class RequestSetup2FAHandler(RequestHandler):
     """
     Handler for setting up two-factor authentication.
-    
+
     This handler generates a TOTP secret and backup codes for the user.
     The TOTP secret is returned as a provisioning URI that can be used
     to generate a QR code for scanning with authenticator apps.
-    
+
     Response Data:
         - secret: The TOTP secret (for manual entry)
         - provisioning_uri: URI for QR code generation
@@ -34,7 +34,7 @@ class RequestSetup2FAHandler(RequestHandler):
 
     data_schema = {
         "type": "object",
-        "properties": {},
+        "properties": {"method": {"type": "string", "enum": ["totp"]}},
         "additionalProperties": False,
     }
 
@@ -63,7 +63,9 @@ class RequestSetup2FAHandler(RequestHandler):
                 handler.conclude_request(
                     code=400,
                     message="Two-factor authentication is already enabled. Please cancel it first.",
-                    data={"totp_enabled": True},
+                    data={
+                        "method": "totp"
+                    },  # will be extended if other methods are added
                 )
                 return
 
@@ -90,7 +92,7 @@ class RequestSetup2FAHandler(RequestHandler):
 class RequestValidate2FAHandler(RequestHandler):
     """
     Handler for validating and enabling two-factor authentication.
-    
+
     After setup, the user must validate their TOTP configuration by
     providing a valid code from their authenticator app. This enables 2FA.
     """
@@ -139,7 +141,7 @@ class RequestValidate2FAHandler(RequestHandler):
                 handler.conclude_request(
                     code=400,
                     message="Two-factor authentication is already enabled.",
-                    data={"totp_enabled": True},
+                    data={"method": "totp"},
                 )
                 return
 
@@ -149,7 +151,7 @@ class RequestValidate2FAHandler(RequestHandler):
                 handler.conclude_request(
                     code=200,
                     message="Two-factor authentication enabled successfully",
-                    data={"totp_enabled": True},
+                    data={"method": "totp"},
                 )
                 log_audit(
                     "validate_2fa",
@@ -171,10 +173,10 @@ class RequestValidate2FAHandler(RequestHandler):
                 )
 
 
-class RequestCancel2FAHandler(RequestHandler):
+class RequestDisable2FAHandler(RequestHandler):
     """
     Handler for canceling two-factor authentication.
-    
+
     This handler disables and removes TOTP configuration for the user.
     The user must provide their password for verification.
     """
@@ -250,10 +252,61 @@ class RequestCancel2FAHandler(RequestHandler):
             )
 
 
+class RequestCancel2FASetupHandler(RequestHandler):
+    """
+    Handler for canceling two-factor authentication setup.
+
+    This handler removes the TOTP configuration that was set up
+    but not yet validated/enabled.
+    """
+
+    data_schema = {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
+    }
+
+    require_auth = True
+
+    def handle(self, handler: ConnectionHandler):
+        with Session() as session:
+            user = session.get(User, handler.username)
+
+            if not user:
+                handler.conclude_request(
+                    code=404,
+                    message="User not found",
+                    data={},
+                )
+                return
+
+            # Check if TOTP setup exists but not enabled yet
+            if not user.totp_secret or user.totp_enabled:
+                handler.conclude_request(
+                    code=400,
+                    message="No pending two-factor authentication setup to cancel.",
+                    data={},
+                )
+                return
+
+            # Cancel TOTP setup
+            user.totp_secret = None
+            user.totp_backup_codes = None
+
+            session.add(user)
+            session.commit()
+
+            handler.conclude_request(
+                code=200,
+                message="Two-factor authentication setup canceled successfully",
+                data={},
+            )
+
+
 class RequestGet2FAStatusHandler(RequestHandler):
     """
     Handler for getting two-factor authentication status.
-    
+
     Returns whether 2FA is enabled for the authenticated user.
     """
 
@@ -281,7 +334,8 @@ class RequestGet2FAStatusHandler(RequestHandler):
                 code=200,
                 message="Two-factor authentication status",
                 data={
-                    "totp_enabled": user.totp_enabled,
+                    "enabled": user.totp_enabled,
+                    "method": "totp" if user.totp_enabled else None,
                     "backup_codes_count": (
                         len(json.loads(user.totp_backup_codes))
                         if user.totp_backup_codes
@@ -294,7 +348,7 @@ class RequestGet2FAStatusHandler(RequestHandler):
 class RequestVerify2FAHandler(RequestHandler):
     """
     Handler for verifying a 2FA token during login.
-    
+
     This is used as a second step during the login process when 2FA is enabled.
     It validates the TOTP token and returns a full authentication token if successful.
     """

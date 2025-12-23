@@ -14,9 +14,10 @@ from include.database.models.classic import User
 from include.util.audit import log_audit
 from include.handlers.auth import RequestLoginHandler, RequestRefreshTokenHandler
 from include.handlers.two_factor import (
+    RequestCancel2FASetupHandler,
     RequestSetup2FAHandler,
     RequestValidate2FAHandler,
-    RequestCancel2FAHandler,
+    RequestDisable2FAHandler,
     RequestGet2FAStatusHandler,
     RequestVerify2FAHandler,
 )
@@ -139,8 +140,9 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "refresh_token": RequestRefreshTokenHandler,
         # 两步验证类
         "setup_2fa": RequestSetup2FAHandler,
+        "cancel_2fa_setup": RequestCancel2FASetupHandler,  # especially for cancelling setup
         "validate_2fa": RequestValidate2FAHandler,
-        "cancel_2fa": RequestCancel2FAHandler,
+        "disable_2fa": RequestDisable2FAHandler,
         "get_2fa_status": RequestGet2FAStatusHandler,
         "verify_2fa": RequestVerify2FAHandler,
         # 文档类
