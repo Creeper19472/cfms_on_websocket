@@ -224,7 +224,7 @@ def main():
     Base.metadata.create_all(engine)
 
     # Check if QUIC mode is enabled
-    use_quic = global_config.get("server", {}).get("use_quic", False)
+    use_quic = global_config["server"].get("use_quic", False)
     
     if use_quic:
         # Use QUIC/WebTransport server (synchronous)
@@ -239,6 +239,7 @@ def main():
             port=global_config["server"].get("quic_port", global_config["server"]["port"]),
             ssl_certfile=global_config["server"]["ssl_certfile"],
             ssl_keyfile=global_config["server"]["ssl_keyfile"],
+            use_ipv6=True,  # Use IPv6 with dual-stack support, consistent with WebSocket mode
         )
         logger.info(
             f"CFMS QUIC/WebTransport server started at https://{global_config['server']['host']}:{global_config['server'].get('quic_port', global_config['server']['port'])}"

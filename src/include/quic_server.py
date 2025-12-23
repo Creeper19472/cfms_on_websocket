@@ -47,6 +47,7 @@ class QuicWebSocketAdapter:
         self.remote_address = remote_address
         self._recv_queue: list = []
         self._recv_lock = threading.Lock()
+        self._recv_event = threading.Event()
         self._closed = False
         
     def recv(self) -> Optional[bytes]:
@@ -61,8 +62,9 @@ class QuicWebSocketAdapter:
                 if self._recv_queue:
                     return self._recv_queue.pop(0)
             
-            # Wait a bit for data
-            time.sleep(0.01)
+            # Wait for data using an event instead of busy waiting
+            self._recv_event.wait(timeout=1.0)
+            self._recv_event.clear()
             
             # Check if connection is closed
             if self._closed or self.connection.is_closing:
@@ -91,12 +93,14 @@ class QuicWebSocketAdapter:
         """Close the QUIC stream."""
         if not self._closed:
             self._closed = True
+            self._recv_event.set()
     
     def _enqueue_data(self, data: bytes) -> None:
         """Internal method to enqueue received data."""
         if not self._closed:
             with self._recv_lock:
                 self._recv_queue.append(data)
+            self._recv_event.set()
 
 
 class SyncQuicConnection:
@@ -213,12 +217,15 @@ class SyncQuicServer:
         port: int,
         ssl_certfile: str,
         ssl_keyfile: str,
+        socket_timeout: float = 1.0,
+        use_ipv6: bool = True,
     ):
         self.handler = handler
         self.host = host
         self.port = port
         self.ssl_certfile = ssl_certfile
         self.ssl_keyfile = ssl_keyfile
+        self.socket_timeout = socket_timeout
         self.connections: Dict[tuple, SyncQuicConnection] = {}
         self.running = False
         
@@ -230,13 +237,19 @@ class SyncQuicServer:
         )
         self.configuration.load_cert_chain(ssl_certfile, ssl_keyfile)
         
-        # Create UDP socket
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # Create UDP socket with IPv6 support if requested
+        if use_ipv6:
+            self.socket = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+            # Enable IPv4-mapped IPv6 addresses for dual stack support
+            self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+        else:
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.bind((host, port))
-        self.socket.settimeout(1.0)  # 1 second timeout for recv
+        self.socket.settimeout(socket_timeout)
         
-        logger.info(f"QUIC server listening on {host}:{port}")
+        logger.info(f"QUIC server listening on {host}:{port} (IPv6: {use_ipv6})")
     
     def serve_forever(self) -> None:
         """Run the server loop."""
@@ -320,6 +333,8 @@ def create_quic_server(
     port: int,
     ssl_certfile: str,
     ssl_keyfile: str,
+    socket_timeout: float = 1.0,
+    use_ipv6: bool = True,
 ) -> SyncQuicServer:
     """
     Create a synchronous QUIC server.
@@ -330,8 +345,12 @@ def create_quic_server(
         port: Port to bind to
         ssl_certfile: Path to SSL certificate file
         ssl_keyfile: Path to SSL key file
+        socket_timeout: Socket timeout in seconds (default: 1.0)
+        use_ipv6: Whether to use IPv6 with dual-stack support (default: True)
         
     Returns:
         SyncQuicServer instance
     """
-    return SyncQuicServer(handler, host, port, ssl_certfile, ssl_keyfile)
+    return SyncQuicServer(
+        handler, host, port, ssl_certfile, ssl_keyfile, socket_timeout, use_ipv6
+    )
