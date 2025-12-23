@@ -220,32 +220,62 @@ def main():
         logger.info("Database not initialized, initializing now...")
         server_init()
 
-    logger.info("Initializating CFMS WebSocket server...")
-    logger.info(f"CFMS Core Version: {CORE_VERSION}")
-    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    ssl_context.load_cert_chain(
-        certfile=global_config["server"]["ssl_certfile"],
-        keyfile=global_config["server"]["ssl_keyfile"],
-    )
-
     # Always create tables that do not exist
     Base.metadata.create_all(engine)
 
-    # DO NOT MODIFY socket family setting unless you know what you are doing
-    socket_family = socket.AF_INET6
+    # Check if QUIC mode is enabled
+    use_quic = global_config.get("server", {}).get("use_quic", False)
+    
+    if use_quic:
+        # Use QUIC/WebTransport server
+        logger.info("Initializing CFMS QUIC/WebTransport server...")
+        logger.info(f"CFMS Core Version: {CORE_VERSION}")
+        
+        import asyncio
+        from include.quic_server import create_quic_server
+        
+        async def run_quic_server():
+            server = await create_quic_server(
+                handler=handle_connection,
+                host=global_config["server"]["host"],
+                port=global_config["server"].get("quic_port", global_config["server"]["port"]),
+                ssl_certfile=global_config["server"]["ssl_certfile"],
+                ssl_keyfile=global_config["server"]["ssl_keyfile"],
+            )
+            logger.info(
+                f"CFMS QUIC/WebTransport server started at https://{global_config['server']['host']}:{global_config['server'].get('quic_port', global_config['server']['port'])}"
+            )
+            await asyncio.Future()  # Run forever
+        
+        try:
+            asyncio.run(run_quic_server())
+        except KeyboardInterrupt:
+            logger.info("Server shutting down...")
+    else:
+        # Use traditional WebSocket server
+        logger.info("Initializing CFMS WebSocket server...")
+        logger.info(f"CFMS Core Version: {CORE_VERSION}")
+        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ssl_context.load_cert_chain(
+            certfile=global_config["server"]["ssl_certfile"],
+            keyfile=global_config["server"]["ssl_keyfile"],
+        )
 
-    with serve(
-        handle_connection,
-        global_config["server"]["host"],
-        global_config["server"]["port"],
-        ssl=ssl_context,
-        family=socket_family,
-        dualstack_ipv6=global_config["server"]["dualstack_ipv6"],
-    ) as server:
-        logger.info(
-            f"CFMS WebSocket server started at wss://{global_config['server']['host']}:{global_config['server']['port']}"
-        )  # TODO
-        server.serve_forever()
+        # DO NOT MODIFY socket family setting unless you know what you are doing
+        socket_family = socket.AF_INET6
+
+        with serve(
+            handle_connection,
+            global_config["server"]["host"],
+            global_config["server"]["port"],
+            ssl=ssl_context,
+            family=socket_family,
+            dualstack_ipv6=global_config["server"]["dualstack_ipv6"],
+        ) as server:
+            logger.info(
+                f"CFMS WebSocket server started at wss://{global_config['server']['host']}:{global_config['server']['port']}"
+            )
+            server.serve_forever()
 
 
 if __name__ == "__main__":

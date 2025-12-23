@@ -8,6 +8,12 @@ dualstack_ipv6 = true
 secret_key = ""
 ssl_keyfile = "./content/ssl/key.pem"
 ssl_certfile = "./content/ssl/cert.pem"
+use_quic = true
+# Enable QUIC (HTTP/3) transport instead of traditional WebSockets over TCP
+# When enabled, the server will use WebTransport over QUIC
+# This provides better performance and handling of packet loss
+quic_port = 5104
+# Port for QUIC/WebTransport connections (can be same as WebSocket port)
 
 file_chunk_size = 2097152 # 2MB
 # 过高的分块大小可能因客户端的配置而导致传输失败
