@@ -1,6 +1,6 @@
 # CFMS On Websocket
 
-CFMS (Classified File Management System), is a complete solution for 
+CFMS (Confidential File Management System), is a complete solution for 
 managing confidential documents. This is the repository used to 
 implement server functionality.
 
