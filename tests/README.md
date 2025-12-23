@@ -1,6 +1,6 @@
 # CFMS WebSocket Server - Test Suite
 
-This directory contains the automated test suite for the CFMS (Classified File Management System) WebSocket server.
+This directory contains the automated test suite for the CFMS (Confidential File Management System) WebSocket server.
 
 ## Overview
 
