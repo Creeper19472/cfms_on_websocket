@@ -1,6 +1,8 @@
 import hashlib
+import json
 import jwt
 import os
+import pyotp
 import secrets
 import time
 from typing import TYPE_CHECKING
@@ -159,9 +161,6 @@ class User(Base):
         Setup TOTP for the user. Generates a new TOTP secret and backup codes.
         Returns a tuple of (secret, backup_codes).
         """
-        import pyotp
-        import json
-
         # Generate a new TOTP secret
         self.totp_secret = pyotp.random_base32()
 
@@ -217,9 +216,6 @@ class User(Base):
         Returns True if the token is valid.
         Can be called during setup (when totp_enabled is False) or during login.
         """
-        import pyotp
-        import json
-
         # Check if TOTP secret exists (may not be enabled yet during setup)
         if not self.totp_secret:
             return False
@@ -256,8 +252,6 @@ class User(Base):
         """
         Get the TOTP provisioning URI for QR code generation.
         """
-        import pyotp
-
         if not self.totp_secret:
             return None
 

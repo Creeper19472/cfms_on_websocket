@@ -6,9 +6,13 @@ two-factor authentication using Time-based One-Time Passwords (TOTP).
 """
 
 import json
+import time
 
+from include.classes.auth import Token
 from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
+from include.conf_loader import global_config
+from include.constants import DEFAULT_TOKEN_EXPIRY_SECONDS
 from include.database.handler import Session
 from include.database.models.classic import User
 from include.util.audit import log_audit
@@ -344,11 +348,6 @@ class RequestVerify2FAHandler(RequestHandler):
                 return
 
             # Generate authentication token
-            import time
-            from include.classes.auth import Token
-            from include.conf_loader import global_config
-            from include.constants import DEFAULT_TOKEN_EXPIRY_SECONDS
-
             secret = (
                 global_config["server"]["secret_key"]
                 if not user.secret_key
