@@ -266,23 +266,42 @@ class RequestGet2FAStatusHandler(RequestHandler):
 
     data_schema = {
         "type": "object",
-        "properties": {},
+        "properties": {
+            "target": {"type": "string", "minLength": 1},
+        },
         "additionalProperties": False,
     }
 
     require_auth = True
 
     def handle(self, handler: ConnectionHandler):
+
+        target_username = handler.data.get("target") or handler.username
+
         with Session() as session:
             user = session.get(User, handler.username)
+            target = session.get(User, target_username)
 
-            if not user:
+            if not target:
                 handler.conclude_request(
                     code=404,
-                    message="User not found",
+                    message="Target user not found",
                     data={},
                 )
                 return
+            
+            assert user is not None
+
+            if (
+                target_username != handler.username
+                and "manage_2fa" not in user.all_permissions
+            ):
+                handler.conclude_request(
+                    code=403,
+                    message="Forbidden: Cannot access another user's two-factor authentication status",
+                    data={},
+                )
+                return 403, target_username, handler.username
 
             handler.conclude_request(
                 code=200,
