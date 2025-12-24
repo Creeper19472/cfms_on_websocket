@@ -258,124 +258,141 @@ class RequestCreateDocumentHandler(RequestHandler):
     require_auth = True
 
     def handle(self, handler: ConnectionHandler):
+        folder_id = handler.data.get("folder_id")
+        title = (handler.data.get("title") or "").strip()
+        access_rules = handler.data.get("access_rules") or {}
 
-        folder_id: str = handler.data.get("folder_id", "")
-        document_title: str = handler.data["title"]
-        access_rules_to_apply: dict = handler.data.get("access_rules", {})
-
-        if not access_rules_to_apply:  # fix
-            access_rules_to_apply = {}
+        if not title:
+            handler.conclude_request(400, {}, "Document title is required")
+            return
 
         with Session() as session:
             user = session.get(User, handler.username)
             assert user is not None
 
-            if not document_title:
-                handler.conclude_request(400, {}, "Document title is required")
-                return
-
-            # 由于之后的逻辑可能提前结束，必须在实质性操作发生前鉴权
-            if not "create_document" in user.all_permissions:
+            if "create_document" not in user.all_permissions:
                 handler.conclude_request(403, {}, "Permission denied")
-                return 403, folder_id, {"title": document_title}, handler.username
+                return 403, folder_id, {"title": title}, handler.username
 
+            folder = None
             if folder_id:
                 folder = session.get(Folder, folder_id)
                 if not folder:
                     handler.conclude_request(404, {}, "Folder not found")
-                    return 404, folder_id, {"title": document_title}, handler.username
+                    return 404, folder_id, {"title": title}, handler.username
+
                 if (
                     not folder.check_access_requirements(user, access_type="write")
-                    and not "super_create_document" in user.all_permissions
-                ):  # 创建文件肯定是写权限
+                    and "super_create_document" not in user.all_permissions
+                ):
                     handler.conclude_request(403, {}, "Access denied to the folder")
-                    return 403, folder_id, {"title": document_title}, handler.username
+                    return 403, folder_id, {"title": title}, handler.username
 
             if not global_config["document"]["allow_name_duplicate"]:
-                # 检查是否有同名文件或文件夹
-
-                # 检查同一 folder_id 下是否有同名文件
                 existing_doc = (
                     session.query(Document)
-                    .filter_by(
-                        folder_id=folder_id if folder_id else None, title=document_title
-                    )
+                    .filter_by(folder_id=(folder_id if folder_id else None), title=title)
                     .first()
                 )
-                # 检查同一 folder_id 下是否有同名文件夹
                 existing_folder = (
                     session.query(Folder)
-                    .filter_by(
-                        parent_id=folder_id if folder_id else None, name=document_title
-                    )
+                    .filter_by(parent_id=(folder_id if folder_id else None), name=title)
                     .first()
                 )
 
                 if existing_doc:
                     if existing_doc.active:
-                        # 409 Conflict
-                        handler.conclude_request(409, {}, smsg.DOCUMENT_NAME_DUPLICATE)
+                        resp_id = (
+                            existing_doc.id
+                            if existing_doc.check_access_requirements(user, "read")
+                            else None
+                        )
+                        handler.conclude_request(
+                            409, {"type": "document", "id": resp_id}, smsg.DOCUMENT_NAME_DUPLICATE
+                        )
                         return
                     else:
-                        # 如果该文档尚未被激活，则先尝试删除未激活的文档
-                        if existing_doc.check_access_requirements(
-                            user, "write"
-                        ):  # 如果有权删除
-                            existing_doc.delete_all_revisions()
+                        if existing_doc.check_access_requirements(user, "write"):
+                            try:
+                                existing_doc.delete_all_revisions()
+                            except PermissionError:
+                                handler.conclude_request(
+                                    500,
+                                    {},
+                                    "Failed to delete revisions. Perhaps a file task is in progress?",
+                                )
+                                return 500, folder_id, {"title": title}, handler.username
                             session.delete(existing_doc)
-                            session.commit()
                         else:
+                            resp_id = (
+                                existing_doc.id
+                                if existing_doc.check_access_requirements(user, "read")
+                                else None
+                            )
                             handler.conclude_request(
-                                409, {}, smsg.DENIED_FOR_DOC_NAME_DUPLICATE
+                                409, {"type": "document", "id": resp_id}, smsg.DENIED_FOR_DOC_NAME_DUPLICATE
                             )
                             return (
                                 409,
                                 folder_id,
-                                {
-                                    "title": document_title,
-                                    "duplicate_id": existing_doc.id,
-                                },
+                                {"title": title, "duplicate_id": existing_doc.id},
                                 handler.username,
                             )
                 elif existing_folder:
-                    handler.conclude_request(409, {}, smsg.DIRECTORY_NAME_DUPLICATE)
+                    resp_id = (
+                        existing_folder.id
+                        if existing_folder.check_access_requirements(user, "read")
+                        else None
+                    )
+                    handler.conclude_request(
+                        409, {"type": "directory", "id": resp_id}, smsg.DIRECTORY_NAME_DUPLICATE
+                    )
                     return
 
             today = datetime.date.today()
-            new_real_filename = secrets.token_hex(32)
+            file_id = secrets.token_hex(32)
+            real_filename = secrets.token_hex(32)
 
             new_file = File(
-                path=f"./content/files/{today.year}/{today.month}/{new_real_filename}",
-                id=secrets.token_hex(32),
+                id=file_id,
+                path=f"./content/files/{today.year}/{today.month}/{real_filename}",
             )
             new_document = Document(
                 id=secrets.token_hex(32),
-                title=document_title,
-                folder_id=folder_id if folder_id else None,
+                title=title,
+                folder_id=(folder_id if folder_id else None),
             )
-            new_document_revision = DocumentRevision(file_id=new_file.id)
-            new_document.revisions.append(new_document_revision)
+            new_revision = DocumentRevision(file_id=new_file.id)
+            new_document.revisions.append(new_revision)
 
-            if apply_access_rules(new_document, access_rules_to_apply, user):
+            try:
+                if not apply_access_rules(new_document, access_rules, user):
+                    session.rollback()
+                    handler.conclude_request(403, {}, "Set access rules failed: permission denied")
+                    return 403, folder_id, {"title": title}, handler.username
+
                 session.add(new_file)
                 session.add(new_document)
-                session.add(new_document_revision)
+                session.add(new_revision)
                 session.commit()
-                task_data = create_file_task(
-                    new_document_revision.file, transfer_mode=1
-                )
+
+                task_data = create_file_task(new_revision.file, transfer_mode=1)
                 handler.conclude_request(
                     200,
                     {"document_id": new_document.id, "task_data": task_data},
                     "Task successfully created",
                 )
-                return 0, folder_id, {"title": document_title}, handler.username
-            else:
+                return 0, folder_id, {"title": title}, handler.username
+
+            except (ValueError, jsonschema.ValidationError) as exc:
                 session.rollback()
-                handler.conclude_request(
-                    403, {}, "Set access rules failed: permission denied"
-                )
-                return 403, folder_id, {"title": document_title}, handler.username
+                handler.conclude_request(400, {}, f"Set access rules failed: {str(exc)}")
+                return 400, folder_id, {"title": title}, handler.username
+
+            except Exception:
+                session.rollback()
+                handler.conclude_request(500, {}, "Internal server error")
+                return 500, folder_id, {"title": title}, handler.username
 
 
 class RequestUploadDocumentHandler(RequestHandler):
