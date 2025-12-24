@@ -102,7 +102,7 @@ class RequestGetDocumentInfoHandler(RequestHandler):
             if not document:
                 handler.conclude_request(404, {}, "Document not found")
                 return 404, document_id, handler.username
-            
+
             try:
                 document.get_latest_revision()
             except NoActiveRevisionsError:
@@ -313,7 +313,8 @@ class RequestCreateDocumentHandler(RequestHandler):
 
                 if existing_doc:
                     if existing_doc.active:
-                        handler.conclude_request(400, {}, smsg.DOCUMENT_NAME_DUPLICATE)
+                        # 409 Conflict
+                        handler.conclude_request(409, {}, smsg.DOCUMENT_NAME_DUPLICATE)
                         return
                     else:
                         # 如果该文档尚未被激活，则先尝试删除未激活的文档
@@ -324,9 +325,11 @@ class RequestCreateDocumentHandler(RequestHandler):
                             session.delete(existing_doc)
                             session.commit()
                         else:
-                            handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
+                            handler.conclude_request(
+                                409, {}, smsg.DENIED_FOR_DOC_NAME_DUPLICATE
+                            )
                             return (
-                                403,
+                                409,
                                 folder_id,
                                 {
                                     "title": document_title,
@@ -335,7 +338,7 @@ class RequestCreateDocumentHandler(RequestHandler):
                                 handler.username,
                             )
                 elif existing_folder:
-                    handler.conclude_request(400, {}, smsg.DIRECTORY_NAME_DUPLICATE)
+                    handler.conclude_request(409, {}, smsg.DIRECTORY_NAME_DUPLICATE)
                     return
 
             today = datetime.date.today()
