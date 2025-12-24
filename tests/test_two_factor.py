@@ -25,8 +25,10 @@ class TestTwoFactorAuth:
             f"Failed to get 2FA status: {response.get('message', '')}"
         
         assert "data" in response, "Response missing 'data'"
-        assert "totp_enabled" in response["data"], "Response missing 'totp_enabled'"
-        assert response["data"]["totp_enabled"] is False, \
+        assert "enabled" in response["data"], "Response missing 'enabled'"
+        assert response["data"].get("method", None) is None, \
+            "2FA method should be None when disabled"
+        assert response["data"]["enabled"] is False, \
             "2FA should be disabled by default"
     
     @pytest.mark.asyncio
