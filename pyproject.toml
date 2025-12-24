@@ -10,6 +10,7 @@ dependencies = [
     "jsonschema>=4.25.1",
     "pycryptodome>=3.23.0",
     "pyjwt>=2.10.1",
+    "pyotp>=2.9.0",
     "sqlalchemy>=2.0.44",
     "tomlkit>=0.13.3",
     "websockets>=15.0.1",

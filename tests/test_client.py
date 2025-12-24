@@ -141,20 +141,25 @@ class CFMSTestClient:
         response_text = await self.websocket.recv()
         return json.loads(response_text)
     
-    async def login(self, username: str, password: str) -> Dict[str, Any]:
+    async def login(self, username: str, password: str, two_fa_token: Optional[str] = None) -> Dict[str, Any]:
         """
         Authenticate with the server.
         
         Args:
             username: Username to authenticate with
             password: Password for the user
+            two_fa_token: Optional 2FA token for two-factor authentication
             
         Returns:
             The login response from the server
         """
+        data = {"username": username, "password": password}
+        if two_fa_token:
+            data["2fa_token"] = two_fa_token
+            
         response = await self.send_request(
             "login",
-            {"username": username, "password": password},
+            data,
             include_auth=False
         )
         
@@ -627,3 +632,56 @@ class CFMSTestClient:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit."""
         await self.disconnect()
+
+    # Two-Factor Authentication methods
+
+    async def setup_2fa(self) -> Dict[str, Any]:
+        """
+        Setup two-factor authentication for the authenticated user.
+        
+        Returns:
+            Response with TOTP secret, provisioning URI, and backup codes
+        """
+        return await self.send_request("setup_2fa", {})
+
+    async def validate_2fa(self, token: str) -> Dict[str, Any]:
+        """
+        Validate and enable two-factor authentication.
+        
+        Args:
+            token: TOTP token from authenticator app
+            
+        Returns:
+            Response indicating success or failure
+        """
+        return await self.send_request("validate_2fa", {"token": token})
+
+    async def cancel_2fa_setup(self) -> Dict[str, Any]:
+        """
+        Cancel two-factor authentication setup (before validation).
+        
+        Returns:
+            Response indicating success or failure
+        """
+        return await self.send_request("cancel_2fa_setup", {})
+
+    async def cancel_2fa(self, password: str) -> Dict[str, Any]:
+        """
+        Cancel two-factor authentication for the authenticated user.
+        
+        Args:
+            password: User's password for verification
+            
+        Returns:
+            Response indicating success or failure
+        """
+        return await self.send_request("disable_2fa", {"password": password})
+
+    async def get_2fa_status(self) -> Dict[str, Any]:
+        """
+        Get two-factor authentication status for the authenticated user.
+        
+        Returns:
+            Response with 2FA status information
+        """
+        return await self.send_request("get_2fa_status", {})

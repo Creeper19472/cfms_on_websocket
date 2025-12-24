@@ -13,6 +13,13 @@ from include.database.handler import Session
 from include.database.models.classic import User
 from include.util.audit import log_audit
 from include.handlers.auth import RequestLoginHandler, RequestRefreshTokenHandler
+from include.handlers.two_factor import (
+    RequestCancel2FASetupHandler,
+    RequestSetup2FAHandler,
+    RequestValidate2FAHandler,
+    RequestDisable2FAHandler,
+    RequestGet2FAStatusHandler,
+)
 from include.handlers.document import (
     RequestCreateDocumentHandler,
     RequestDeleteDocumentHandler,
@@ -130,6 +137,12 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         # 认证类
         "login": RequestLoginHandler,
         "refresh_token": RequestRefreshTokenHandler,
+        # 两步验证类
+        "setup_2fa": RequestSetup2FAHandler,
+        "cancel_2fa_setup": RequestCancel2FASetupHandler,  # especially for cancelling setup
+        "validate_2fa": RequestValidate2FAHandler,
+        "disable_2fa": RequestDisable2FAHandler,
+        "get_2fa_status": RequestGet2FAStatusHandler,
         # 文档类
         "get_document": RequestGetDocumentHandler,
         "create_document": RequestCreateDocumentHandler,
@@ -190,6 +203,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "register_listener",
         "login",
         "refresh_token",
+        "validate_2fa",
         "upload_file",
         "download_file",
     ]

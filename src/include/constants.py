@@ -13,8 +13,8 @@ __all__ = [
     "FILE_TASK_DEFAULT_DURATION_SECONDS",
 ]
 
-CORE_VERSION = Version("0.1.0.251112_alpha")
-PROTOCOL_VERSION = 4
+CORE_VERSION = Version("0.1.0.251224_alpha")
+PROTOCOL_VERSION = 5
 
 AVAILABLE_ACCESS_TYPES = ["read", "write", "move", "manage"]
 AVAILABLE_BLOCK_TYPES: set = {"read", "write", "move"}

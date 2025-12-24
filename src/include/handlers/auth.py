@@ -30,80 +30,89 @@ class RequestLoginHandler(RequestHandler):
         "properties": {
             "username": {"type": "string", "minLength": 1},
             "password": {"type": "string", "minLength": 1},
+            "2fa_token": {"type": "string", "minLength": 1},
         },
         "required": ["username", "password"],
         "additionalProperties": False,
     }
 
     def handle(self, handler: ConnectionHandler):
-
-        # Parse the login request
         username: str = handler.data["username"]
         password: str = handler.data["password"]
+        two_factor_auth_token: str = handler.data.get("2fa_token", "")
+
+        cfg = global_config["security"]
+        response_invalid = {"code": 401, "message": "Invalid credentials", "data": {}}
+        should_delay = False
 
         with Session() as session:
             user = session.get(User, username)
 
-            response_invalid = {
-                "code": 401,
-                "message": "Invalid credentials",
-                "data": {},
-            }
-
-            if user:
-                if token := user.authenticate_and_create_token(password):
+            if not user:
+                response = response_invalid
+                should_delay = True
+            else:
+                token = user.authenticate_and_create_token(password)
+                if not token:
+                    response = response_invalid
+                    should_delay = True
+                else:
+                    # enforce password policy (force change)
                     try:
                         check_passwd_requirements(
                             password,
-                            global_config["security"]["passwd_min_length"],
-                            global_config["security"]["passwd_max_length"],
-                            global_config["security"]["passwd_must_contain"],
+                            cfg["passwd_min_length"],
+                            cfg["passwd_max_length"],
+                            cfg["passwd_must_contain"],
                         )
-                    except ValueError as e:
+                    except ValueError:
                         handler.conclude_request(
-                            403,
-                            {},
-                            "Password must be changed before you can log in",
+                            403, {}, "Password must be changed before you can log in"
                         )
                         return 403, username
 
-                    now = time.time()
+                    # enforce password expiration
                     if (
-                        global_config["security"]["enable_passwd_force_expiration"]
-                        and now - user.passwd_last_modified
-                        > 3600
-                        * 24
-                        * global_config["security"]["passwd_expire_after_days"]
+                        cfg["enable_passwd_force_expiration"]
+                        and time.time() - user.passwd_last_modified
+                        > 3600 * 24 * cfg["passwd_expire_after_days"]
                     ):
                         handler.conclude_request(
-                            403,
-                            {},
-                            "Password should be changed because it's expired",
+                            403, {}, "Password should be changed because it's expired"
                         )
                         return 403, username
 
-                    response = {
-                        "code": 200,
-                        "message": "Login successful",
-                        "data": {
-                            "token": token.raw,
-                            "exp": token.exp,
-                            "nickname": user.nickname,
-                            "avatar_id": user.avatar_id,
-                            "permissions": list(user.all_permissions),
-                            "groups": list(user.all_groups),
-                        },
+                    success_data = {
+                        "token": token.raw,
+                        "exp": token.exp,
+                        "nickname": user.nickname,
+                        "avatar_id": user.avatar_id,
+                        "permissions": list(user.all_permissions),
+                        "groups": list(user.all_groups),
                     }
 
-                else:
-                    response = response_invalid
-            else:
-                response = response_invalid
+                    if user.totp_enabled:
+                        if not two_factor_auth_token:
+                            response = {
+                                "code": 202,
+                                "message": "Two-factor authentication required",
+                                "data": {"method": "totp"},
+                            }
+                        elif not user.verify_totp(two_factor_auth_token):
+                            response = {
+                                "code": 401,
+                                "message": "Invalid two-factor authentication token",
+                                "data": {},
+                            }
+                            should_delay = True
+                        else:
+                            response = {"code": 200, "message": "Login successful", "data": success_data}
+                    else:
+                        response = {"code": 200, "message": "Login successful", "data": success_data}
 
-        if response == response_invalid:
+        if should_delay:
             time.sleep(FAILED_LOGIN_DELAY_SECONDS)
 
-        # Send the response back to the client
         handler.conclude_request(**response)
         return response["code"], username
 

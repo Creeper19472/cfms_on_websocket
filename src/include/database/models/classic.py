@@ -1,9 +1,11 @@
 import hashlib
+import json
 import jwt
 import os
+import pyotp
 import secrets
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 from typing import List
 from typing import Optional
 from typing import Set
@@ -50,6 +52,17 @@ class User(Base):
     secret_key: Mapped[str] = mapped_column(
         VARCHAR(32), default=secrets.token_hex(32), nullable=True
     )
+
+    # Two-Factor Authentication (TOTP) fields
+    totp_secret: Mapped[Optional[str]] = mapped_column(
+        VARCHAR(32), nullable=True, default=None
+    )
+    totp_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    totp_backup_codes: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True, default=None
+    )  # JSON string of backup codes
 
     groups: Mapped[List["UserMembership"]] = relationship(
         "UserMembership", back_populates="user"
@@ -142,6 +155,110 @@ class User(Base):
         if session is not None:
             session.add(self)
             session.commit()
+
+    def setup_totp(self) -> tuple[str, list[str]]:
+        """
+        Setup TOTP for the user. Generates a new TOTP secret and backup codes.
+        Returns a tuple of (secret, backup_codes).
+        """
+        # Generate a new TOTP secret
+        self.totp_secret = pyotp.random_base32()
+
+        # Generate 10 backup codes
+        backup_codes = [secrets.token_hex(4) for _ in range(10)]
+        # Hash the backup codes before storing
+        hashed_codes = [
+            hashlib.sha256(code.encode("utf-8")).hexdigest() for code in backup_codes
+        ]
+        self.totp_backup_codes = json.dumps(hashed_codes)
+
+        # TOTP is not enabled yet until validated
+        self.totp_enabled = False
+
+        # Write to database
+        session = object_session(self)
+        if session is not None:
+            session.add(self)
+            session.commit()
+
+        return cast(str, self.totp_secret), backup_codes
+
+    def enable_totp(self):
+        """
+        Enable TOTP authentication for the user.
+        """
+        if not self.totp_secret:
+            raise ValueError("TOTP secret not set. Call setup_totp() first.")
+
+        self.totp_enabled = True
+
+        session = object_session(self)
+        if session is not None:
+            session.add(self)
+            session.commit()
+
+    def disable_totp(self):
+        """
+        Disable and remove TOTP authentication for the user.
+        """
+        self.totp_enabled = False
+        self.totp_secret = None
+        self.totp_backup_codes = None
+
+        session = object_session(self)
+        if session is not None:
+            session.add(self)
+            session.commit()
+
+    def verify_totp(self, token: str) -> bool:
+        """
+        Verify a TOTP token or backup code.
+        Returns True if the token is valid.
+        Can be called during setup (when totp_enabled is False) or during login.
+        """
+        # Check if TOTP secret exists (may not be enabled yet during setup)
+        if not self.totp_secret:
+            return False
+
+        # Try to verify as TOTP token first
+        totp = pyotp.TOTP(self.totp_secret)
+        if totp.verify(token, valid_window=1):
+            return True
+
+        # Try to verify as backup code (only if 2FA is enabled)
+        if self.totp_enabled and self.totp_backup_codes:
+            try:
+                hashed_codes = json.loads(self.totp_backup_codes)
+                token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+                if token_hash in hashed_codes:
+                    # Remove the used backup code
+                    hashed_codes.remove(token_hash)
+                    self.totp_backup_codes = json.dumps(hashed_codes)
+
+                    session = object_session(self)
+                    if session is not None:
+                        session.add(self)
+                        session.commit()
+
+                    return True
+            except (json.JSONDecodeError, ValueError):
+                pass
+
+        return False
+
+    @property
+    def totp_provisioning_uri(self) -> Optional[str]:
+        """
+        Get the TOTP provisioning URI for QR code generation.
+        """
+        if not self.totp_secret:
+            return None
+
+        totp = pyotp.TOTP(self.totp_secret)
+        return totp.provisioning_uri(
+            name=self.username, issuer_name="CFMS"
+        )
 
     @property
     def all_groups(self):
