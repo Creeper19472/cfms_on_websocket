@@ -50,13 +50,7 @@ class RequestSetup2FAHandler(RequestHandler):
                     message="User not found",
                     data={},
                 )
-                log_audit(
-                    "setup_2fa",
-                    target=handler.username,
-                    result=1,
-                    remote_address=handler.remote_address,
-                )
-                return
+                return 404, handler.username
 
             # Check if user already has 2FA enabled
             if user.totp_enabled:
@@ -81,12 +75,7 @@ class RequestSetup2FAHandler(RequestHandler):
                     "backup_codes": backup_codes,
                 },
             )
-            log_audit(
-                "setup_2fa",
-                target=handler.username,
-                result=0,
-                remote_address=handler.remote_address,
-            )
+            return 200, handler.username
 
 
 class RequestValidate2FAHandler(RequestHandler):
@@ -120,13 +109,7 @@ class RequestValidate2FAHandler(RequestHandler):
                     message="User not found",
                     data={},
                 )
-                log_audit(
-                    "validate_2fa",
-                    target=handler.username,
-                    result=1,
-                    remote_address=handler.remote_address,
-                )
-                return
+                return 404, handler.username
 
             # Check if TOTP secret exists but not enabled yet
             if not user.totp_secret:
@@ -153,24 +136,14 @@ class RequestValidate2FAHandler(RequestHandler):
                     message="Two-factor authentication enabled successfully",
                     data={"method": "totp"},
                 )
-                log_audit(
-                    "validate_2fa",
-                    target=handler.username,
-                    result=0,
-                    remote_address=handler.remote_address,
-                )
+                return 200, handler.username
             else:
                 handler.conclude_request(
                     code=401,
                     message="Invalid verification code",
                     data={},
                 )
-                log_audit(
-                    "validate_2fa",
-                    target=handler.username,
-                    result=1,
-                    remote_address=handler.remote_address,
-                )
+                return 401, handler.username
 
 
 class RequestDisable2FAHandler(RequestHandler):
@@ -204,13 +177,7 @@ class RequestDisable2FAHandler(RequestHandler):
                     message="User not found",
                     data={},
                 )
-                log_audit(
-                    "cancel_2fa",
-                    target=handler.username,
-                    result=1,
-                    remote_address=handler.remote_address,
-                )
-                return
+                return 404, handler.username
 
             # Verify password
             if not user.authenticate_and_create_token(password):
@@ -219,20 +186,13 @@ class RequestDisable2FAHandler(RequestHandler):
                     message="Invalid password",
                     data={},
                 )
-                log_audit(
-                    "cancel_2fa",
-                    target=handler.username,
-                    result=1,
-                    remote_address=handler.remote_address,
-                )
-                return
+                return 401, handler.username
 
             # Check if 2FA is enabled
             if not user.totp_enabled:
                 handler.conclude_request(
                     code=400,
                     message="Two-factor authentication is not enabled",
-                    data={"totp_enabled": False},
                 )
                 return
 
@@ -242,14 +202,8 @@ class RequestDisable2FAHandler(RequestHandler):
             handler.conclude_request(
                 code=200,
                 message="Two-factor authentication disabled successfully",
-                data={"totp_enabled": False},
             )
-            log_audit(
-                "cancel_2fa",
-                target=handler.username,
-                result=0,
-                remote_address=handler.remote_address,
-            )
+            return 200, handler.username
 
 
 class RequestCancel2FASetupHandler(RequestHandler):
