@@ -63,9 +63,15 @@ class TestTwoFactorAuth:
         provisioning_uri = response["data"]["provisioning_uri"]
         assert provisioning_uri.startswith("otpauth://totp/"), \
             "Provisioning URI should start with 'otpauth://totp/'"
+        
+        # Cleanup: Cancel 2FA setup for other tests
+        try:
+            await authenticated_client.cancel_2fa_setup()
+        except Exception:
+            pass  # Ignore cleanup errors
     
     @pytest.mark.asyncio
-    async def test_validate_2fa_with_valid_token(self, authenticated_client: CFMSTestClient):
+    async def test_validate_2fa_with_valid_token(self, authenticated_client: CFMSTestClient, admin_credentials: dict):
         """Test validating 2FA with a valid TOTP token."""
         # Setup 2FA first
         setup_response = await authenticated_client.setup_2fa()
@@ -91,6 +97,12 @@ class TestTwoFactorAuth:
         assert "data" in response, "Response missing 'data'"
         assert response["data"].get("totp_enabled") is True, \
             "2FA should be enabled after validation"
+        
+        # Cleanup: Disable 2FA for other tests
+        try:
+            await authenticated_client.cancel_2fa(admin_credentials["password"])
+        except Exception:
+            pass  # Ignore cleanup errors
     
     @pytest.mark.asyncio
     async def test_validate_2fa_with_invalid_token(self, authenticated_client: CFMSTestClient):
@@ -109,6 +121,12 @@ class TestTwoFactorAuth:
         assert "code" in response, "Response missing 'code'"
         assert response["code"] == 401, \
             f"Expected 401 for invalid token, got {response.get('code')}"
+        
+        # Cleanup: Cancel 2FA setup for other tests
+        try:
+            await authenticated_client.cancel_2fa_setup()
+        except Exception:
+            pass  # Ignore cleanup errors
     
     @pytest.mark.asyncio
     async def test_validate_2fa_without_setup(self, authenticated_client: CFMSTestClient):
@@ -124,7 +142,7 @@ class TestTwoFactorAuth:
             f"Expected 400 for validation without setup, got {response.get('code')}"
     
     @pytest.mark.asyncio
-    async def test_setup_2fa_twice_fails(self, authenticated_client: CFMSTestClient):
+    async def test_setup_2fa_twice_fails(self, authenticated_client: CFMSTestClient, admin_credentials: dict):
         """Test that setting up 2FA twice fails if already enabled."""
         # Setup and enable 2FA
         setup_response = await authenticated_client.setup_2fa()
@@ -147,6 +165,12 @@ class TestTwoFactorAuth:
         assert "code" in response, "Response missing 'code'"
         assert response["code"] == 400, \
             f"Expected 400 for duplicate setup, got {response.get('code')}"
+        
+        # Cleanup: Disable 2FA for other tests
+        try:
+            await authenticated_client.cancel_2fa(admin_credentials["password"])
+        except Exception:
+            pass  # Ignore cleanup errors
     
     @pytest.mark.asyncio
     async def test_cancel_2fa_with_valid_password(self, authenticated_client: CFMSTestClient, test_user: dict):
@@ -178,7 +202,7 @@ class TestTwoFactorAuth:
             "2FA should be disabled after cancellation"
     
     @pytest.mark.asyncio
-    async def test_cancel_2fa_with_invalid_password(self, authenticated_client: CFMSTestClient):
+    async def test_cancel_2fa_with_invalid_password(self, authenticated_client: CFMSTestClient, admin_credentials: dict):
         """Test that canceling 2FA fails with incorrect password."""
         # Setup and enable 2FA
         setup_response = await authenticated_client.setup_2fa()
@@ -201,6 +225,12 @@ class TestTwoFactorAuth:
         assert "code" in response, "Response missing 'code'"
         assert response["code"] == 401, \
             f"Expected 401 for invalid password, got {response.get('code')}"
+        
+        # Cleanup: Disable 2FA with correct password for other tests
+        try:
+            await authenticated_client.cancel_2fa(admin_credentials["password"])
+        except Exception:
+            pass  # Ignore cleanup errors
     
     @pytest.mark.asyncio
     async def test_cancel_2fa_when_not_enabled(self, authenticated_client: CFMSTestClient, test_user: dict):
@@ -235,7 +265,7 @@ class TestTwoFactorAuthLogin:
             f"Unexpected response code: {response.get('code')}"
     
     @pytest.mark.asyncio
-    async def test_login_with_2fa_enabled_returns_202(self, authenticated_client: CFMSTestClient, test_user: dict, client: CFMSTestClient):
+    async def test_login_with_2fa_enabled_returns_202(self, authenticated_client: CFMSTestClient, test_user: dict, client: CFMSTestClient, admin_credentials: dict):
         """Test that login returns 202 when 2FA is enabled and no token provided."""
         # Setup and enable 2FA for test user
         setup_response = await authenticated_client.setup_2fa()
@@ -247,6 +277,12 @@ class TestTwoFactorAuthLogin:
         
         validate_response = await authenticated_client.validate_2fa(token)
         assert validate_response.get("code") == 200, "Failed to validate 2FA"
+        
+        # Cleanup: Disable 2FA before disconnecting
+        try:
+            await authenticated_client.cancel_2fa(admin_credentials["password"])
+        except Exception:
+            pass  # Ignore cleanup errors
         
         # Disconnect authenticated client
         await authenticated_client.disconnect()
@@ -267,7 +303,7 @@ class TestTwoFactorAuthLogin:
             "Response should indicate TOTP method is required"
     
     @pytest.mark.asyncio
-    async def test_verify_2fa_login_with_valid_token(self, authenticated_client: CFMSTestClient, test_user: dict, client: CFMSTestClient):
+    async def test_verify_2fa_login_with_valid_token(self, authenticated_client: CFMSTestClient, test_user: dict, client: CFMSTestClient, admin_credentials: dict):
         """Test completing login with valid 2FA token."""
         # Setup and enable 2FA
         setup_response = await authenticated_client.setup_2fa()
@@ -279,6 +315,12 @@ class TestTwoFactorAuthLogin:
         
         validate_response = await authenticated_client.validate_2fa(token)
         assert validate_response.get("code") == 200, "Failed to validate 2FA"
+        
+        # Cleanup: Disable 2FA before disconnecting
+        try:
+            await authenticated_client.cancel_2fa(admin_credentials["password"])
+        except Exception:
+            pass  # Ignore cleanup errors
         
         # Disconnect authenticated client
         await authenticated_client.disconnect()
@@ -300,7 +342,7 @@ class TestTwoFactorAuthLogin:
         assert "exp" in response["data"], "Response should include token expiry"
     
     @pytest.mark.asyncio
-    async def test_verify_2fa_login_with_invalid_token(self, authenticated_client: CFMSTestClient, test_user: dict, client: CFMSTestClient):
+    async def test_verify_2fa_login_with_invalid_token(self, authenticated_client: CFMSTestClient, test_user: dict, client: CFMSTestClient, admin_credentials: dict):
         """Test that login fails with invalid 2FA token."""
         # Setup and enable 2FA
         setup_response = await authenticated_client.setup_2fa()
@@ -312,6 +354,12 @@ class TestTwoFactorAuthLogin:
         
         validate_response = await authenticated_client.validate_2fa(token)
         assert validate_response.get("code") == 200, "Failed to validate 2FA"
+        
+        # Cleanup: Disable 2FA before disconnecting
+        try:
+            await authenticated_client.cancel_2fa(admin_credentials["password"])
+        except Exception:
+            pass  # Ignore cleanup errors
         
         # Disconnect authenticated client
         await authenticated_client.disconnect()
@@ -328,7 +376,7 @@ class TestTwoFactorAuthLogin:
             f"Expected 401 for invalid token, got {response.get('code')}"
     
     @pytest.mark.asyncio
-    async def test_verify_2fa_login_with_backup_code(self, authenticated_client: CFMSTestClient, test_user: dict, client: CFMSTestClient):
+    async def test_verify_2fa_login_with_backup_code(self, authenticated_client: CFMSTestClient, test_user: dict, client: CFMSTestClient, admin_credentials: dict):
         """Test completing login with a backup code."""
         # Setup and enable 2FA
         setup_response = await authenticated_client.setup_2fa()
@@ -342,6 +390,12 @@ class TestTwoFactorAuthLogin:
         
         validate_response = await authenticated_client.validate_2fa(token)
         assert validate_response.get("code") == 200, "Failed to validate 2FA"
+        
+        # Cleanup: Disable 2FA before disconnecting
+        try:
+            await authenticated_client.cancel_2fa(admin_credentials["password"])
+        except Exception:
+            pass  # Ignore cleanup errors
         
         # Disconnect authenticated client
         await authenticated_client.disconnect()

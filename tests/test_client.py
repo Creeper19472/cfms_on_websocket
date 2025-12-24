@@ -656,6 +656,15 @@ class CFMSTestClient:
         """
         return await self.send_request("validate_2fa", {"token": token})
 
+    async def cancel_2fa_setup(self) -> Dict[str, Any]:
+        """
+        Cancel two-factor authentication setup (before validation).
+        
+        Returns:
+            Response indicating success or failure
+        """
+        return await self.send_request("cancel_2fa_setup", {})
+
     async def cancel_2fa(self, password: str) -> Dict[str, Any]:
         """
         Cancel two-factor authentication for the authenticated user.
