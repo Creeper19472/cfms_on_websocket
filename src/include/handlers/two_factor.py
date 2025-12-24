@@ -6,9 +6,11 @@ two-factor authentication using Time-based One-Time Passwords (TOTP).
 """
 
 import json
+import time
 
 from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
+from include.constants import FAILED_LOGIN_DELAY_SECONDS
 from include.database.handler import Session
 from include.database.models.classic import User
 
@@ -174,15 +176,6 @@ class RequestDisable2FAHandler(RequestHandler):
                 )
                 return 404, handler.username
 
-            # Verify password
-            if not user.authenticate_and_create_token(password):
-                handler.conclude_request(
-                    code=401,
-                    message="Invalid password",
-                    data={},
-                )
-                return 401, handler.username
-
             # Check if 2FA is enabled
             if not user.totp_enabled:
                 handler.conclude_request(
@@ -190,6 +183,17 @@ class RequestDisable2FAHandler(RequestHandler):
                     message="Two-factor authentication is not enabled",
                 )
                 return
+            
+            # Verify password
+            if not user.authenticate_and_create_token(password):
+                time.sleep(FAILED_LOGIN_DELAY_SECONDS)  # Mitigate brute-force attacks
+
+                handler.conclude_request(
+                    code=401,
+                    message="Invalid password",
+                    data={},
+                )
+                return 401, handler.username
 
             # Disable TOTP
             user.disable_totp()
