@@ -203,7 +203,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "register_listener",
         "login",
         "refresh_token",
-        "verify_2fa",
+        "validate_2fa",
         "upload_file",
         "download_file",
     ]

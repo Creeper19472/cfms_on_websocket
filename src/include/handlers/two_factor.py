@@ -306,11 +306,11 @@ class RequestGet2FAStatusHandler(RequestHandler):
                 code=200,
                 message="Two-factor authentication status",
                 data={
-                    "enabled": user.totp_enabled,
-                    "method": "totp" if user.totp_enabled else None,
+                    "enabled": target.totp_enabled,
+                    "method": "totp" if target.totp_enabled else None,
                     "backup_codes_count": (
-                        len(json.loads(user.totp_backup_codes))
-                        if user.totp_backup_codes
+                        len(json.loads(target.totp_backup_codes))
+                        if target.totp_backup_codes
                         else 0
                     ),
                 },

@@ -3,7 +3,6 @@ Tests for two-factor authentication (TOTP) functionality.
 """
 
 import pytest
-import time
 import pyotp
 from tests.test_client import CFMSTestClient
 
