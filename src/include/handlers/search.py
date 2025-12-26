@@ -85,21 +85,20 @@ class RequestSearchHandler(RequestHandler):
                 
                 documents = documents_query.all()
                 
-                # Filter by permissions and active status
+                # Filter by permissions
                 for document in documents:
-                    # Skip inactive documents
-                    if not document.active:
-                        continue
-                    
                     # Check if user has read permission
                     if not document.check_access_requirements(user, access_type="read"):
                         continue
                     
+                    # Try to get size and last_modified from active revision
+                    # If no active revision, use defaults (document still searchable)
                     try:
                         latest_revision = document.get_latest_revision()
                         size = latest_revision.file.size if latest_revision.file else 0
                         last_modified = latest_revision.created_time
-                    except (NoActiveRevisionsError, AttributeError):
+                    except (NoActiveRevisionsError, AttributeError, RuntimeError):
+                        # Document has no active revision yet, use defaults
                         size = 0
                         last_modified = document.created_time
                     
