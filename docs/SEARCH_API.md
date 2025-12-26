@@ -119,7 +119,7 @@ The Search API provides functionality to search for documents and directories by
 
 The search automatically filters results based on the authenticated user's read permissions. Users will only see documents and directories they have permission to access.
 
-- Documents are searchable immediately after creation, even without uploaded files
+- Documents without active revisions are excluded from results
 - Only items with read permission are returned
 - No indication is given that filtered results exist (security by obscurity)
 

@@ -38,7 +38,7 @@ The problem statement requested:
 **Security:**
 - Requires authentication
 - Permission-based filtering (only returns items user can read)
-- Documents searchable immediately after creation (even without uploaded files)
+- Excludes inactive documents
 - No information disclosure about filtered results
 
 ### 2. API Integration (`src/include/connection_handler.py`)
