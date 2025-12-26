@@ -303,6 +303,42 @@ class CFMSTestClient:
         """
         return await self.send_request("delete_directory", {"folder_id": folder_id})
     
+    async def search(
+        self,
+        query: str,
+        limit: Optional[int] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
+        search_documents: Optional[bool] = None,
+        search_directories: Optional[bool] = None
+    ) -> Dict[str, Any]:
+        """
+        Search for documents and directories by name.
+        
+        Args:
+            query: Search query string
+            limit: Maximum number of results to return
+            sort_by: Sort field (name, created_time, size, last_modified)
+            sort_order: Sort order (asc, desc)
+            search_documents: Whether to search documents
+            search_directories: Whether to search directories
+            
+        Returns:
+            Search results with matching documents and directories
+        """
+        data: Dict[str, Any] = {"query": query}
+        if limit is not None:
+            data["limit"] = limit
+        if sort_by is not None:
+            data["sort_by"] = sort_by
+        if sort_order is not None:
+            data["sort_order"] = sort_order
+        if search_documents is not None:
+            data["search_documents"] = search_documents
+        if search_directories is not None:
+            data["search_directories"] = search_directories
+        return await self.send_request("search", data)
+    
     async def create_user(
         self,
         username: str,

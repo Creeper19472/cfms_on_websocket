@@ -320,6 +320,33 @@ async def authenticated_client(client: CFMSTestClient, admin_credentials: dict) 
 
 
 @pytest_asyncio.fixture
+async def unauthenticated_client(server_process) -> AsyncGenerator[CFMSTestClient, None]:
+    """
+    Provide an unauthenticated test client (just connected, not logged in).
+    """
+    test_client = CFMSTestClient()
+    
+    # Try to connect with retries
+    max_attempts = 5
+    for attempt in range(max_attempts):
+        try:
+            await test_client.connect()
+            break
+        except (ConnectionRefusedError, TimeoutError, OSError) as e:
+            if attempt == max_attempts - 1:
+                pytest.fail(f"Failed to connect to server after {max_attempts} attempts: {e}")
+            await asyncio.sleep(1)
+    
+    yield test_client
+    
+    # Cleanup
+    try:
+        await test_client.disconnect()
+    except:
+        pass
+
+
+@pytest_asyncio.fixture
 async def test_document(authenticated_client: CFMSTestClient) -> AsyncGenerator[dict, None]:
     """
     Create a test document and clean it up after the test.
