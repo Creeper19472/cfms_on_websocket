@@ -5,8 +5,7 @@ Provides functionality to search for documents and directories by name,
 with permission filtering, result limiting, and sorting capabilities.
 """
 
-from typing import Optional, List, Dict, Any
-from sqlalchemy import or_, func
+from typing import List, Dict, Any
 from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
 from include.database.handler import Session
