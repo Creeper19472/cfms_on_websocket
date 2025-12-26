@@ -166,9 +166,9 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "delete_directory": RequestDeleteDirectoryHandler,
         "rename_directory": RequestRenameDirectoryHandler,
         "move_directory": RequestMoveDirectoryHandler,
-        # 搜索类
+        # Search
         "search": RequestSearchHandler,
-        # 用户类
+        # Users
         "block_user": RequestBlockUserHandler,
         "unblock_user": RequestUnblockUserHandler,
         "list_users": RequestListUsersHandler,
