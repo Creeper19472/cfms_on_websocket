@@ -73,6 +73,7 @@ from include.handlers.management.system import (
     RequestViewAuditLogsHandler,
 )
 from include.handlers.debugging.throw import RequestThrowExceptionHandler
+from include.handlers.search import RequestSearchHandler
 
 from include.constants import CORE_VERSION, PROTOCOL_VERSION
 from include.shared import connected_listeners, lockdown_enabled
@@ -165,7 +166,9 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "delete_directory": RequestDeleteDirectoryHandler,
         "rename_directory": RequestRenameDirectoryHandler,
         "move_directory": RequestMoveDirectoryHandler,
-        # 用户类
+        # Search
+        "search": RequestSearchHandler,
+        # Users
         "block_user": RequestBlockUserHandler,
         "unblock_user": RequestUnblockUserHandler,
         "list_users": RequestListUsersHandler,
