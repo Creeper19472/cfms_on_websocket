@@ -653,7 +653,7 @@ class RequestMoveDirectoryHandler(RequestHandler):
                 existing_folder = (
                     session.query(Folder)
                     .filter_by(
-                        parent_id=folder.parent_id if folder.parent_id else None,
+                        parent_id=target_folder_id,
                         name=folder.name,
                     )
                     .first()
@@ -661,7 +661,7 @@ class RequestMoveDirectoryHandler(RequestHandler):
                 existing_document = (
                     session.query(Document)
                     .filter_by(
-                        folder_id=folder.parent_id if folder.parent_id else None,
+                        folder_id=target_folder_id,
                         title=folder.name,
                     )
                     .first()

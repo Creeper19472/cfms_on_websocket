@@ -291,7 +291,9 @@ class RequestCreateDocumentHandler(RequestHandler):
             if not global_config["document"]["allow_name_duplicate"]:
                 existing_doc = (
                     session.query(Document)
-                    .filter_by(folder_id=(folder_id if folder_id else None), title=title)
+                    .filter_by(
+                        folder_id=(folder_id if folder_id else None), title=title
+                    )
                     .first()
                 )
                 existing_folder = (
@@ -308,7 +310,9 @@ class RequestCreateDocumentHandler(RequestHandler):
                             else None
                         )
                         handler.conclude_request(
-                            409, {"type": "document", "id": resp_id}, smsg.DOCUMENT_NAME_DUPLICATE
+                            409,
+                            {"type": "document", "id": resp_id},
+                            smsg.DOCUMENT_NAME_DUPLICATE,
                         )
                         return
                     else:
@@ -321,7 +325,12 @@ class RequestCreateDocumentHandler(RequestHandler):
                                     {},
                                     "Failed to delete revisions. Perhaps a file task is in progress?",
                                 )
-                                return 500, folder_id, {"title": title}, handler.username
+                                return (
+                                    500,
+                                    folder_id,
+                                    {"title": title},
+                                    handler.username,
+                                )
                             session.delete(existing_doc)
                         else:
                             resp_id = (
@@ -330,7 +339,9 @@ class RequestCreateDocumentHandler(RequestHandler):
                                 else None
                             )
                             handler.conclude_request(
-                                409, {"type": "document", "id": resp_id}, smsg.DENIED_FOR_DOC_NAME_DUPLICATE
+                                409,
+                                {"type": "document", "id": resp_id},
+                                smsg.DENIED_FOR_DOC_NAME_DUPLICATE,
                             )
                             return (
                                 409,
@@ -345,7 +356,9 @@ class RequestCreateDocumentHandler(RequestHandler):
                         else None
                     )
                     handler.conclude_request(
-                        409, {"type": "directory", "id": resp_id}, smsg.DIRECTORY_NAME_DUPLICATE
+                        409,
+                        {"type": "directory", "id": resp_id},
+                        smsg.DIRECTORY_NAME_DUPLICATE,
                     )
                     return
 
@@ -368,7 +381,9 @@ class RequestCreateDocumentHandler(RequestHandler):
             try:
                 if not apply_access_rules(new_document, access_rules, user):
                     session.rollback()
-                    handler.conclude_request(403, {}, "Set access rules failed: permission denied")
+                    handler.conclude_request(
+                        403, {}, "Set access rules failed: permission denied"
+                    )
                     return 403, folder_id, {"title": title}, handler.username
 
                 session.add(new_file)
@@ -386,7 +401,9 @@ class RequestCreateDocumentHandler(RequestHandler):
 
             except (ValueError, jsonschema.ValidationError) as exc:
                 session.rollback()
-                handler.conclude_request(400, {}, f"Set access rules failed: {str(exc)}")
+                handler.conclude_request(
+                    400, {}, f"Set access rules failed: {str(exc)}"
+                )
                 return 400, folder_id, {"title": title}, handler.username
 
             except Exception:
@@ -835,6 +852,15 @@ class RequestMoveDocumentHandler(RequestHandler):
                     {"target_folder_id": target_folder_id},
                     handler.username,
                 )
+            
+            if document.folder_id == target_folder_id:
+                handler.conclude_request(400, {}, "Cannot move to the same folder")
+                return (
+                    400,
+                    document_id,
+                    {"target_folder_id": target_folder_id},
+                    handler.username,
+                )
 
             if not document.check_access_requirements(user, "move"):
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MOVE_DOCUMENT)
@@ -852,7 +878,7 @@ class RequestMoveDocumentHandler(RequestHandler):
                 existing_doc = (
                     session.query(Document)
                     .filter_by(
-                        folder_id=document.folder_id if document.folder_id else None,
+                        folder_id=target_folder_id,
                         title=document.title,
                     )
                     .first()
@@ -861,7 +887,7 @@ class RequestMoveDocumentHandler(RequestHandler):
                 existing_folder = (
                     session.query(Folder)
                     .filter_by(
-                        parent_id=document.folder_id if document.folder_id else None,
+                        parent_id=target_folder_id,
                         name=document.title,
                     )
                     .first()
