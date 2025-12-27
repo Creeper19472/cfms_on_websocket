@@ -719,6 +719,13 @@ class RequestMoveDirectoryHandler(RequestHandler):
                     )
                     return 403, folder_id, handler.username
 
+                # Check if target folder is a descendant of the folder being moved
+                if target_folder.id == folder.id or target_folder.is_descendant_of(folder):
+                    handler.conclude_request(
+                        400, {}, smsg.CANNOT_MOVE_DIRECTORY_INTO_SUBDIRECTORY
+                    )
+                    return 400, folder_id, handler.username
+
                 folder.parent = target_folder
             else:
                 # 未来添加有关根目录写入的规则
