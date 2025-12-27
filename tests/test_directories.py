@@ -105,6 +105,201 @@ class TestDirectoryOperations:
                     pass
 
 
+class TestDirectoryMove:
+    """Test directory move operations."""
+    
+    @pytest.mark.asyncio
+    async def test_move_directory_to_root(self, authenticated_client: CFMSTestClient):
+        """Test moving a directory to root."""
+        # Create a parent and a child directory
+        parent_response = await authenticated_client.create_directory("Parent Dir")
+        
+        if parent_response["code"] == 200:
+            parent_id = parent_response["data"]["id"]
+            
+            try:
+                child_response = await authenticated_client.create_directory(
+                    "Child Dir", parent_id=parent_id
+                )
+                
+                if child_response["code"] == 200:
+                    child_id = child_response["data"]["id"]
+                    
+                    try:
+                        # Move child to root
+                        move_response = await authenticated_client.move_directory(
+                            child_id, None
+                        )
+                        
+                        # Should succeed
+                        assert move_response["code"] == 200
+                    finally:
+                        try:
+                            await authenticated_client.delete_directory(child_id)
+                        except Exception:
+                            pass
+            finally:
+                try:
+                    await authenticated_client.delete_directory(parent_id)
+                except Exception:
+                    pass
+    
+    @pytest.mark.asyncio
+    async def test_move_directory_into_itself(self, authenticated_client: CFMSTestClient):
+        """Test that moving a directory into itself is prevented."""
+        # Create a directory
+        dir_response = await authenticated_client.create_directory("Test Dir")
+        
+        if dir_response["code"] == 200:
+            dir_id = dir_response["data"]["id"]
+            
+            try:
+                # Try to move directory into itself
+                move_response = await authenticated_client.move_directory(
+                    dir_id, dir_id
+                )
+                
+                # Should fail with 400
+                assert move_response["code"] == 400
+                assert "subdirectory" in move_response["message"].lower()
+            finally:
+                try:
+                    await authenticated_client.delete_directory(dir_id)
+                except Exception:
+                    pass
+    
+    @pytest.mark.asyncio
+    async def test_move_directory_into_child(self, authenticated_client: CFMSTestClient):
+        """Test that moving a directory into its child is prevented."""
+        # Create parent and child
+        parent_response = await authenticated_client.create_directory("Parent Dir")
+        
+        if parent_response["code"] == 200:
+            parent_id = parent_response["data"]["id"]
+            
+            try:
+                child_response = await authenticated_client.create_directory(
+                    "Child Dir", parent_id=parent_id
+                )
+                
+                if child_response["code"] == 200:
+                    child_id = child_response["data"]["id"]
+                    
+                    try:
+                        # Try to move parent into child
+                        move_response = await authenticated_client.move_directory(
+                            parent_id, child_id
+                        )
+                        
+                        # Should fail with 400
+                        assert move_response["code"] == 400
+                        assert "subdirectory" in move_response["message"].lower()
+                    finally:
+                        try:
+                            await authenticated_client.delete_directory(child_id)
+                        except Exception:
+                            pass
+            finally:
+                try:
+                    await authenticated_client.delete_directory(parent_id)
+                except Exception:
+                    pass
+    
+    @pytest.mark.asyncio
+    async def test_move_directory_into_grandchild(self, authenticated_client: CFMSTestClient):
+        """Test that moving a directory into its grandchild is prevented."""
+        # Create parent, child, and grandchild
+        parent_response = await authenticated_client.create_directory("Parent Dir")
+        
+        if parent_response["code"] == 200:
+            parent_id = parent_response["data"]["id"]
+            
+            try:
+                child_response = await authenticated_client.create_directory(
+                    "Child Dir", parent_id=parent_id
+                )
+                
+                if child_response["code"] == 200:
+                    child_id = child_response["data"]["id"]
+                    
+                    try:
+                        grandchild_response = await authenticated_client.create_directory(
+                            "Grandchild Dir", parent_id=child_id
+                        )
+                        
+                        if grandchild_response["code"] == 200:
+                            grandchild_id = grandchild_response["data"]["id"]
+                            
+                            try:
+                                # Try to move parent into grandchild
+                                move_response = await authenticated_client.move_directory(
+                                    parent_id, grandchild_id
+                                )
+                                
+                                # Should fail with 400
+                                assert move_response["code"] == 400
+                                assert "subdirectory" in move_response["message"].lower()
+                            finally:
+                                try:
+                                    await authenticated_client.delete_directory(grandchild_id)
+                                except Exception:
+                                    pass
+                    finally:
+                        try:
+                            await authenticated_client.delete_directory(child_id)
+                        except Exception:
+                            pass
+            finally:
+                try:
+                    await authenticated_client.delete_directory(parent_id)
+                except Exception:
+                    pass
+    
+    @pytest.mark.asyncio
+    async def test_move_directory_to_sibling(self, authenticated_client: CFMSTestClient):
+        """Test moving a directory to a sibling location (should succeed)."""
+        # Create parent with two children
+        parent_response = await authenticated_client.create_directory("Parent Dir")
+        
+        if parent_response["code"] == 200:
+            parent_id = parent_response["data"]["id"]
+            
+            try:
+                child1_response = await authenticated_client.create_directory(
+                    "Child Dir 1", parent_id=parent_id
+                )
+                child2_response = await authenticated_client.create_directory(
+                    "Child Dir 2", parent_id=parent_id
+                )
+                
+                if child1_response["code"] == 200 and child2_response["code"] == 200:
+                    child1_id = child1_response["data"]["id"]
+                    child2_id = child2_response["data"]["id"]
+                    
+                    try:
+                        # Move child2 into child1 (should succeed)
+                        move_response = await authenticated_client.move_directory(
+                            child2_id, child1_id
+                        )
+                        
+                        # Should succeed
+                        assert move_response["code"] == 200
+                    finally:
+                        try:
+                            await authenticated_client.delete_directory(child1_id)
+                        except Exception:
+                            pass
+                        try:
+                            await authenticated_client.delete_directory(child2_id)
+                        except Exception:
+                            pass
+            finally:
+                try:
+                    await authenticated_client.delete_directory(parent_id)
+                except Exception:
+                    pass
+
+
 class TestDirectoryWithoutAuth:
     """Test that directory operations require authentication."""
     

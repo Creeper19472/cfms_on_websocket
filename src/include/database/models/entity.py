@@ -272,6 +272,23 @@ class Folder(BaseObject):  # 文档文件夹
     def count_of_child(self):
         return len(self.children) + sum(1 for doc in self.documents if doc.active)
 
+    def is_descendant_of(self, potential_ancestor: "Folder") -> bool:
+        """
+        Check if this folder is a descendant of the given potential ancestor folder.
+        
+        Args:
+            potential_ancestor: The folder to check if it's an ancestor
+            
+        Returns:
+            True if this folder is a descendant of potential_ancestor, False otherwise
+        """
+        current = self.parent
+        while current is not None:
+            if current.id == potential_ancestor.id:
+                return True
+            current = current.parent
+        return False
+
     def delete_all_children(self):
         session = object_session(self)
         if not session:

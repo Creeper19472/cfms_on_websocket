@@ -303,6 +303,22 @@ class CFMSTestClient:
         """
         return await self.send_request("delete_directory", {"folder_id": folder_id})
     
+    async def move_directory(self, folder_id: str, target_folder_id: Optional[str]) -> Dict[str, Any]:
+        """
+        Move a directory to a new location.
+        
+        Args:
+            folder_id: The ID of the folder to move
+            target_folder_id: The ID of the target parent folder (None for root)
+            
+        Returns:
+            Response indicating success or failure
+        """
+        return await self.send_request("move_directory", {
+            "folder_id": folder_id,
+            "target_folder_id": target_folder_id
+        })
+    
     async def search(
         self,
         query: str,
