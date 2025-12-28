@@ -12,7 +12,7 @@ from include.database.models.entity import (
 )
 import include.system.messages as smsg
 
-__all__ = ["RequestGrantAccessHandler"]
+__all__ = ["RequestGrantAccessHandler", "RequestRevokeAccessHandler"]
 
 ENTITY_TYPE_MAPPING = {"user": User, "group": UserGroup}
 TARGET_TYPE_MAPPING = {"document": Document, "directory": Folder}
@@ -218,3 +218,55 @@ class RequestViewAccessEntriesHandler(RequestHandler):
             {"object_type": object_type, "object_identifier": object_identifier},
             handler.username,
         )
+
+
+class RequestRevokeAccessHandler(RequestHandler):
+
+    data_schema = {
+        "type": "object",
+        "properties": {
+            "entry_id": {
+                "type": "integer",
+                "minimum": 1,
+            },
+        },
+        "required": ["entry_id"],
+        "additionalProperties": False,
+    }
+
+    def handle(self, handler: ConnectionHandler):
+        entry_id: int = handler.data["entry_id"]
+
+        with Session() as session:
+
+            operator = session.get(User, handler.username)
+
+            if not operator or not operator.is_token_valid(handler.token):
+                handler.conclude_request(403, {}, "Invalid user or token")
+                return
+
+            if "manage_access" not in operator.all_permissions:
+                handler.conclude_request(
+                    code=403,
+                    message="You do not have permission to manage object access",
+                    data={},
+                )
+                return 403, handler.username
+
+            # Get the access entry
+            entry = session.get(ObjectAccessEntry, entry_id)
+            if not entry:
+                handler.conclude_request(404, {}, "Access entry not found")
+                return (
+                    404,
+                    None,
+                    handler.data,
+                    handler.username,
+                )
+
+            # Delete the entry
+            session.delete(entry)
+            session.commit()
+
+        handler.conclude_request(200, {}, smsg.SUCCESS)
+        return 200, None, handler.data, handler.username

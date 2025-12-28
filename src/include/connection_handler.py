@@ -66,6 +66,7 @@ from include.handlers.management.group import (
 )
 from include.handlers.management.access import (
     RequestGrantAccessHandler,
+    RequestRevokeAccessHandler,
     RequestViewAccessEntriesHandler,
 )
 from include.handlers.management.system import (
@@ -189,6 +190,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "change_group_permissions": RequestChangeGroupPermissionsHandler,
         # 访问类
         "grant_access": RequestGrantAccessHandler,
+        "revoke_access": RequestRevokeAccessHandler,
         "view_access_entries": RequestViewAccessEntriesHandler,
         # 系统类
         "lockdown": RequestLockdownHandler,

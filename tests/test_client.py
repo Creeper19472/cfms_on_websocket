@@ -737,3 +737,72 @@ class CFMSTestClient:
             Response with 2FA status information
         """
         return await self.send_request("get_2fa_status", {})
+
+    async def grant_access(
+        self,
+        entity_type: str,
+        entity_identifier: str,
+        target_type: str,
+        target_identifier: str,
+        access_types: list[str],
+        start_time: float,
+        end_time: float | None = None
+    ) -> Dict[str, Any]:
+        """
+        Grant access to a user or group for a document or directory.
+        
+        Args:
+            entity_type: Type of entity ("user" or "group")
+            entity_identifier: Username or group name
+            target_type: Type of target ("document" or "directory")
+            target_identifier: Document or folder ID
+            access_types: List of access types to grant
+            start_time: When access starts (timestamp)
+            end_time: When access ends (timestamp, optional)
+            
+        Returns:
+            Response indicating success or failure
+        """
+        data: Dict[str, Any] = {
+            "entity_type": entity_type,
+            "entity_identifier": entity_identifier,
+            "target_type": target_type,
+            "target_identifier": target_identifier,
+            "access_types": access_types,
+            "start_time": start_time,
+        }
+        if end_time is not None:
+            data["end_time"] = end_time
+        return await self.send_request("grant_access", data)
+
+    async def revoke_access(self, entry_id: int) -> Dict[str, Any]:
+        """
+        Revoke access by deleting an access entry.
+        
+        Args:
+            entry_id: ID of the access entry to revoke
+            
+        Returns:
+            Response indicating success or failure
+        """
+        return await self.send_request("revoke_access", {"entry_id": entry_id})
+
+    async def view_access_entries(
+        self,
+        object_type: str,
+        object_identifier: str
+    ) -> Dict[str, Any]:
+        """
+        View access entries for a user, group, document, or directory.
+        
+        Args:
+            object_type: Type of object ("user", "group", "document", or "directory")
+            object_identifier: Identifier of the object
+            
+        Returns:
+            Response with list of access entries
+        """
+        return await self.send_request("view_access_entries", {
+            "object_type": object_type,
+            "object_identifier": object_identifier
+        })
