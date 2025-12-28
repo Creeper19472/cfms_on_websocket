@@ -46,7 +46,7 @@ class PasswordProtection(Base):
     )
     
     # Additional metadata (reserved for future use)
-    metadata: Mapped[Optional[str]] = mapped_column(
+    protection_metadata: Mapped[Optional[str]] = mapped_column(
         Text, nullable=True,
         comment="JSON metadata for future extensions"
     )
