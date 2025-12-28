@@ -74,6 +74,11 @@ from include.handlers.management.system import (
 )
 from include.handlers.debugging.throw import RequestThrowExceptionHandler
 from include.handlers.search import RequestSearchHandler
+from include.handlers.protection import (
+    RequestEnablePasswordProtectionHandler,
+    RequestRemovePasswordProtectionHandler,
+    RequestVerifyPasswordHandler,
+)
 
 from include.constants import CORE_VERSION, PROTOCOL_VERSION
 from include.shared import connected_listeners, lockdown_enabled
@@ -193,6 +198,10 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         # 系统类
         "lockdown": RequestLockdownHandler,
         "view_audit_logs": RequestViewAuditLogsHandler,
+        # 密码保护类
+        "enable_password_protection": RequestEnablePasswordProtectionHandler,
+        "remove_password_protection": RequestRemovePasswordProtectionHandler,
+        "verify_password": RequestVerifyPasswordHandler,
     }
 
     # Debugging

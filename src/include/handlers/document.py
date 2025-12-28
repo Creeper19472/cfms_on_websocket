@@ -79,7 +79,10 @@ class RequestGetDocumentInfoHandler(RequestHandler):
 
     data_schema = {
         "type": "object",
-        "properties": {"document_id": {"type": "string", "minLength": 1}},
+        "properties": {
+            "document_id": {"type": "string", "minLength": 1},
+            "password": {"type": "string"}
+        },
         "required": ["document_id"],
     }
 
@@ -88,6 +91,7 @@ class RequestGetDocumentInfoHandler(RequestHandler):
     def handle(self, handler: ConnectionHandler):
 
         document_id = handler.data.get("document_id")
+        password = handler.data.get("password")
 
         if not document_id:
             handler.conclude_request(400, {}, "Document ID is required")
@@ -114,6 +118,15 @@ class RequestGetDocumentInfoHandler(RequestHandler):
             if not document.check_access_requirements(user, access_type="read"):
                 handler.conclude_request(403, {}, "Permission denied")
                 return 403, document_id, handler.username
+            
+            # Check password protection
+            if document.is_password_protected():
+                if password is None:
+                    handler.conclude_request(202, {}, "Password required")
+                    return 202, document_id, handler.username
+                if not document.verify_password(password):
+                    handler.conclude_request(403, {}, "Incorrect password")
+                    return 403, document_id, handler.username
 
             info_code = 0
             ### generate access_rules text
@@ -198,7 +211,10 @@ class RequestGetDocumentHandler(RequestHandler):
 
     data_schema = {
         "type": "object",
-        "properties": {"document_id": {"type": "string", "minLength": 1}},
+        "properties": {
+            "document_id": {"type": "string", "minLength": 1},
+            "password": {"type": "string"}
+        },
         "required": ["document_id"],
         "additionalProperties": False,
     }
@@ -207,6 +223,7 @@ class RequestGetDocumentHandler(RequestHandler):
 
     def handle(self, handler: ConnectionHandler):
         document_id: str = handler.data["document_id"]
+        password = handler.data.get("password")
 
         with Session() as session:
             user = session.get(User, handler.username)
@@ -220,6 +237,15 @@ class RequestGetDocumentHandler(RequestHandler):
             if not document.check_access_requirements(user):
                 handler.conclude_request(403, {}, "Access denied to the document")
                 return 403, document_id, handler.username
+            
+            # Check password protection
+            if document.is_password_protected():
+                if password is None:
+                    handler.conclude_request(202, {}, "Password required")
+                    return 202, document_id, handler.username
+                if not document.verify_password(password):
+                    handler.conclude_request(403, {}, "Incorrect password")
+                    return 403, document_id, handler.username
 
             try:
                 latest_revision = document.get_latest_revision()

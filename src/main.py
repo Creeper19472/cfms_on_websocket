@@ -41,6 +41,7 @@ from include.database.handler import engine
 from include.database.models.classic import User, UserGroup
 from include.database.models.entity import Document, DocumentRevision
 from include.database.models.file import File
+from include.database.models.protection import PasswordProtection
 from include.util.log import getCustomLogger
 
 

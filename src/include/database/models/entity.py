@@ -26,6 +26,67 @@ class BaseObject(Base):
     id: Mapped[str]
     access_rules: Mapped[List]
 
+    def get_password_protection(self):
+        """
+        Get the password protection entry for this object, if any.
+        
+        Returns:
+            PasswordProtection object if password protected, None otherwise
+        """
+        from include.database.models.protection import PasswordProtection
+        
+        _TARGET_TYPE_MAPPING = {"folders": "directory", "documents": "document"}
+        
+        session = object_session(self)
+        if not session:
+            raise RuntimeError("No active session found for object")
+        
+        target_type = _TARGET_TYPE_MAPPING[self.__tablename__]
+        
+        protection = (
+            session.query(PasswordProtection)
+            .filter(
+                PasswordProtection.target_type == target_type,
+                PasswordProtection.target_id == self.id
+            )
+            .first()
+        )
+        
+        return protection
+    
+    def is_password_protected(self) -> bool:
+        """
+        Check if this object is password protected.
+        
+        Returns:
+            True if password protected, False otherwise
+        """
+        return self.get_password_protection() is not None
+    
+    def verify_password(self, password: Optional[str]) -> bool:
+        """
+        Verify the provided password against the stored password.
+        
+        Args:
+            password: The password to verify (None if not provided)
+            
+        Returns:
+            True if password is correct or object is not protected,
+            False if password is incorrect or missing when required
+        """
+        protection = self.get_password_protection()
+        
+        if not protection:
+            # Not password protected, access granted
+            return True
+        
+        if password is None:
+            # Password required but not provided
+            return False
+        
+        # Verify the password
+        return protection.verify_password(password)
+
     def check_access_requirements(self, user: User, access_type: str = "read") -> bool:
         """
         Checks if a given user meets the access requirements for a specific access type based on defined access rules.
