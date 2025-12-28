@@ -7,6 +7,7 @@ from include.conf_loader import global_config
 from include.database.handler import Session
 from include.database.models.classic import User
 from include.database.models.entity import Folder, Document, FolderAccessRule
+from include.handlers.protection import check_password_protection
 from include.util.audit import log_audit
 from include.util.rule.applying import apply_access_rules
 import include.system.messages as smsg
@@ -79,13 +80,10 @@ class RequestListDirectoryHandler(RequestHandler):
                     return 403, folder_id, handler.username
                 
                 # Check password protection
-                if folder.is_password_protected():
-                    if password is None:
-                        handler.conclude_request(202, {}, "Password required")
-                        return 202, folder_id, handler.username
-                    if not folder.verify_password(password):
-                        handler.conclude_request(403, {}, "Incorrect password")
-                        return 403, folder_id, handler.username
+                protection_code, protection_msg = check_password_protection(folder, password, session)
+                if protection_code != 0:
+                    handler.conclude_request(protection_code, {}, protection_msg)
+                    return protection_code, folder_id, handler.username
                 
                 parent = folder.parent
                 children = folder.children
@@ -193,13 +191,10 @@ class RequestGetDirectoryInfoHandler(RequestHandler):
                 return 403, directory_id, handler.username
             
             # Check password protection
-            if directory.is_password_protected():
-                if password is None:
-                    handler.conclude_request(202, {}, "Password required")
-                    return 202, directory_id, handler.username
-                if not directory.verify_password(password):
-                    handler.conclude_request(403, {}, "Incorrect password")
-                    return 403, directory_id, handler.username
+            protection_code, protection_msg = check_password_protection(directory, password, session)
+            if protection_code != 0:
+                handler.conclude_request(protection_code, {}, protection_msg)
+                return protection_code, directory_id, handler.username
 
             info_code = 0
             ### generate access_rules text

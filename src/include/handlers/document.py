@@ -19,6 +19,7 @@ from include.database.models.entity import (
     NoActiveRevisionsError,
 )
 from include.database.models.file import File, FileTask
+from include.handlers.protection import check_password_protection
 from include.util.rule.applying import apply_access_rules
 import include.system.messages as smsg
 
@@ -120,13 +121,10 @@ class RequestGetDocumentInfoHandler(RequestHandler):
                 return 403, document_id, handler.username
             
             # Check password protection
-            if document.is_password_protected():
-                if password is None:
-                    handler.conclude_request(202, {}, "Password required")
-                    return 202, document_id, handler.username
-                if not document.verify_password(password):
-                    handler.conclude_request(403, {}, "Incorrect password")
-                    return 403, document_id, handler.username
+            protection_code, protection_msg = check_password_protection(document, password, session)
+            if protection_code != 0:
+                handler.conclude_request(protection_code, {}, protection_msg)
+                return protection_code, document_id, handler.username
 
             info_code = 0
             ### generate access_rules text
@@ -239,13 +237,10 @@ class RequestGetDocumentHandler(RequestHandler):
                 return 403, document_id, handler.username
             
             # Check password protection
-            if document.is_password_protected():
-                if password is None:
-                    handler.conclude_request(202, {}, "Password required")
-                    return 202, document_id, handler.username
-                if not document.verify_password(password):
-                    handler.conclude_request(403, {}, "Incorrect password")
-                    return 403, document_id, handler.username
+            protection_code, protection_msg = check_password_protection(document, password, session)
+            if protection_code != 0:
+                handler.conclude_request(protection_code, {}, protection_msg)
+                return protection_code, document_id, handler.username
 
             try:
                 latest_revision = document.get_latest_revision()

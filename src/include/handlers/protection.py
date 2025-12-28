@@ -9,16 +9,64 @@ from typing import Optional
 
 from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
+from include.constants import TARGET_TYPE_MAPPING
 from include.database.handler import Session
 from include.database.models.classic import User
 from include.database.models.entity import Document, Folder
-from include.database.models.protection import PasswordProtection
+from include.database.models.protection import ObjectProtection
 
 __all__ = [
     "RequestEnablePasswordProtectionHandler",
     "RequestRemovePasswordProtectionHandler",
     "RequestVerifyPasswordHandler",
+    "check_password_protection",
 ]
+
+
+def check_password_protection(target, password: Optional[str], session) -> tuple[int, str]:
+    """
+    Check password protection for a document or directory.
+    
+    This is a helper function to be used by request handlers to check
+    if an object has password protection and verify the password if provided.
+    
+    Args:
+        target: The Document or Folder object to check
+        password: The password provided by the user (None if not provided)
+        session: The database session
+        
+    Returns:
+        Tuple of (code, message):
+            - (0, "success") if access granted (no protection or correct password)
+            - (202, "Password required") if protected but no password provided
+            - (403, "Incorrect password") if protected and wrong password provided
+    """
+    target_type = TARGET_TYPE_MAPPING[target.__tablename__]
+    
+    # Check if object has password protection
+    protection = (
+        session.query(ObjectProtection)
+        .filter(
+            ObjectProtection.target_type == target_type,
+            ObjectProtection.target_id == target.id,
+            ObjectProtection.protection_type == "password"
+        )
+        .first()
+    )
+    
+    if not protection:
+        # No password protection, access granted
+        return (0, "success")
+    
+    if password is None:
+        # Password required but not provided
+        return (202, "Password required")
+    
+    # Verify the password
+    if protection.verify_password(password):
+        return (0, "success")
+    else:
+        return (403, "Incorrect password")
 
 
 class RequestEnablePasswordProtectionHandler(RequestHandler):
@@ -79,10 +127,11 @@ class RequestEnablePasswordProtectionHandler(RequestHandler):
             
             # Check if protection already exists
             existing_protection = (
-                session.query(PasswordProtection)
+                session.query(ObjectProtection)
                 .filter(
-                    PasswordProtection.target_type == target_type,
-                    PasswordProtection.target_id == target_id
+                    ObjectProtection.target_type == target_type,
+                    ObjectProtection.target_id == target_id,
+                    ObjectProtection.protection_type == "password"
                 )
                 .first()
             )
@@ -97,10 +146,9 @@ class RequestEnablePasswordProtectionHandler(RequestHandler):
                 return 0, target_id, handler.username
             else:
                 # Create new protection
-                protection = PasswordProtection(
+                protection = ObjectProtection(
                     target_type=target_type,
-                    target_id=target_id,
-                    protection_type="password"
+                    target_id=target_id
                 )
                 protection.set_password(password)
                 session.add(protection)
@@ -168,10 +216,11 @@ class RequestRemovePasswordProtectionHandler(RequestHandler):
             
             # Find and delete the protection
             protection = (
-                session.query(PasswordProtection)
+                session.query(ObjectProtection)
                 .filter(
-                    PasswordProtection.target_type == target_type,
-                    PasswordProtection.target_id == target_id
+                    ObjectProtection.target_type == target_type,
+                    ObjectProtection.target_id == target_id,
+                    ObjectProtection.protection_type == "password"
                 )
                 .first()
             )
@@ -240,10 +289,11 @@ class RequestVerifyPasswordHandler(RequestHandler):
             
             # Find the protection
             protection = (
-                session.query(PasswordProtection)
+                session.query(ObjectProtection)
                 .filter(
-                    PasswordProtection.target_type == target_type,
-                    PasswordProtection.target_id == target_id
+                    ObjectProtection.target_type == target_type,
+                    ObjectProtection.target_id == target_id,
+                    ObjectProtection.protection_type == "password"
                 )
                 .first()
             )
