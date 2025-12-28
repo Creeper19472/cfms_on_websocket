@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 import secrets
 from sqlalchemy import VARCHAR, Float, ForeignKey, Integer
 from include.classes.exceptions import NoActiveRevisionsError
-from include.constants import AVAILABLE_ACCESS_TYPES, AVAILABLE_BLOCK_TYPES
+from include.constants import AVAILABLE_ACCESS_TYPES, AVAILABLE_BLOCK_TYPES, TARGET_TYPE_MAPPING
 from include.database.handler import Base
 from include.classes.access_rule import AccessRuleBase
 from sqlalchemy.orm import Mapped
@@ -18,6 +18,10 @@ from sqlalchemy import JSON
 from include.database.models.file import File
 from include.database.models.classic import User, ObjectAccessEntry
 from include.database.models.blocking import UserBlockEntry, UserBlockSubEntry
+
+# Import protection model - placed here to avoid circular imports
+if TYPE_CHECKING:
+    from include.database.models.protection import PasswordProtection
 
 
 class BaseObject(Base):
@@ -33,8 +37,8 @@ class BaseObject(Base):
         Returns:
             PasswordProtection object if password protected, None otherwise
         """
+        # Import here to avoid circular dependency at module load time
         from include.database.models.protection import PasswordProtection
-        from include.constants import TARGET_TYPE_MAPPING
         
         session = object_session(self)
         if not session:
@@ -102,8 +106,6 @@ class BaseObject(Base):
             - Rules are grouped and evaluated according to their match modes and requirements.
             - If no access rules are defined, access is granted by default.
         """
-
-        from include.constants import TARGET_TYPE_MAPPING
 
         def match_rights(sub_rights_group):
             if not sub_rights_group:

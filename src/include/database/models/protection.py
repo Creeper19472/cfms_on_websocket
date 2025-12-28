@@ -55,16 +55,25 @@ class PasswordProtection(Base):
         """
         Set a new password for this protection entry.
         
+        Uses PBKDF2-HMAC-SHA256 with 600,000 iterations for secure password hashing,
+        following OWASP recommendations for password storage.
+        
         Args:
             plain_password: The plain text password to hash and store
         """
         self.salt = secrets.token_hex(16)
-        salted = plain_password + self.salt
-        self.password_hash = hashlib.sha256(salted.encode("utf-8")).hexdigest()
+        # Use PBKDF2-HMAC for secure password hashing (OWASP recommended)
+        # 600,000 iterations is the OWASP recommended minimum as of 2023
+        password_bytes = plain_password.encode('utf-8')
+        salt_bytes = self.salt.encode('utf-8')
+        key = hashlib.pbkdf2_hmac('sha256', password_bytes, salt_bytes, 600000)
+        self.password_hash = key.hex()
     
     def verify_password(self, plain_password: str) -> bool:
         """
         Verify a password against the stored hash.
+        
+        Uses constant-time comparison to prevent timing attacks.
         
         Args:
             plain_password: The plain text password to verify
@@ -72,9 +81,13 @@ class PasswordProtection(Base):
         Returns:
             True if the password matches, False otherwise
         """
-        salted = plain_password + self.salt
-        password_hash = hashlib.sha256(salted.encode("utf-8")).hexdigest()
-        return password_hash == self.password_hash
+        password_bytes = plain_password.encode('utf-8')
+        salt_bytes = self.salt.encode('utf-8')
+        key = hashlib.pbkdf2_hmac('sha256', password_bytes, salt_bytes, 600000)
+        computed_hash = key.hex()
+        
+        # Use constant-time comparison to prevent timing attacks
+        return secrets.compare_digest(computed_hash, self.password_hash)
     
     def __repr__(self) -> str:
         return (
