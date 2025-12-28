@@ -222,14 +222,14 @@ class TestAccessManagement:
             name=f"Test Directory {int(time.time() * 1000)}"
         )
         assert dir_response["code"] == 200
-        folder_id = dir_response["data"]["folder_id"]
+        directory_id = dir_response["data"]["id"]
         
         # Grant access to the user for the directory
         grant_response = await authenticated_client.grant_access(
             entity_type="user",
             entity_identifier=test_username,
             target_type="directory",
-            target_identifier=folder_id,
+            target_identifier=directory_id,
             access_types=["read"],
             start_time=time.time()
         )
@@ -238,7 +238,7 @@ class TestAccessManagement:
         # View access entries for the directory
         view_response = await authenticated_client.view_access_entries(
             object_type="directory",
-            object_identifier=folder_id
+            object_identifier=directory_id
         )
         assert view_response["code"] == 200
         entries = view_response["data"]["result"]
@@ -253,12 +253,12 @@ class TestAccessManagement:
         # Verify the access was revoked
         view_after_revoke = await authenticated_client.view_access_entries(
             object_type="directory",
-            object_identifier=folder_id
+            object_identifier=directory_id
         )
         assert view_after_revoke["code"] == 200
         entries_after = view_after_revoke["data"]["result"]
         assert len(entries_after) == 0
         
         # Clean up
-        await authenticated_client.delete_directory(folder_id)
+        await authenticated_client.delete_directory(directory_id)
         await authenticated_client.delete_user(test_username)
