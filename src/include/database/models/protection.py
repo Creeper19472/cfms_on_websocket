@@ -6,6 +6,7 @@ protection types in a single table.
 """
 
 import hashlib
+import json
 import secrets
 from typing import Optional
 
@@ -65,8 +66,6 @@ class ObjectProtection(Base):
         Args:
             plain_password: The plain text password to hash and store
         """
-        import json
-        
         self.protection_type = "password"
         
         # Generate salt and hash
@@ -95,8 +94,6 @@ class ObjectProtection(Base):
         Returns:
             True if the password matches, False otherwise
         """
-        import json
-        
         if self.protection_type != "password":
             return False
         
