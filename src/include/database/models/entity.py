@@ -34,14 +34,13 @@ class BaseObject(Base):
             PasswordProtection object if password protected, None otherwise
         """
         from include.database.models.protection import PasswordProtection
-        
-        _TARGET_TYPE_MAPPING = {"folders": "directory", "documents": "document"}
+        from include.constants import TARGET_TYPE_MAPPING
         
         session = object_session(self)
         if not session:
             raise RuntimeError("No active session found for object")
         
-        target_type = _TARGET_TYPE_MAPPING[self.__tablename__]
+        target_type = TARGET_TYPE_MAPPING[self.__tablename__]
         
         protection = (
             session.query(PasswordProtection)
@@ -104,7 +103,7 @@ class BaseObject(Base):
             - If no access rules are defined, access is granted by default.
         """
 
-        _TARGET_TYPE_MAPPING = {"folders": "directory", "documents": "document"}
+        from include.constants import TARGET_TYPE_MAPPING
 
         def match_rights(sub_rights_group):
             if not sub_rights_group:
@@ -225,7 +224,7 @@ class BaseObject(Base):
                 ObjectAccessEntry.entity_type == "user",
                 ObjectAccessEntry.entity_identifier == user.username,
                 ObjectAccessEntry.target_type
-                == _TARGET_TYPE_MAPPING[self.__tablename__],
+                == TARGET_TYPE_MAPPING[self.__tablename__],
                 ObjectAccessEntry.target_identifier == self.id,
                 ObjectAccessEntry.access_type == access_type,
                 ObjectAccessEntry.start_time <= now,
@@ -246,7 +245,7 @@ class BaseObject(Base):
                     ObjectAccessEntry.entity_type == "group",
                     ObjectAccessEntry.entity_identifier == group.group_name,
                     ObjectAccessEntry.target_type
-                    == _TARGET_TYPE_MAPPING[self.__tablename__],
+                    == TARGET_TYPE_MAPPING[self.__tablename__],
                     ObjectAccessEntry.target_identifier == self.id,
                     ObjectAccessEntry.access_type == access_type,
                     ObjectAccessEntry.start_time <= now,

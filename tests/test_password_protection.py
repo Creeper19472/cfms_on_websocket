@@ -198,7 +198,7 @@ class TestPasswordProtection:
         
         assert response["code"] == 200, \
             f"Expected 200 for correct password, got {response.get('code')}"
-        assert response.get("data", {}).get("verified") == True, \
+        assert response.get("data", {}).get("verified") is True, \
             "Expected verified=True for correct password"
         
         # Verify incorrect password
@@ -213,7 +213,7 @@ class TestPasswordProtection:
         
         assert response["code"] == 403, \
             f"Expected 403 for incorrect password, got {response.get('code')}"
-        assert response.get("data", {}).get("verified") == False, \
+        assert response.get("data", {}).get("verified") is False, \
             "Expected verified=False for incorrect password"
     
     @pytest.mark.asyncio
