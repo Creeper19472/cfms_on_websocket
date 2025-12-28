@@ -38,7 +38,7 @@ class ObjectProtection(Base):
     
     # Protection type identifier
     protection_type: Mapped[str] = mapped_column(
-        VARCHAR(64), nullable=False,
+        VARCHAR(64), nullable=False, default="password",
         comment="Protection type: 'password', 'encryption', 'biometric', etc."
     )
     
