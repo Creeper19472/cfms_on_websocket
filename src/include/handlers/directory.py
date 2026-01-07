@@ -7,6 +7,7 @@ from include.conf_loader import global_config
 from include.database.handler import Session
 from include.database.models.classic import User
 from include.database.models.entity import Folder, Document, FolderAccessRule
+from include.handlers.protection import check_password_protection
 from include.util.audit import log_audit
 from include.util.rule.applying import apply_access_rules
 import include.system.messages as smsg
@@ -21,15 +22,19 @@ class RequestListDirectoryHandler(RequestHandler):
         handler (ConnectionHandler): The connection handler containing request data and methods for responding.
     Response Codes:
         200 - Directory listing successful, returns a list of files and directories in the response data.
+        202 - Password required for access.
         400 - Invalid request.
-        403 - Invalid user or token.
+        403 - Invalid user or token, or incorrect password.
         404 - Directory not found.
         500 - Internal server error, with the exception message.
     """
 
     data_schema = {
         "type": "object",
-        "properties": {"folder_id": {"anyOf": [{"type": "string"}, {"type": "null"}]}},
+        "properties": {
+            "folder_id": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+            "password": {"type": "string"}
+        },
         "required": ["folder_id"],
         "additionalProperties": False,
     }
@@ -40,6 +45,7 @@ class RequestListDirectoryHandler(RequestHandler):
 
         # Parse the directory listing request
         folder_id: Optional[str] = handler.data.get("folder_id")
+        password = handler.data.get("password")
 
         with Session() as session:
             this_user = session.get(User, handler.username)
@@ -72,6 +78,13 @@ class RequestListDirectoryHandler(RequestHandler):
                         **{"code": 403, "message": "Access denied", "data": {}}
                     )
                     return 403, folder_id, handler.username
+                
+                # Check password protection
+                protection_code, protection_msg = check_password_protection(folder, password, session)
+                if protection_code != 0:
+                    handler.conclude_request(protection_code, {}, protection_msg)
+                    return protection_code, folder_id, handler.username
+                
                 parent = folder.parent
                 children = folder.children
                 documents = folder.documents
@@ -129,15 +142,19 @@ class RequestGetDirectoryInfoHandler(RequestHandler):
         handler (ConnectionHandler): The connection handler containing request data and methods for responding.
     Response Codes:
         200 - Directory info successful, returns directory info in the response data.
+        202 - Password required for access.
         400 - Invalid request.
-        403 - Invalid user or token.
+        403 - Invalid user or token, or incorrect password.
         404 - Directory not found.
         500 - Internal server error, with the exception message.
     """
 
     data_schema = {
         "type": "object",
-        "properties": {"directory_id": {"type": "string", "minLength": 1}},
+        "properties": {
+            "directory_id": {"type": "string", "minLength": 1},
+            "password": {"type": "string"}
+        },
         "required": ["directory_id"],
         "additionalProperties": False,
     }
@@ -145,6 +162,7 @@ class RequestGetDirectoryInfoHandler(RequestHandler):
     def handle(self, handler: ConnectionHandler):
 
         directory_id: str = handler.data["directory_id"]
+        password = handler.data.get("password")
 
         if not directory_id:
             handler.conclude_request(400, {}, "Directory ID is required")
@@ -171,6 +189,12 @@ class RequestGetDirectoryInfoHandler(RequestHandler):
             if not directory.check_access_requirements(user, access_type="read"):
                 handler.conclude_request(403, {}, "Permission denied")
                 return 403, directory_id, handler.username
+            
+            # Check password protection
+            protection_code, protection_msg = check_password_protection(directory, password, session)
+            if protection_code != 0:
+                handler.conclude_request(protection_code, {}, protection_msg)
+                return protection_code, directory_id, handler.username
 
             info_code = 0
             ### generate access_rules text

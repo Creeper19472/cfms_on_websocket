@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 import secrets
 from sqlalchemy import VARCHAR, Float, ForeignKey, Integer
 from include.classes.exceptions import NoActiveRevisionsError
-from include.constants import AVAILABLE_ACCESS_TYPES, AVAILABLE_BLOCK_TYPES
+from include.constants import AVAILABLE_ACCESS_TYPES, AVAILABLE_BLOCK_TYPES, TARGET_TYPE_MAPPING
 from include.database.handler import Base
 from include.classes.access_rule import AccessRuleBase
 from sqlalchemy.orm import Mapped
@@ -42,8 +42,6 @@ class BaseObject(Base):
             - Rules are grouped and evaluated according to their match modes and requirements.
             - If no access rules are defined, access is granted by default.
         """
-
-        _TARGET_TYPE_MAPPING = {"folders": "directory", "documents": "document"}
 
         def match_rights(sub_rights_group):
             if not sub_rights_group:
@@ -164,7 +162,7 @@ class BaseObject(Base):
                 ObjectAccessEntry.entity_type == "user",
                 ObjectAccessEntry.entity_identifier == user.username,
                 ObjectAccessEntry.target_type
-                == _TARGET_TYPE_MAPPING[self.__tablename__],
+                == TARGET_TYPE_MAPPING[self.__tablename__],
                 ObjectAccessEntry.target_identifier == self.id,
                 ObjectAccessEntry.access_type == access_type,
                 ObjectAccessEntry.start_time <= now,
@@ -185,7 +183,7 @@ class BaseObject(Base):
                     ObjectAccessEntry.entity_type == "group",
                     ObjectAccessEntry.entity_identifier == group.group_name,
                     ObjectAccessEntry.target_type
-                    == _TARGET_TYPE_MAPPING[self.__tablename__],
+                    == TARGET_TYPE_MAPPING[self.__tablename__],
                     ObjectAccessEntry.target_identifier == self.id,
                     ObjectAccessEntry.access_type == access_type,
                     ObjectAccessEntry.start_time <= now,

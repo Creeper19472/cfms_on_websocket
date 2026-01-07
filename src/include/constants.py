@@ -11,6 +11,7 @@ __all__ = [
     "FILE_TRANSFER_MAX_CHUNK_SIZE",
     "FILE_TRANSFER_MIN_CHUNK_SIZE",
     "FILE_TASK_DEFAULT_DURATION_SECONDS",
+    "TARGET_TYPE_MAPPING",
 ]
 
 CORE_VERSION = Version("0.1.0.251226_alpha")
@@ -18,6 +19,9 @@ PROTOCOL_VERSION = 5
 
 AVAILABLE_ACCESS_TYPES = ["read", "write", "move", "manage"]
 AVAILABLE_BLOCK_TYPES: set = {"read", "write", "move"}
+
+# Target type mapping for database table names to API types
+TARGET_TYPE_MAPPING = {"folders": "directory", "documents": "document"}
 
 # Authentication and Security Constants
 DEFAULT_TOKEN_EXPIRY_SECONDS = 3600  # 1 hour
