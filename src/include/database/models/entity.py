@@ -1,10 +1,10 @@
 from typing import List
 from typing import Optional
-from typing import TYPE_CHECKING
 
 import secrets
-from sqlalchemy import VARCHAR, Float, ForeignKey, Integer
+from sqlalchemy import VARCHAR, Boolean, Float, ForeignKey, Integer
 from include.classes.exceptions import NoActiveRevisionsError
+from include.conf_loader import global_config
 from include.constants import AVAILABLE_ACCESS_TYPES, AVAILABLE_BLOCK_TYPES
 from include.database.handler import Base
 from include.classes.access_rule import AccessRuleBase
@@ -25,6 +25,9 @@ class BaseObject(Base):
 
     id: Mapped[str]
     access_rules: Mapped[List]
+
+    # Whether to inherit access rules from parent folders. Useful when enabling recursion check.
+    inherit: Mapped[bool]
 
     def check_access_requirements(self, user: User, access_type: str = "read") -> bool:
         """
@@ -134,6 +137,29 @@ class BaseObject(Base):
             raise RuntimeError("No active session found for user")
 
         now = time.time()
+
+        if global_config["access"]["enable_access_recursive_check"] and self.inherit:
+            # check all parent folders' access rules
+            parent = None
+            if type(self) == Document:
+                parent = self.folder
+            elif type(self) == Folder:
+                parent = self.parent
+
+            visited_folder_ids = set()
+            while parent is not None:
+                if parent.id in visited_folder_ids:
+                    # Cycle detected; break to prevent an infinite loop
+                    raise RuntimeError("Cycle detected in folder hierarchy")
+                visited_folder_ids.add(parent.id)
+
+                if not parent.check_access_requirements(user, access_type=access_type):
+                    return False
+
+                if not parent.inherit:
+                    break  # if the parent folder does not inherit, stop checking further up
+
+                parent = parent.parent
 
         # check user blocks first
         if access_type in AVAILABLE_BLOCK_TYPES:
@@ -267,6 +293,7 @@ class Folder(BaseObject):  # 文档文件夹
     documents: Mapped[List["Document"]] = relationship(
         "Document", back_populates="folder"
     )
+    inherit: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     @property
     def count_of_child(self):
@@ -344,6 +371,8 @@ class Document(BaseObject):
         back_populates="document",
         order_by="DocumentRevision.created_time",
     )
+
+    inherit: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     @property
     def active(self):

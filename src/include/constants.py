@@ -13,7 +13,7 @@ __all__ = [
     "FILE_TASK_DEFAULT_DURATION_SECONDS",
 ]
 
-CORE_VERSION = Version("0.1.0.251226_alpha")
+CORE_VERSION = Version("0.1.0.260201_alpha")
 PROTOCOL_VERSION = 5
 
 AVAILABLE_ACCESS_TYPES = ["read", "write", "move", "manage"]

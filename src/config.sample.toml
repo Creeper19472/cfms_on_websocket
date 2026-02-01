@@ -29,6 +29,11 @@ require_passwd_enforcement_changes = true
 passwd_expire_after_days = 365
 passwd_must_contain = []
 
+[access]
+enable_access_recursive_check = true
+# 启用访问递归检查。启用时，对于每个被请求的对象，不仅检查它本身具有的访问规则，也检查到达其所在位置需要经过的所有目录所具有的访问规则。
+# 这在层级过深时可能导致显著的性能问题。另一种选择是禁用此选项，但确保在每个目录上都正确设置访问规则。
+
 [database]
 type = "sqlite"
 
