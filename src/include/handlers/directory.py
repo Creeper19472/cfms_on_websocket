@@ -1,4 +1,4 @@
-from typing import Iterable, Optional
+from typing import Optional
 
 import jsonschema
 from include.classes.connection import ConnectionHandler
@@ -6,7 +6,7 @@ from include.classes.request import RequestHandler
 from include.conf_loader import global_config
 from include.database.handler import Session
 from include.database.models.classic import User
-from include.database.models.entity import Folder, Document, FolderAccessRule
+from include.database.models.entity import Folder, Document
 from include.util.audit import log_audit
 from include.util.rule.applying import apply_access_rules
 import include.system.messages as smsg

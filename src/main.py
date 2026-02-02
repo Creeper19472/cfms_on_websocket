@@ -106,7 +106,11 @@ def server_init():
             {"permission": "unblock"},
             {"permission": "super_set_user_avatar"},
             {"permission": "debugging"},
-            {"permission": "manage_2fa"}
+            {"permission": "manage_2fa"},
+            {"permission": "list_revisions"},
+            {"permission": "view_revision"},
+            {"permission": "set_current_revision"},
+            {"permission": "delete_revision"},
         ],
     )
     with Session() as session:

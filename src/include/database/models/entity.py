@@ -372,6 +372,17 @@ class Document(BaseObject):
         order_by="DocumentRevision.created_time",
     )
 
+    # 最新修订版本
+    current_revision: Mapped[Optional["DocumentRevision"]] = relationship(
+        "DocumentRevision",
+        primaryjoin="and_(Document.current_revision_id==DocumentRevision.id, "
+        "DocumentRevision.document_id==Document.id)",
+        uselist=False,
+    )
+    current_revision_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("document_revisions.id"), nullable=True
+    )
+
     inherit: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     @property
@@ -441,13 +452,16 @@ class DocumentRevision(Base):
     created_time: Mapped[float] = mapped_column(
         Float, nullable=False, default=lambda: time.time()
     )
-    # active: Mapped[bool] = mapped_column(
-    #     Boolean, nullable=False, default=False
-    # )  # 文件实际上传后激活
+    parent_revision_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("document_revisions.id"), nullable=True
+    )
 
     document: Mapped["Document"] = relationship("Document", back_populates="revisions")
     file: Mapped["File"] = relationship(
         "File", primaryjoin="DocumentRevision.file_id == File.id"
+    )
+    parent_revision: Mapped[Optional["DocumentRevision"]] = relationship(
+        "DocumentRevision", remote_side=[id]
     )
 
     @property

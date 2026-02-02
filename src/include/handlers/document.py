@@ -453,8 +453,15 @@ class RequestUploadDocumentHandler(RequestHandler):
                     path=f"./content/files/{today.year}/{today.month}/{real_filename}",
                 )
 
+                try:
+                    latest_revision_id = document.get_latest_revision().id
+                except NoActiveRevisionsError:
+                    latest_revision_id = None
+
                 new_revision = DocumentRevision(
-                    document_id=document_id, file_id=file_id
+                    document_id=document_id,
+                    file_id=file_id,
+                    parent_revision_id=latest_revision_id,
                 )
                 document.revisions.append(new_revision)
 
@@ -852,7 +859,7 @@ class RequestMoveDocumentHandler(RequestHandler):
                     {"target_folder_id": target_folder_id},
                     handler.username,
                 )
-            
+
             if document.folder_id == target_folder_id:
                 handler.conclude_request(400, {}, "Cannot move to the same folder")
                 return (
