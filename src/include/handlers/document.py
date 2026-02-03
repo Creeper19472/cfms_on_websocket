@@ -186,7 +186,9 @@ class RequestGetDocumentAccessRulesHandler(RequestHandler):
                 access_rules[each_rule.access_type].append(each_rule.rule_data)
 
             handler.conclude_request(
-                200, access_rules, "Document access rules retrieved successfully"
+                200,
+                {"rules": access_rules, "inherit": document.inherit},
+                "Document access rules retrieved successfully",
             )
             return 0, document_id, handler.username
 
