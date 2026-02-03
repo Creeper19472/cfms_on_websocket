@@ -36,6 +36,31 @@ def upgrade() -> None:
         batch_op.create_foreign_key(batch_op.f('fk_users_avatar_id_files'), 'files', ['avatar_id'], ['id'])
 
     # ### end Alembic commands ###
+    
+    # Data migration: Set current_revision_id for all documents that don't have one
+    # For each document, set the current_revision to the latest revision by created_time
+    connection = op.get_bind()
+    
+    # Use a single UPDATE with subquery to efficiently set current_revision_id
+    # for all documents to their latest revision by created_time
+    connection.execute(
+        sa.text("""
+            UPDATE documents
+            SET current_revision_id = (
+                SELECT id
+                FROM document_revisions
+                WHERE document_revisions.document_id = documents.id
+                ORDER BY created_time DESC
+                LIMIT 1
+            )
+            WHERE current_revision_id IS NULL
+            AND EXISTS (
+                SELECT 1
+                FROM document_revisions
+                WHERE document_revisions.document_id = documents.id
+            )
+        """)
+    )
 
 
 def downgrade() -> None:
