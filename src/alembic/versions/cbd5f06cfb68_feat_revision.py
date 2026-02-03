@@ -41,32 +41,26 @@ def upgrade() -> None:
     # For each document, set the current_revision to the latest revision by created_time
     connection = op.get_bind()
     
-    # Get all documents without a current_revision_id
-    documents_without_current = connection.execute(
-        sa.text("SELECT id FROM documents WHERE current_revision_id IS NULL")
-    ).fetchall()
-    
-    # For each document, find the latest revision and set it as current
-    for doc in documents_without_current:
-        doc_id = doc[0]
-        latest_revision = connection.execute(
-            sa.text(
-                "SELECT id FROM document_revisions "
-                "WHERE document_id = :doc_id "
-                "ORDER BY created_time DESC LIMIT 1"
-            ),
-            {"doc_id": doc_id}
-        ).fetchone()
-        
-        if latest_revision:
-            revision_id = latest_revision[0]
-            connection.execute(
-                sa.text(
-                    "UPDATE documents SET current_revision_id = :revision_id "
-                    "WHERE id = :doc_id"
-                ),
-                {"revision_id": revision_id, "doc_id": doc_id}
+    # Use a single UPDATE with subquery to efficiently set current_revision_id
+    # for all documents to their latest revision by created_time
+    connection.execute(
+        sa.text("""
+            UPDATE documents
+            SET current_revision_id = (
+                SELECT id
+                FROM document_revisions
+                WHERE document_revisions.document_id = documents.id
+                ORDER BY created_time DESC
+                LIMIT 1
             )
+            WHERE current_revision_id IS NULL
+            AND EXISTS (
+                SELECT 1
+                FROM document_revisions
+                WHERE document_revisions.document_id = documents.id
+            )
+        """)
+    )
 
 
 def downgrade() -> None:
