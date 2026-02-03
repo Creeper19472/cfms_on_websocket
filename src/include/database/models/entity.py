@@ -375,11 +375,11 @@ class Document(BaseObject):
         uselist=False,
     )
 
-    # 每个文档有多个修订版本 - 关键修改：添加 foreign_keys 参数
+    # 每个文档有多个修订版本
     revisions: Mapped[List["DocumentRevision"]] = relationship(
         "DocumentRevision",
         back_populates="document",
-        foreign_keys="[DocumentRevision.document_id]",  # 明确指定使用哪个外键
+        foreign_keys="[DocumentRevision.document_id]",
         order_by="DocumentRevision.created_time",
         cascade="all, delete-orphan",
         overlaps="current_revision",  # 声明与 current_revision 的重叠
