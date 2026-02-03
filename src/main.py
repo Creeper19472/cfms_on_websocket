@@ -111,7 +111,7 @@ def server_init():
             {"permission": "view_revision"},
             {"permission": "set_current_revision"},
             {"permission": "delete_revision"},
-        ], 
+        ],
     )
     with Session() as session:
         init_file = File(id="init", path="./content/hello", active=True)

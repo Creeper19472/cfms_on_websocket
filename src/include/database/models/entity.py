@@ -2,7 +2,7 @@ from typing import List
 from typing import Optional
 
 import secrets
-from sqlalchemy import VARCHAR, Boolean, Column, Float, ForeignKey, Integer
+from sqlalchemy import VARCHAR, Boolean, Float, ForeignKey, Integer
 from include.classes.exceptions import NoActiveRevisionsError
 from include.conf_loader import global_config
 from include.constants import AVAILABLE_ACCESS_TYPES, AVAILABLE_BLOCK_TYPES
@@ -479,7 +479,9 @@ class DocumentRevision(Base):
         Integer, ForeignKey("document_revisions.id"), nullable=True
     )
     parent_revision: Mapped[Optional["DocumentRevision"]] = relationship(
-        "DocumentRevision", remote_side=[id]
+        "DocumentRevision",
+        remote_side=[id],
+        back_populates="child_revisions",
     )
 
     child_revisions: Mapped[List["DocumentRevision"]] = relationship(

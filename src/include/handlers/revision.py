@@ -1,15 +1,10 @@
-from typing import Optional
 
-import jsonschema
 from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
-from include.conf_loader import global_config
 from include.database.handler import Session
 from include.database.models.classic import User
-from include.database.models.entity import DocumentRevision, Folder, Document
+from include.database.models.entity import DocumentRevision, Document
 from include.handlers.document import create_file_task
-from include.util.audit import log_audit
-from include.util.rule.applying import apply_access_rules
 import include.system.messages as smsg
 
 
@@ -176,26 +171,6 @@ class RequestDeleteRevisionHandler(RequestHandler):
                 handler.conclude_request(400, {}, "Cannot delete the current revision")
                 return 400, revision_id, handler.username
 
-            # # Load all revisions of the document once, then check ancestry in-memory
-            # rows = (
-            #     session.query(DocumentRevision.id, DocumentRevision.parent_revision_id)
-            #     .filter(DocumentRevision.document_id == document.id)
-            #     .all()
-            # )
-            # parent_map = {r[0]: r[1] for r in rows}
-            # current_id = document.current_revision_id
-            # while current_id is not None:
-            #     if current_id == revision.id:
-            #         handler.conclude_request(
-            #             400, {}, "Cannot delete a revision that is an ancestor of the current revision"
-            #         )
-            #         return 400, revision_id, handler.username
-            #     current_id = parent_map.get(current_id)
-
-            # Try to connect parent and child revisions directly
-            for child_rev in revision.child_revisions:
-                child_rev.parent_revision = revision.parent_revision
-
             assert user is not None
             if (
                 "delete_revision" not in user.all_permissions
@@ -203,6 +178,10 @@ class RequestDeleteRevisionHandler(RequestHandler):
             ):
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                 return 403, revision_id, handler.username
+            
+            # Try to connect parent and child revisions directly
+            for child_rev in revision.child_revisions:
+                child_rev.parent_revision = revision.parent_revision
 
             revision.before_delete()
             session.delete(revision)
