@@ -67,8 +67,6 @@ def upgrade() -> None:
                 ),
                 {"revision_id": revision_id, "doc_id": doc_id}
             )
-    
-    connection.commit()
 
 
 def downgrade() -> None:
