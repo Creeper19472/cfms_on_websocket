@@ -250,6 +250,7 @@ class RequestCreateDocumentHandler(RequestHandler):
             "folder_id": {"anyOf": [{"type": "string"}, {"type": "null"}]},
             "title": {"type": "string", "minLength": 1},
             "access_rules": {"type": "object"},
+            "inherit_parent": {"type": "boolean"},
         },
         "required": ["title"],
         "additionalProperties": False,
@@ -261,6 +262,7 @@ class RequestCreateDocumentHandler(RequestHandler):
         folder_id = handler.data.get("folder_id")
         title = (handler.data.get("title") or "").strip()
         access_rules = handler.data.get("access_rules") or {}
+        inherit_parent = handler.data.get("inherit_parent", True)
 
         if not title:
             handler.conclude_request(400, {}, "Document title is required")
@@ -379,7 +381,9 @@ class RequestCreateDocumentHandler(RequestHandler):
             new_document.revisions.append(new_revision)
 
             try:
-                if not apply_access_rules(new_document, access_rules, user):
+                if not apply_access_rules(
+                    new_document, access_rules, user, inherit_parent
+                ):
                     session.rollback()
                     handler.conclude_request(
                         403, {}, "Set access rules failed: permission denied"
@@ -389,6 +393,8 @@ class RequestCreateDocumentHandler(RequestHandler):
                 session.add(new_file)
                 session.add(new_document)
                 session.add(new_revision)
+
+                new_document.current_revision = new_revision
                 session.commit()
 
                 task_data = create_file_task(new_revision.file, transfer_mode=1)
@@ -453,13 +459,22 @@ class RequestUploadDocumentHandler(RequestHandler):
                     path=f"./content/files/{today.year}/{today.month}/{real_filename}",
                 )
 
+                try:
+                    latest_revision_id = document.get_latest_revision().id
+                except NoActiveRevisionsError:
+                    latest_revision_id = None
+
                 new_revision = DocumentRevision(
-                    document_id=document_id, file_id=file_id
+                    document_id=document_id,
+                    file_id=file_id,
+                    parent_revision_id=latest_revision_id,
                 )
                 document.revisions.append(new_revision)
 
                 session.add(new_file)
                 session.add(new_revision)
+
+                document.current_revision = new_revision
                 session.commit()
 
             else:
@@ -735,6 +750,7 @@ class RequestSetDocumentRulesHandler(RequestHandler):
                 "properties": {},
                 "additionalProperties": {"type": "array", "items": {}},
             },
+            "inherit_parent": {"type": "boolean"},
         },
         "required": ["document_id", "access_rules"],
         "additionalProperties": False,
@@ -746,6 +762,7 @@ class RequestSetDocumentRulesHandler(RequestHandler):
         """
         document_id: str = handler.data["document_id"]
         access_rules_to_apply: dict = handler.data["access_rules"]
+        inherit_parent: bool = handler.data.get("inherit_parent", True)
 
         if not handler.username:
             handler.conclude_request(
@@ -776,7 +793,9 @@ class RequestSetDocumentRulesHandler(RequestHandler):
                 return 403, document_id, handler.username
 
             try:
-                if apply_access_rules(document, access_rules_to_apply, user):
+                if apply_access_rules(
+                    document, access_rules_to_apply, user, inherit_parent
+                ):
                     session.commit()
                     handler.conclude_request(200, {}, "Set access rules successfully")
                     return 0, document_id, handler.username
@@ -852,7 +871,7 @@ class RequestMoveDocumentHandler(RequestHandler):
                     {"target_folder_id": target_folder_id},
                     handler.username,
                 )
-            
+
             if document.folder_id == target_folder_id:
                 handler.conclude_request(400, {}, "Cannot move to the same folder")
                 return (

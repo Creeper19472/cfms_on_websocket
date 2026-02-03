@@ -1,4 +1,4 @@
-from typing import Iterable, Optional
+from typing import Optional
 
 import jsonschema
 from include.classes.connection import ConnectionHandler
@@ -6,7 +6,7 @@ from include.classes.request import RequestHandler
 from include.conf_loader import global_config
 from include.database.handler import Session
 from include.database.models.classic import User
-from include.database.models.entity import Folder, Document, FolderAccessRule
+from include.database.models.entity import Folder, Document
 from include.util.audit import log_audit
 from include.util.rule.applying import apply_access_rules
 import include.system.messages as smsg
@@ -272,6 +272,8 @@ class RequestCreateDirectoryHandler(RequestHandler):
                 "properties": {},
                 "additionalProperties": {"type": "array", "items": {}},
             },
+            "exists_ok": {"type": "boolean"},
+            "inherit_parent": {"type": "boolean"},
         },
         "required": ["name"],
     }
@@ -287,6 +289,7 @@ class RequestCreateDirectoryHandler(RequestHandler):
             "access_rules", {}
         )
         exists_ok = handler.data.get("exists_ok", False)
+        inherit_parent: bool = handler.data.get("inherit_parent", True)
 
         with Session() as session:
             this_user = session.get(User, handler.username)
@@ -368,7 +371,9 @@ class RequestCreateDirectoryHandler(RequestHandler):
 
             folder = Folder(name=name, parent=parent)
 
-            if apply_access_rules(folder, access_rules_to_apply, this_user):
+            if apply_access_rules(
+                folder, access_rules_to_apply, this_user, inherit_parent
+            ):
                 session.add(folder)
                 session.commit()
                 handler.conclude_request(
@@ -720,7 +725,9 @@ class RequestMoveDirectoryHandler(RequestHandler):
                     return 403, folder_id, handler.username
 
                 # Check if target folder is a descendant of the folder being moved
-                if target_folder.id == folder.id or target_folder.is_descendant_of(folder):
+                if target_folder.id == folder.id or target_folder.is_descendant_of(
+                    folder
+                ):
                     handler.conclude_request(
                         400, {}, smsg.CANNOT_MOVE_DIRECTORY_INTO_SUBDIRECTORY
                     )
@@ -751,6 +758,7 @@ class RequestSetDirectoryRulesHandler(RequestHandler):
                 "properties": {},
                 "additionalProperties": {"type": "array", "items": {}},
             },
+            "inherit_parent": {"type": "boolean"},
         },
         "required": ["directory_id", "access_rules"],
         "additionalProperties": False,
@@ -762,6 +770,7 @@ class RequestSetDirectoryRulesHandler(RequestHandler):
         """
         directory_id: str = handler.data["directory_id"]
         access_rules_to_apply: dict = handler.data["access_rules"]
+        inherit_parent: bool = handler.data.get("inherit_parent", True)
 
         if not handler.username:
             handler.conclude_request(
@@ -792,7 +801,9 @@ class RequestSetDirectoryRulesHandler(RequestHandler):
                 return 403, directory_id, handler.username
 
             try:
-                if apply_access_rules(directory, access_rules_to_apply, user):
+                if apply_access_rules(
+                    directory, access_rules_to_apply, user, inherit_parent
+                ):
                     session.commit()
                     handler.conclude_request(200, {}, "Set access rules successfully")
                     return 0, directory_id, handler.username

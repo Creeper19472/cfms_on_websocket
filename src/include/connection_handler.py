@@ -1,6 +1,5 @@
 import os
 import threading
-from types import FunctionType
 from typing import Optional, Union
 import jsonschema
 import websockets
@@ -43,6 +42,12 @@ from include.handlers.directory import (
     RequestRenameDirectoryHandler,
     RequestSetDirectoryRulesHandler,
 )
+from include.handlers.revision import (
+    RequestDeleteRevisionHandler,
+    RequestListRevisionsHandler,
+    RequestGetRevisionHandler,
+    RequestSetDocumentRevisionHandler,
+)
 from include.handlers.management.user import (
     RequestChangeUserGroupsHandler,
     RequestCreateUserHandler,
@@ -78,7 +83,6 @@ from include.handlers.search import RequestSearchHandler
 
 from include.constants import CORE_VERSION, PROTOCOL_VERSION
 from include.shared import connected_listeners, lockdown_enabled
-import include.system.messages as smsg
 
 from include.util.log import getCustomLogger
 
@@ -155,6 +159,11 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "get_document_info": RequestGetDocumentInfoHandler,
         "get_document_access_rules": RequestGetDocumentAccessRulesHandler,
         "set_document_rules": RequestSetDocumentRulesHandler,
+        # 修订版本类
+        "list_revisions": RequestListRevisionsHandler,
+        "get_revision": RequestGetRevisionHandler,
+        "set_current_revision": RequestSetDocumentRevisionHandler,
+        "delete_revision": RequestDeleteRevisionHandler,
         # 文件类
         "download_file": RequestDownloadFileHandler,
         "upload_file": RequestUploadFileHandler,

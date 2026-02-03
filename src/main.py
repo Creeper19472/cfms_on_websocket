@@ -106,7 +106,11 @@ def server_init():
             {"permission": "unblock"},
             {"permission": "super_set_user_avatar"},
             {"permission": "debugging"},
-            {"permission": "manage_2fa"}
+            {"permission": "manage_2fa"},
+            {"permission": "list_revisions"},
+            {"permission": "view_revision"},
+            {"permission": "set_current_revision"},
+            {"permission": "delete_revision"},
         ],
     )
     with Session() as session:
@@ -116,6 +120,7 @@ def server_init():
         init_document = Document(id="hello", title="Hello World")
         init_document_revision = DocumentRevision(file_id=init_file.id)
         init_document.revisions.append(init_document_revision)
+        init_document.current_revision = init_document_revision
         session.add(init_document)
         session.add(init_document_revision)
         session.commit()

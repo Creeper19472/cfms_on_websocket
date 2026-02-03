@@ -365,13 +365,25 @@ class Document(BaseObject):
         "DocumentAccessRule", back_populates="document", cascade="all, delete-orphan"
     )
 
+    current_revision_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("document_revisions.id"), nullable=True
+    )
+    current_revision: Mapped[Optional["DocumentRevision"]] = relationship(
+        "DocumentRevision",
+        foreign_keys=[current_revision_id],
+        post_update=True,
+        uselist=False,
+    )
+
     # 每个文档有多个修订版本
     revisions: Mapped[List["DocumentRevision"]] = relationship(
         "DocumentRevision",
         back_populates="document",
+        foreign_keys="[DocumentRevision.document_id]",
         order_by="DocumentRevision.created_time",
+        cascade="all, delete-orphan",
+        overlaps="current_revision",  # 声明与 current_revision 的重叠
     )
-
     inherit: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     @property
@@ -382,12 +394,32 @@ class Document(BaseObject):
             return False
         return True
 
-    def get_latest_revision(self):
+    def get_latest_revision(self) -> "DocumentRevision":
         """
-        获取最新的修订版本（按created_time降序排列的第一个），且revision.active为True。
+        获取最新的活跃修订版本。
+
+        该函数的逻辑如下：
+
+        - 如果 current_revision 不为空，则从指定的 current_revision 开始，寻找从修订版本树末端上溯遇到的第一个活跃修订版本。
+        - 如果 current_revision 为空（这一般仅在从过去的版本升级时发生），则将全体修订版本按`created_time`降序排列，返回第一个`revision.active`为`True`的修订版本。
         """
         if not self.revisions:
             raise RuntimeError("A document cannot have no revisions.")
+
+        if self.current_revision:
+            if self.current_revision.active:
+                return self.current_revision
+
+            # find active revisions
+            latest_revision = self.current_revision.parent_revision
+            while latest_revision is not None:
+                if latest_revision.active:
+                    return latest_revision
+                latest_revision = latest_revision.parent_revision
+
+            # if goes here, use backward compatibility method
+
+        # for backward compatibility
 
         # 过滤出active为True的修订版本
         active_revisions = [rev for rev in self.revisions if rev.active]
@@ -402,21 +434,10 @@ class Document(BaseObject):
         if not session:
             raise Exception("The object is not associated with a session")
 
+        self.current_revision = None
+
         for revision in self.revisions:
-            # revision.file
-            # 检查该File对象是否被其他revision引用
-            other_refs = (
-                session.query(DocumentRevision)
-                .filter(DocumentRevision.file_id == revision.file_id)
-                .filter(DocumentRevision.id != revision.id)
-                .count()
-            )
-            if other_refs == 0:
-                try:
-                    revision.file.delete()
-                except PermissionError:
-                    raise
-                session.delete(revision.file)
+            revision.before_delete()
             session.delete(revision)
 
         self.revisions.clear()
@@ -436,18 +457,37 @@ class DocumentRevision(Base):
 
     __tablename__ = "document_revisions"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id"))
+    document_id: Mapped[str] = mapped_column(
+        VARCHAR(255), ForeignKey("documents.id"), nullable=False
+    )
     file_id: Mapped[str] = mapped_column(ForeignKey("files.id"))
     created_time: Mapped[float] = mapped_column(
         Float, nullable=False, default=lambda: time.time()
     )
-    # active: Mapped[bool] = mapped_column(
-    #     Boolean, nullable=False, default=False
-    # )  # 文件实际上传后激活
 
-    document: Mapped["Document"] = relationship("Document", back_populates="revisions")
+    document: Mapped["Document"] = relationship(
+        "Document",
+        back_populates="revisions",
+        foreign_keys=[document_id],
+        overlaps="current_revision",  # 声明重叠
+    )
     file: Mapped["File"] = relationship(
         "File", primaryjoin="DocumentRevision.file_id == File.id"
+    )
+
+    parent_revision_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("document_revisions.id"), nullable=True
+    )
+    parent_revision: Mapped[Optional["DocumentRevision"]] = relationship(
+        "DocumentRevision",
+        remote_side=[id],
+        back_populates="child_revisions",
+    )
+
+    child_revisions: Mapped[List["DocumentRevision"]] = relationship(
+        "DocumentRevision",
+        back_populates="parent_revision",
+        foreign_keys="[DocumentRevision.parent_revision_id]",
     )
 
     @property
@@ -457,6 +497,24 @@ class DocumentRevision(Base):
     @property
     def writeable(self):
         return self.file.writeable
+
+    def before_delete(self):
+        session = object_session(self)
+        if not session:
+            raise Exception("The object is not associated with a session")
+
+        other_refs = (
+            session.query(DocumentRevision)
+            .filter(DocumentRevision.file_id == self.file_id)
+            .filter(DocumentRevision.id != self.id)
+            .count()
+        )
+        if other_refs == 0:
+            try:
+                self.file.delete()
+            except PermissionError:
+                raise
+            session.delete(self.file)
 
     def __repr__(self) -> str:
         return (
