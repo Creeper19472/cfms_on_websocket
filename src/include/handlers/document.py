@@ -389,6 +389,8 @@ class RequestCreateDocumentHandler(RequestHandler):
                 session.add(new_file)
                 session.add(new_document)
                 session.add(new_revision)
+                
+                new_document.current_revision = new_revision
                 session.commit()
 
                 task_data = create_file_task(new_revision.file, transfer_mode=1)
@@ -467,6 +469,8 @@ class RequestUploadDocumentHandler(RequestHandler):
 
                 session.add(new_file)
                 session.add(new_revision)
+
+                document.current_revision = new_revision
                 session.commit()
 
             else:

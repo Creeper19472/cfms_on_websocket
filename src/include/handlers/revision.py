@@ -15,7 +15,7 @@ import include.system.messages as smsg
 
 class RequestListRevisionsHandler(RequestHandler):
 
-    schema = {
+    data_schema = {
         "type": "object",
         "properties": {
             "document_id": {"type": "string", "minLength": 1},
@@ -61,10 +61,10 @@ class RequestListRevisionsHandler(RequestHandler):
 
 
 class RequestGetRevisionHandler(RequestHandler):
-    schema = {
+    data_schema = {
         "type": "object",
         "properties": {
-            "id": {"type": "string", "minLength": 1},
+            "id": {"type": "integer"},
         },
         "required": ["id"],
         "additionalProperties": False,
@@ -73,7 +73,7 @@ class RequestGetRevisionHandler(RequestHandler):
     require_auth = True  # when True, handler.username is guaranteed to be not None
 
     def handle(self, handler: ConnectionHandler):
-        revision_id = handler.data["revision_id"]
+        revision_id = handler.data["id"]
 
         with Session() as session:
             user = session.get(User, handler.username)
@@ -95,14 +95,14 @@ class RequestGetRevisionHandler(RequestHandler):
 
         handler.conclude_request(200, {"task_data": task_data}, smsg.SUCCESS)
         return 200, revision_id, handler.username
-    
+
 
 class RequestSetDocumentRevisionHandler(RequestHandler):
-    schema = {
+    data_schema = {
         "type": "object",
         "properties": {
             "document_id": {"type": "string", "minLength": 1},
-            "revision_id": {"type": "string", "minLength": 1},
+            "revision_id": {"type": "integer"},
         },
         "required": ["document_id", "revision_id"],
         "additionalProperties": False,
@@ -119,7 +119,11 @@ class RequestSetDocumentRevisionHandler(RequestHandler):
             document = session.get(Document, document_id)
             revision = session.get(DocumentRevision, revision_id)
 
-            if document is None or revision is None or revision.document_id != document.id:
+            if (
+                document is None
+                or revision is None
+                or revision.document_id != document.id
+            ):
                 handler.conclude_request(404, {}, "Document or Revision not found")
                 return 404, document_id, handler.username
 
@@ -136,3 +140,72 @@ class RequestSetDocumentRevisionHandler(RequestHandler):
 
         handler.conclude_request(200, {}, "Current revision set successfully")
         return 200, document_id, handler.username
+
+
+class RequestDeleteRevisionHandler(RequestHandler):
+    data_schema = {
+        "type": "object",
+        "properties": {
+            "id": {"type": "integer"},
+        },
+        "required": ["id"],
+        "additionalProperties": False,
+    }
+
+    require_auth = True
+
+    def handle(self, handler: ConnectionHandler):
+        ### be careful! this function will change the tree structure of revisions ###
+
+        revision_id = handler.data["id"]
+
+        with Session() as session:
+            user = session.get(User, handler.username)
+            revision = session.get(DocumentRevision, revision_id)
+
+            if revision is None:
+                handler.conclude_request(404, {}, "Revision not found")
+                return 404, revision_id, handler.username
+
+            document = revision.document
+            if (
+                document.current_revision_id == revision.id
+                or len(document.revisions) == 1  # backward compatibility
+            ):
+                handler.conclude_request(400, {}, "Cannot delete the current revision")
+                return 400, revision_id, handler.username
+
+            # # Load all revisions of the document once, then check ancestry in-memory
+            # rows = (
+            #     session.query(DocumentRevision.id, DocumentRevision.parent_revision_id)
+            #     .filter(DocumentRevision.document_id == document.id)
+            #     .all()
+            # )
+            # parent_map = {r[0]: r[1] for r in rows}
+            # current_id = document.current_revision_id
+            # while current_id is not None:
+            #     if current_id == revision.id:
+            #         handler.conclude_request(
+            #             400, {}, "Cannot delete a revision that is an ancestor of the current revision"
+            #         )
+            #         return 400, revision_id, handler.username
+            #     current_id = parent_map.get(current_id)
+
+            # Try to connect parent and child revisions directly
+            for child_rev in revision.child_revisions:
+                child_rev.parent_revision = revision.parent_revision
+
+            assert user is not None
+            if (
+                "delete_revision" not in user.all_permissions
+                or document.check_access_requirements(user, "write") is False
+            ):
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
+                return 403, revision_id, handler.username
+
+            revision.before_delete()
+            session.delete(revision)
+            session.commit()
+
+        handler.conclude_request(200, {}, "Revision deleted successfully")
+        return 200, revision_id, handler.username

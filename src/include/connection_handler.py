@@ -43,7 +43,7 @@ from include.handlers.directory import (
     RequestSetDirectoryRulesHandler,
 )
 from include.handlers.revision import (
-    # RequestDeleteRevisionHandler,
+    RequestDeleteRevisionHandler,
     RequestListRevisionsHandler,
     RequestGetRevisionHandler,
     RequestSetDocumentRevisionHandler,
@@ -163,7 +163,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "list_revisions": RequestListRevisionsHandler,
         "get_revision": RequestGetRevisionHandler,
         "set_current_revision": RequestSetDocumentRevisionHandler,
-        # "delete_revision": RequestDeleteRevisionHandler,
+        "delete_revision": RequestDeleteRevisionHandler,
         # 文件类
         "download_file": RequestDownloadFileHandler,
         "upload_file": RequestUploadFileHandler,
