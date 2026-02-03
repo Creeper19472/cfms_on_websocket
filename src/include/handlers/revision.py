@@ -50,6 +50,7 @@ class RequestListRevisionsHandler(RequestHandler):
                     "id": rev.id,
                     "parent_id": rev.parent_revision_id,
                     "created_time": rev.created_time,
+                    "is_current": rev.id == document.current_revision_id,
                 }
                 for rev in document.revisions
             ]
