@@ -10,7 +10,7 @@ from include.util.rule.validation import validate_access_rules
 
 
 def apply_access_rules(
-    target: Document | Folder, set_access_rules: dict[str, list[dict]], user: User
+    target: Document | Folder, set_access_rules: dict[str, list[dict]], user: User, inherit_parent: bool = True
 ) -> bool:
     """
     只对对象进行更改，而不进行提交。
@@ -54,6 +54,7 @@ def apply_access_rules(
                     this_new_rule  # pyright: ignore[reportArgumentType]
                 )
 
+        target.inherit = inherit_parent
         if not target.check_access_requirements(user, access_type):
             return False
 
