@@ -2,7 +2,7 @@ from typing import List
 from typing import Optional
 
 import secrets
-from sqlalchemy import VARCHAR, Boolean, Float, ForeignKey, Integer
+from sqlalchemy import VARCHAR, Boolean, Column, Float, ForeignKey, Integer
 from include.classes.exceptions import NoActiveRevisionsError
 from include.conf_loader import global_config
 from include.constants import AVAILABLE_ACCESS_TYPES, AVAILABLE_BLOCK_TYPES
@@ -365,24 +365,25 @@ class Document(BaseObject):
         "DocumentAccessRule", back_populates="document", cascade="all, delete-orphan"
     )
 
-    # 每个文档有多个修订版本
-    revisions: Mapped[List["DocumentRevision"]] = relationship(
-        "DocumentRevision",
-        back_populates="document",
-        order_by="DocumentRevision.created_time",
-    )
-
-    # 最新修订版本
-    current_revision: Mapped[Optional["DocumentRevision"]] = relationship(
-        "DocumentRevision",
-        primaryjoin="and_(Document.current_revision_id==DocumentRevision.id, "
-        "DocumentRevision.document_id==Document.id)",
-        uselist=False,
-    )
     current_revision_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("document_revisions.id"), nullable=True
     )
+    current_revision: Mapped[Optional["DocumentRevision"]] = relationship(
+        "DocumentRevision",
+        foreign_keys=[current_revision_id],
+        post_update=True,
+        uselist=False,
+    )
 
+    # 每个文档有多个修订版本 - 关键修改：添加 foreign_keys 参数
+    revisions: Mapped[List["DocumentRevision"]] = relationship(
+        "DocumentRevision",
+        back_populates="document",
+        foreign_keys="[DocumentRevision.document_id]",  # 明确指定使用哪个外键
+        order_by="DocumentRevision.created_time",
+        cascade="all, delete-orphan",
+        overlaps="current_revision"  # 声明与 current_revision 的重叠
+    )
     inherit: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     @property
@@ -447,7 +448,7 @@ class DocumentRevision(Base):
 
     __tablename__ = "document_revisions"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id"))
+    document_id: Mapped[str] = mapped_column(VARCHAR(255), ForeignKey('documents.id'), nullable=False)
     file_id: Mapped[str] = mapped_column(ForeignKey("files.id"))
     created_time: Mapped[float] = mapped_column(
         Float, nullable=False, default=lambda: time.time()
@@ -456,7 +457,12 @@ class DocumentRevision(Base):
         Integer, ForeignKey("document_revisions.id"), nullable=True
     )
 
-    document: Mapped["Document"] = relationship("Document", back_populates="revisions")
+    document: Mapped["Document"] = relationship(
+        "Document",
+        back_populates="revisions",
+        foreign_keys=[document_id],
+        overlaps="current_revision"  # 声明重叠
+    )
     file: Mapped["File"] = relationship(
         "File", primaryjoin="DocumentRevision.file_id == File.id"
     )
