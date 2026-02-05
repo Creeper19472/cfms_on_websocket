@@ -88,7 +88,7 @@ class User(Base):
     def authenticate_and_create_token(self, plain_password: str) -> Optional[Token]:
         salted = plain_password + self.salt
         password_hash = hashlib.sha256(salted.encode("utf-8")).hexdigest()
-        if password_hash == self.pass_hash:
+        if secrets.compare_digest(password_hash, self.pass_hash):
             secret = (
                 global_config["server"]["secret_key"]
                 if not self.secret_key
