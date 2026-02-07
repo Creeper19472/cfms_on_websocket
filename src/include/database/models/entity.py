@@ -508,7 +508,11 @@ class DocumentRevision(Base):
             .filter(DocumentRevision.file_id == self.file_id)
             .filter(DocumentRevision.id != self.id)
             .count()
+            +
+            # Check if file is not used as any avatar property
+            session.query(User).filter(User.avatar_id == self.file_id).count()
         )
+
         if other_refs == 0:
             try:
                 self.file.delete()
