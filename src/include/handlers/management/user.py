@@ -16,12 +16,14 @@ from include.database.models.blocking import (
     UserBlockSubEntry,
 )
 from include.database.models.entity import Document
+from include.handlers.document import create_file_task
 from include.util.user import create_user
 from include.util.pwd import (
     InvaildPasswordLengthError,
     MissingComponentsError,
     check_passwd_requirements,
 )
+import include.system.messages as smsg
 
 
 class RequestListUsersHandler(RequestHandler):
@@ -620,14 +622,28 @@ class RequestGetUserAvatarHandler(RequestHandler):
                 )
                 return
 
-            avatar_id = user_to_get.avatar_id if user_to_get.avatar_id else b""
+            avatar = user_to_get.avatar
 
-            handler.conclude_request(
-                **{"code": 200, "message": "OK", "data": {"avatar_id": avatar_id}}
-            )
+            if avatar:
+                avatar_task_data = create_file_task(avatar, 0)
+                handler.conclude_request(
+                    200, {"task_data": avatar_task_data}, smsg.SUCCESS
+                )
+            else:
+                handler.conclude_request(404, {}, smsg.TARGET_OBJECT_NOT_FOUND)
 
 
 class RequestSetUserAvatarHandler(RequestHandler):
+    """
+    Handler for action `set_user_avatar`.
+
+    This operation sets the user's avatar to the latest revision of a specified document.
+
+    Note: The document itself is not required to be an image file, but its latest revision
+    must be an image file. Additionally, if the access permissions of the document originally
+    designated as the avatar are changed later, the avatar setting will not be lost.
+    """
+
     data_schema = {
         "type": "object",
         "properties": {
@@ -847,7 +863,7 @@ class RequestSetPasswdHandler(RequestHandler):
                         }
                     )
                     return
-                
+
             else:  # 用户更改其他用户的密码
                 if not operator_user:
                     handler.conclude_request(
