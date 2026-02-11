@@ -8,8 +8,10 @@ import hashlib
 import json
 import mmap
 import os
+import secrets
 import ssl
 import asyncio
+import time
 from typing import Any, Dict, Optional
 from websockets.asyncio.client import connect, ClientConnection
 
@@ -128,14 +130,27 @@ class CFMSTestClient:
         if self.websocket is None:
             raise RuntimeError("Not connected to server. Call connect() first.")
         
-        request = {
+        request: Dict[str, Any] = {
             "action": action,
             "data": data if data is not None else {}
         }
         
         if include_auth:
-            request["username"] = username if username is not None else self.username
-            request["token"] = token if token is not None else self.token
+            resolved_username = username if username is not None else self.username
+            resolved_token = token if token is not None else self.token
+
+            # Only include authentication fields when we have at least one
+            # non-None credential value to avoid sending nulls that violate
+            # the request-envelope schema.
+            if resolved_username is not None or resolved_token is not None:
+                if resolved_username is not None:
+                    request["username"] = resolved_username
+                if resolved_token is not None:
+                    request["token"] = resolved_token
+                nonce = secrets.token_hex(16)
+                timestamp = time.time()
+                request["nonce"] = nonce
+                request["timestamp"] = timestamp
         
         await self.websocket.send(json.dumps(request, ensure_ascii=False))
         response_text = await self.websocket.recv()

@@ -11,6 +11,8 @@ __all__ = [
     "FILE_TRANSFER_MAX_CHUNK_SIZE",
     "FILE_TRANSFER_MIN_CHUNK_SIZE",
     "FILE_TASK_DEFAULT_DURATION_SECONDS",
+    "REPLAY_PROTECTION_TIME_WINDOW_SECONDS",
+    "NONCE_MIN_LENGTH",
 ]
 
 CORE_VERSION = Version("0.1.0.260207_alpha")
@@ -28,3 +30,7 @@ DEFAULT_SSL_CERT_VALIDITY_DAYS = 365  # 1 year
 FILE_TRANSFER_MAX_CHUNK_SIZE = 1024 * 64  # 64KB - size threshold for determining end of transfer
 FILE_TRANSFER_MIN_CHUNK_SIZE = 512
 FILE_TASK_DEFAULT_DURATION_SECONDS = 3600  # 1 hour
+
+# Replay Attack Protection Constants
+REPLAY_PROTECTION_TIME_WINDOW_SECONDS = 15  # Maximum age of a request timestamp
+NONCE_MIN_LENGTH = 16  # Minimum length of a nonce string

@@ -1,5 +1,8 @@
+import json
 import os
 import threading
+import time
+import copy
 from typing import Optional, Union
 import jsonschema
 import websockets
@@ -81,7 +84,8 @@ from include.handlers.management.system import (
 from include.handlers.debugging.throw import RequestThrowExceptionHandler
 from include.handlers.search import RequestSearchHandler
 
-from include.constants import CORE_VERSION, PROTOCOL_VERSION
+from include.constants import CORE_VERSION, NONCE_MIN_LENGTH, PROTOCOL_VERSION
+from include.nonce_store import nonce_store
 from include.shared import connected_listeners, lockdown_enabled
 
 from include.util.log import getCustomLogger
@@ -91,6 +95,38 @@ logger = getCustomLogger(
 )
 
 connected_listeners: set[websockets.sync.server.ServerConnection]
+
+
+def _validate_replay_protection(
+    handler: ConnectionHandler,
+) -> Optional[str]:
+    """
+    Validate nonce and timestamp for an authenticated request.
+
+    Returns None on success, or an error string after sending a rejection
+    response via handler.conclude_request.
+    """
+    nonce = handler.nonce
+    request_timestamp = handler.request_timestamp
+
+    if not nonce or len(nonce) < NONCE_MIN_LENGTH:
+        handler.conclude_request(
+            400, {}, "Missing or invalid nonce for replay protection"
+        )
+        return "nonce"
+
+    if not request_timestamp:
+        handler.conclude_request(
+            400, {}, "Missing or invalid timestamp for replay protection"
+        )
+        return "timestamp"
+
+    replay_error = nonce_store.validate_and_store(nonce, float(request_timestamp))
+    if replay_error is not None:
+        handler.conclude_request(1001, {}, replay_error)
+        return "replay"
+
+    return None
 
 
 def handle_connection(websocket: websockets.sync.server.ServerConnection):
@@ -130,7 +166,19 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         websocket: The WebSocket connection object.
         message: The data/message received from the client.
     """
-    this_handler = ConnectionHandler(websocket, message)
+    try:
+        this_handler = ConnectionHandler(websocket, message)
+    except jsonschema.ValidationError as error:
+        # Request envelope failed schema validation — send error and bail out
+        response = {
+            "code": 400,
+            "data": {},
+            "message": f"Invalid request format: {error.message}",
+            "timestamp": time.time(),
+        }
+        websocket.send(json.dumps(response, ensure_ascii=False))
+        return
+
     action = this_handler.action
 
     if action is None:
@@ -222,29 +270,42 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "download_file",
     ]
 
+    user_permissions: set[str] = set()
+    authenticated = False
+    if this_handler.username and this_handler.token:
+        with Session() as session:
+            user = session.get(User, this_handler.username)
+            if user and user.is_token_valid(this_handler.token):
+                authenticated = True
+                user_permissions = user.all_permissions
+            else:
+                this_handler.conclude_request(401, {}, "Invalid user or token")
+                return
+
     if lockdown_enabled.is_set():
         if action not in whitelisted_functions:
             can_bypass_lockdown = False
-            if this_handler.username:
-                with Session() as session:
-                    user = session.get(User, this_handler.username)
-                    if user and ("bypass_lockdown" in user.all_permissions):
-                        can_bypass_lockdown = True
+            if authenticated and "bypass_lockdown" in user_permissions:
+                can_bypass_lockdown = True
 
             if not can_bypass_lockdown:
                 this_handler.conclude_request(999, {}, "lockdown")
                 return
 
-    if action == "shutdown":
-        with Session() as session:
-            this_user = session.get(User, this_handler.username)
-            if not this_user or not this_user.is_token_valid(this_handler.token):
-                this_handler.conclude_request(403, {}, "Invalid user or token")
-                return
+    # Replay attack protection: validate nonce and timestamp.
+    # Only applied to authenticated requests to prevent unauthenticated
+    # traffic from polluting the nonce store (DoS vector).
+    if authenticated and _validate_replay_protection(this_handler) is not None:
+        return
 
-            if "shutdown" not in this_user.all_permissions:
-                this_handler.conclude_request(403, {}, "Permission denied")
-                return
+    if action == "shutdown":
+        if not authenticated:
+            this_handler.conclude_request(401, {}, "Authentication required")
+            return
+
+        if "shutdown" not in user_permissions:
+            this_handler.conclude_request(403, {}, "Permission denied")
+            return
 
         # Shutdown the server
         this_handler.conclude_request(200, {}, "Server is shutting down")
@@ -267,26 +328,15 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
             )
             return
 
-        if _request_handler.require_auth:
-            auth_error: Optional[str] = None
-
-            if not this_handler.username or not this_handler.token:
-                auth_error = "Authentication required"
-            else:
-                with Session() as session:
-                    this_user = session.get(User, this_handler.username)
-                    if not this_user or not this_user.is_token_valid(this_handler.token):
-                        auth_error = "Invalid user or token"
-
-            if auth_error is not None:
-                this_handler.conclude_request(401, {}, auth_error)
-                log_audit(
-                    action,
-                    401,
-                    data=this_handler.data,
-                    remote_address=this_handler.remote_address,
-                )
-                return
+        if _request_handler.require_auth and not authenticated:
+            this_handler.conclude_request(401, {}, "Authentication required")
+            log_audit(
+                action,
+                401,
+                data=this_handler.data,
+                remote_address=this_handler.remote_address,
+            )
+            return
 
         try:
             callback: Union[
