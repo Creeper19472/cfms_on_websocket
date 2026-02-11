@@ -292,8 +292,12 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
                 this_handler.conclude_request(999, {}, "lockdown")
                 return
 
-    if _validate_replay_protection(this_handler) is not None:
-        return
+    # Replay attack protection: validate nonce and timestamp.
+    # Only applied to authenticated requests to prevent unauthenticated
+    # traffic from polluting the nonce store (DoS vector).
+    if authenticated:
+        if _validate_replay_protection(this_handler) is not None:
+            return
 
     if action == "shutdown":
         if "shutdown" not in user_permissions:
