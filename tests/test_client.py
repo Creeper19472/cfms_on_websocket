@@ -5,6 +5,7 @@ This module provides a reusable WebSocket client for testing the CFMS server.
 """
 
 import hashlib
+import hmac as hmac_module
 import json
 import mmap
 import os
@@ -58,6 +59,8 @@ class CFMSTestClient:
         self.websocket: Optional[ClientConnection] = None
         self.username: Optional[str] = None
         self.token: Optional[str] = None
+        self.api_key: Optional[str] = None
+        self.hmac_secret_key: Optional[str] = None
         
     async def connect(self) -> None:
         """
@@ -105,7 +108,24 @@ class CFMSTestClient:
             self.websocket = None
         self.username = None
         self.token = None
+        self.api_key = None
+        self.hmac_secret_key = None
     
+    @staticmethod
+    def _compute_signature(
+        secret_key: str, action: str, data: dict, timestamp: float, nonce: str
+    ) -> str:
+        """Compute HMAC-SHA256 signature for a request."""
+        normalized_data = json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+        data_hash = hashlib.sha256(normalized_data.encode("utf-8")).hexdigest()
+        payload_hash = f"{action}:{data_hash}"
+        string_to_sign = f"{timestamp}:{nonce}:{payload_hash}"
+        return hmac_module.new(
+            secret_key.encode("utf-8"),
+            string_to_sign.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+
     async def send_request(
         self,
         action: str,
@@ -130,7 +150,7 @@ class CFMSTestClient:
         if self.websocket is None:
             raise RuntimeError("Not connected to server. Call connect() first.")
         
-        request = {
+        request: Dict[str, Any] = {
             "action": action,
             "data": data if data is not None else {}
         }
@@ -138,8 +158,22 @@ class CFMSTestClient:
         if include_auth:
             request["username"] = username if username is not None else self.username
             request["token"] = token if token is not None else self.token
-            request["nonce"] = secrets.token_hex(16)
-            request["timestamp"] = time.time()
+            nonce = secrets.token_hex(16)
+            timestamp = time.time()
+            request["nonce"] = nonce
+            request["timestamp"] = timestamp
+            request["api_key"] = self.api_key or ""
+            # Compute HMAC-SHA256 signature
+            if self.hmac_secret_key:
+                request["signature"] = self._compute_signature(
+                    self.hmac_secret_key,
+                    action,
+                    request["data"],
+                    timestamp,
+                    nonce,
+                )
+            else:
+                request["signature"] = ""
         
         await self.websocket.send(json.dumps(request, ensure_ascii=False))
         response_text = await self.websocket.recv()
@@ -170,6 +204,8 @@ class CFMSTestClient:
         if response.get("code") == 200:
             self.username = username
             self.token = response.get("data", {}).get("token")
+            self.api_key = response.get("data", {}).get("api_key")
+            self.hmac_secret_key = response.get("data", {}).get("hmac_secret_key")
         
         return response
     

@@ -89,6 +89,8 @@ class RequestLoginHandler(RequestHandler):
                         "avatar_id": user.avatar_id,
                         "permissions": list(user.all_permissions),
                         "groups": list(user.all_groups),
+                        "api_key": user.api_key,
+                        "hmac_secret_key": user.hmac_secret_key,
                     }
 
                     if user.totp_enabled:

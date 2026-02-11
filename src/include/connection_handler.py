@@ -83,6 +83,7 @@ from include.handlers.search import RequestSearchHandler
 
 from include.constants import CORE_VERSION, NONCE_MIN_LENGTH, PROTOCOL_VERSION
 from include.nonce_store import nonce_store
+from include.signature import verify_signature
 from include.shared import connected_listeners, lockdown_enabled
 
 from include.util.log import getCustomLogger
@@ -236,29 +237,6 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
                 this_handler.conclude_request(999, {}, "lockdown")
                 return
 
-    # Replay attack protection: validate nonce and timestamp for
-    # requests that carry authentication credentials.
-    if this_handler.username and this_handler.token:
-        nonce = this_handler.nonce
-        request_timestamp = this_handler.request_timestamp
-
-        if not nonce or not isinstance(nonce, str) or len(nonce) < NONCE_MIN_LENGTH:
-            this_handler.conclude_request(
-                400, {}, "Missing or invalid nonce for replay protection"
-            )
-            return
-
-        if not request_timestamp or not isinstance(request_timestamp, (int, float)):
-            this_handler.conclude_request(
-                400, {}, "Missing or invalid timestamp for replay protection"
-            )
-            return
-
-        replay_error = nonce_store.validate_and_store(nonce, float(request_timestamp))
-        if replay_error is not None:
-            this_handler.conclude_request(1001, {}, replay_error)
-            return
-
     if action == "shutdown":
         with Session() as session:
             this_user = session.get(User, this_handler.username)
@@ -268,6 +246,38 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
 
             if "shutdown" not in this_user.all_permissions:
                 this_handler.conclude_request(403, {}, "Permission denied")
+                return
+
+            # Signature verification for shutdown
+            nonce = this_handler.nonce
+            request_timestamp = this_handler.request_timestamp
+            provided_signature = this_handler.signature
+            provided_api_key = this_handler.api_key
+
+            if (
+                not nonce or not isinstance(nonce, str) or len(nonce) < NONCE_MIN_LENGTH
+                or not request_timestamp or not isinstance(request_timestamp, (int, float))
+                or not provided_signature or not isinstance(provided_signature, str)
+                or not provided_api_key or not isinstance(provided_api_key, str)
+            ):
+                this_handler.conclude_request(400, {}, "Missing replay protection fields")
+                return
+
+            replay_error = nonce_store.validate_and_store(nonce, float(request_timestamp))
+            if replay_error is not None:
+                this_handler.conclude_request(1001, {}, replay_error)
+                return
+
+            if (
+                not this_user.api_key
+                or not this_user.hmac_secret_key
+                or this_user.api_key != provided_api_key
+                or not verify_signature(
+                    this_user.hmac_secret_key, action, this_handler.data,
+                    float(request_timestamp), nonce, provided_signature,
+                )
+            ):
+                this_handler.conclude_request(1001, {}, "Invalid API key or signature")
                 return
 
         # Shutdown the server
@@ -311,6 +321,70 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
                     remote_address=this_handler.remote_address,
                 )
                 return
+
+            # Replay attack protection and HMAC signature verification.
+            # Performed after authentication to prevent unauthenticated
+            # traffic from polluting the nonce store (DoS vector).
+            nonce = this_handler.nonce
+            request_timestamp = this_handler.request_timestamp
+            provided_signature = this_handler.signature
+            provided_api_key = this_handler.api_key
+
+            if not nonce or not isinstance(nonce, str) or len(nonce) < NONCE_MIN_LENGTH:
+                this_handler.conclude_request(
+                    400, {}, "Missing or invalid nonce for replay protection"
+                )
+                return
+
+            if not request_timestamp or not isinstance(request_timestamp, (int, float)):
+                this_handler.conclude_request(
+                    400, {}, "Missing or invalid timestamp for replay protection"
+                )
+                return
+
+            replay_error = nonce_store.validate_and_store(nonce, float(request_timestamp))
+            if replay_error is not None:
+                this_handler.conclude_request(1001, {}, replay_error)
+                return
+
+            # HMAC-SHA256 signature verification
+            if not provided_signature or not isinstance(provided_signature, str):
+                this_handler.conclude_request(
+                    400, {}, "Missing or invalid request signature"
+                )
+                return
+
+            if not provided_api_key or not isinstance(provided_api_key, str):
+                this_handler.conclude_request(
+                    400, {}, "Missing or invalid API key"
+                )
+                return
+
+            with Session() as session:
+                this_user = session.get(User, this_handler.username)
+                if (
+                    not this_user
+                    or not this_user.api_key
+                    or not this_user.hmac_secret_key
+                    or this_user.api_key != provided_api_key
+                ):
+                    this_handler.conclude_request(
+                        1001, {}, "Invalid API key"
+                    )
+                    return
+
+                if not verify_signature(
+                    this_user.hmac_secret_key,
+                    action,
+                    this_handler.data,
+                    float(request_timestamp),
+                    nonce,
+                    provided_signature,
+                ):
+                    this_handler.conclude_request(
+                        1001, {}, "Invalid request signature"
+                    )
+                    return
 
         try:
             callback: Union[

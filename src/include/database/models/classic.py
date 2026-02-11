@@ -53,6 +53,16 @@ class User(Base):
         VARCHAR(32), default=secrets.token_hex(32), nullable=True
     )
 
+    # API Key and HMAC Secret Key for request signature verification.
+    # The api_key is a public identifier; the hmac_secret_key is used to compute HMAC-SHA256 signatures.
+    # Both are generated upon user creation and the hmac_secret_key is rotated when the password changes.
+    api_key: Mapped[Optional[str]] = mapped_column(
+        VARCHAR(64), unique=True, nullable=True, default=None
+    )
+    hmac_secret_key: Mapped[Optional[str]] = mapped_column(
+        VARCHAR(128), nullable=True, default=None
+    )
+
     # Two-Factor Authentication (TOTP) fields
     totp_secret: Mapped[Optional[str]] = mapped_column(
         VARCHAR(32), nullable=True, default=None
@@ -100,6 +110,11 @@ class User(Base):
             session = object_session(self)
             if session is not None:
                 self.last_login = time.time()
+                # Generate API key and HMAC secret key if not already set
+                if not self.api_key:
+                    self.api_key = secrets.token_hex(16)
+                if not self.hmac_secret_key:
+                    self.hmac_secret_key = secrets.token_hex(32)
                 session.add(self)
                 session.commit()
             return token
@@ -149,6 +164,9 @@ class User(Base):
 
         self.secret_key = os.urandom(64).hex()  # int/2
         self.passwd_last_modified = time.time() if not force_update_after_login else 0
+
+        # Rotate HMAC secret key on password change
+        self.hmac_secret_key = secrets.token_hex(32)
 
         # 写入数据库
         session = object_session(self)

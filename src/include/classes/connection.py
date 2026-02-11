@@ -48,11 +48,13 @@ class ConnectionHandler:
         self.action = self.request.get("action", None)
         self.data: dict = self.request.get("data", {})
 
-        self.username: str = self.request.get("username", "")
-        self.token: str = self.request.get("token", "")
+        self.username: Optional[str] = self.request.get("username", "")
+        self.token: Optional[str] = self.request.get("token", "")
 
-        self.nonce: str = self.request.get("nonce", "")
-        self.request_timestamp: float = self.request.get("timestamp", 0.0)
+        self.nonce: Optional[str] = self.request.get("nonce", "")
+        self.request_timestamp: Optional[float] = self.request.get("timestamp", 0.0)
+        self.api_key: Optional[str] = self.request.get("api_key", "")
+        self.signature: Optional[str] = self.request.get("signature", "")
 
     def conclude_request(
         self, code: int, data: Optional[dict] = None, message: str = ""
