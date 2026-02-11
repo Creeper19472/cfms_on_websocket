@@ -53,8 +53,6 @@ class ConnectionHandler:
 
         self.nonce: Optional[str] = self.request.get("nonce", "")
         self.request_timestamp: Optional[float] = self.request.get("timestamp", 0.0)
-        self.api_key: Optional[str] = self.request.get("api_key", "")
-        self.signature: Optional[str] = self.request.get("signature", "")
 
     def conclude_request(
         self, code: int, data: Optional[dict] = None, message: str = ""
