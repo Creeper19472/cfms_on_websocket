@@ -51,6 +51,9 @@ class ConnectionHandler:
         self.username: str = self.request.get("username", "")
         self.token: str = self.request.get("token", "")
 
+        self.nonce: str = self.request.get("nonce", "")
+        self.request_timestamp: float = self.request.get("timestamp", 0.0)
+
     def conclude_request(
         self, code: int, data: Optional[dict] = None, message: str = ""
     ) -> None:

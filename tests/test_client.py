@@ -8,8 +8,10 @@ import hashlib
 import json
 import mmap
 import os
+import secrets
 import ssl
 import asyncio
+import time
 from typing import Any, Dict, Optional
 from websockets.asyncio.client import connect, ClientConnection
 
@@ -136,6 +138,8 @@ class CFMSTestClient:
         if include_auth:
             request["username"] = username if username is not None else self.username
             request["token"] = token if token is not None else self.token
+            request["nonce"] = secrets.token_hex(16)
+            request["timestamp"] = time.time()
         
         await self.websocket.send(json.dumps(request, ensure_ascii=False))
         response_text = await self.websocket.recv()

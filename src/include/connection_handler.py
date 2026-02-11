@@ -81,7 +81,8 @@ from include.handlers.management.system import (
 from include.handlers.debugging.throw import RequestThrowExceptionHandler
 from include.handlers.search import RequestSearchHandler
 
-from include.constants import CORE_VERSION, PROTOCOL_VERSION
+from include.constants import CORE_VERSION, NONCE_MIN_LENGTH, PROTOCOL_VERSION
+from include.nonce_store import nonce_store
 from include.shared import connected_listeners, lockdown_enabled
 
 from include.util.log import getCustomLogger
@@ -234,6 +235,29 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
             if not can_bypass_lockdown:
                 this_handler.conclude_request(999, {}, "lockdown")
                 return
+
+    # Replay attack protection: validate nonce and timestamp for
+    # requests that carry authentication credentials.
+    if this_handler.username and this_handler.token:
+        nonce = this_handler.nonce
+        request_timestamp = this_handler.request_timestamp
+
+        if not nonce or not isinstance(nonce, str) or len(nonce) < NONCE_MIN_LENGTH:
+            this_handler.conclude_request(
+                400, {}, "Missing or invalid nonce for replay protection"
+            )
+            return
+
+        if not request_timestamp or not isinstance(request_timestamp, (int, float)):
+            this_handler.conclude_request(
+                400, {}, "Missing or invalid timestamp for replay protection"
+            )
+            return
+
+        replay_error = nonce_store.validate_and_store(nonce, float(request_timestamp))
+        if replay_error is not None:
+            this_handler.conclude_request(409, {}, replay_error)
+            return
 
     if action == "shutdown":
         with Session() as session:
