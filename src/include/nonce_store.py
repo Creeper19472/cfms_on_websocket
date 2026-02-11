@@ -31,8 +31,12 @@ class NonceStore:
     def _cleanup_expired(self) -> None:
         """Remove nonces that have expired beyond the time window."""
         now = time.time()
-        cutoff = now - self._time_window
-        expired = [n for n, ts in self._nonces.items() if ts < cutoff]
+        cutoff_past = now - self._time_window
+        cutoff_future = now + self._time_window
+        expired = [
+            n for n, ts in self._nonces.items()
+            if ts < cutoff_past or ts > cutoff_future
+        ]
         for n in expired:
             del self._nonces[n]
 
