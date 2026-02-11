@@ -256,7 +256,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
 
         replay_error = nonce_store.validate_and_store(nonce, float(request_timestamp))
         if replay_error is not None:
-            this_handler.conclude_request(409, {}, replay_error)
+            this_handler.conclude_request(1001, {}, replay_error)
             return
 
     if action == "shutdown":

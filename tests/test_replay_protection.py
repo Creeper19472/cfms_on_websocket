@@ -56,8 +56,8 @@ class TestReplayProtection:
         # Second request with same nonce should be rejected
         await authenticated_client.websocket.send(json.dumps(request1))
         response2 = json.loads(await authenticated_client.websocket.recv())
-        assert response2["code"] == 409, (
-            f"Replayed request should be rejected with 409, got: {response2}"
+        assert response2["code"] == 1001, (
+            f"Replayed request should be rejected with 1001, got: {response2}"
         )
         assert "nonce" in response2["message"].lower() or "replay" in response2["message"].lower(), (
             f"Error message should mention nonce or replay: {response2['message']}"
@@ -81,8 +81,8 @@ class TestReplayProtection:
         }
         await authenticated_client.websocket.send(json.dumps(request))
         response = json.loads(await authenticated_client.websocket.recv())
-        assert response["code"] == 409, (
-            f"Expired timestamp should be rejected with 409, got: {response}"
+        assert response["code"] == 1001, (
+            f"Expired timestamp should be rejected with 1001, got: {response}"
         )
         assert "timestamp" in response["message"].lower() or "time" in response["message"].lower(), (
             f"Error message should mention timestamp: {response['message']}"
@@ -106,8 +106,8 @@ class TestReplayProtection:
         }
         await authenticated_client.websocket.send(json.dumps(request))
         response = json.loads(await authenticated_client.websocket.recv())
-        assert response["code"] == 409, (
-            f"Future timestamp should be rejected with 409, got: {response}"
+        assert response["code"] == 1001, (
+            f"Future timestamp should be rejected with 1001, got: {response}"
         )
 
     @pytest.mark.asyncio
