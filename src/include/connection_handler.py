@@ -295,9 +295,8 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
     # Replay attack protection: validate nonce and timestamp.
     # Only applied to authenticated requests to prevent unauthenticated
     # traffic from polluting the nonce store (DoS vector).
-    if authenticated:
-        if _validate_replay_protection(this_handler) is not None:
-            return
+    if authenticated and _validate_replay_protection(this_handler) is not None:
+        return
 
     if action == "shutdown":
         if "shutdown" not in user_permissions:
