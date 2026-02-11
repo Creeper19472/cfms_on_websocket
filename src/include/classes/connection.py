@@ -37,6 +37,22 @@ def calculate_sha256(file_path):
         return hashlib.sha256(mmapped_file).hexdigest()
 
 
+# JSON Schema for the top-level request envelope.
+# Validates field types so downstream code can rely on concrete types.
+_REQUEST_ENVELOPE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "action": {"type": "string"},
+        "data": {"type": "object"},
+        "username": {"type": "string"},
+        "token": {"type": "string"},
+        "nonce": {"type": "string"},
+        "timestamp": {"type": "number"},
+    },
+    "required": ["action", "data"],
+}
+
+
 class ConnectionHandler:
     def __init__(self, websocket: ServerConnection, message: Data) -> None:
         self.websocket = websocket
@@ -45,14 +61,17 @@ class ConnectionHandler:
         self.request = json.loads(message)
         self.logger = logger
 
-        self.action = self.request.get("action", None)
-        self.data: dict = self.request.get("data", {})
+        # Validate the request envelope structure and field types
+        jsonschema.validate(self.request, _REQUEST_ENVELOPE_SCHEMA)
 
-        self.username: Optional[str] = self.request.get("username", "")
-        self.token: Optional[str] = self.request.get("token", "")
+        self.action: str = self.request["action"]
+        self.data: dict = self.request["data"]
 
-        self.nonce: Optional[str] = self.request.get("nonce", "")
-        self.request_timestamp: Optional[float] = self.request.get("timestamp", 0.0)
+        self.username: str = self.request.get("username", "")
+        self.token: str = self.request.get("token", "")
+
+        self.nonce: str = self.request.get("nonce", "")
+        self.request_timestamp: float = self.request.get("timestamp", 0.0)
 
     def conclude_request(
         self, code: int, data: Optional[dict] = None, message: str = ""

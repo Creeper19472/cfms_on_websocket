@@ -1,5 +1,7 @@
+import json
 import os
 import threading
+import time
 from typing import Optional, Union
 import jsonschema
 import websockets
@@ -106,11 +108,11 @@ def _validate_replay_protection(
     nonce = handler.nonce
     request_timestamp = handler.request_timestamp
 
-    if not nonce or not isinstance(nonce, str) or len(nonce) < NONCE_MIN_LENGTH:
+    if not nonce or len(nonce) < NONCE_MIN_LENGTH:
         handler.conclude_request(400, {}, "Missing or invalid nonce for replay protection")
         return "nonce"
 
-    if not request_timestamp or not isinstance(request_timestamp, (int, float)):
+    if not request_timestamp:
         handler.conclude_request(400, {}, "Missing or invalid timestamp for replay protection")
         return "timestamp"
 
@@ -159,7 +161,19 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         websocket: The WebSocket connection object.
         message: The data/message received from the client.
     """
-    this_handler = ConnectionHandler(websocket, message)
+    try:
+        this_handler = ConnectionHandler(websocket, message)
+    except jsonschema.ValidationError as error:
+        # Request envelope failed schema validation — send error and bail out
+        response = {
+            "code": 400,
+            "data": {},
+            "message": f"Invalid request format: {error.message}",
+            "timestamp": time.time(),
+        }
+        websocket.send(json.dumps(response, ensure_ascii=False))
+        return
+
     action = this_handler.action
 
     if action is None:
