@@ -9,8 +9,6 @@ These tests verify that the server correctly:
 5. Accepts valid signed requests
 """
 
-import hashlib
-import hmac as hmac_module
 import json
 import secrets
 import time
@@ -18,20 +16,8 @@ import time
 import pytest
 from tests.test_client import CFMSTestClient
 
-
-def _compute_signature(
-    secret_key: str, action: str, data: dict, timestamp: float, nonce: str
-) -> str:
-    """Helper to compute HMAC-SHA256 signature (mirrors server logic)."""
-    normalized_data = json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
-    data_hash = hashlib.sha256(normalized_data.encode("utf-8")).hexdigest()
-    payload_hash = f"{action}:{data_hash}"
-    string_to_sign = f"{timestamp}:{nonce}:{payload_hash}"
-    return hmac_module.new(
-        secret_key.encode("utf-8"),
-        string_to_sign.encode("utf-8"),
-        hashlib.sha256,
-    ).hexdigest()
+# Reuse the production-equivalent signature computation from the test client
+_compute_signature = CFMSTestClient._compute_signature
 
 
 class TestReplayProtection:

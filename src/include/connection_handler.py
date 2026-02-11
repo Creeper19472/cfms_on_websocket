@@ -95,6 +95,63 @@ logger = getCustomLogger(
 connected_listeners: set[websockets.sync.server.ServerConnection]
 
 
+def _validate_replay_and_signature(
+    handler: ConnectionHandler, action: str, user: User
+) -> Optional[str]:
+    """
+    Validate nonce, timestamp, and HMAC-SHA256 signature for an authenticated request.
+
+    Returns None on success, or an error tuple (code, message) string is returned
+    via handler.conclude_request and this function returns the error message.
+    """
+    nonce = handler.nonce
+    request_timestamp = handler.request_timestamp
+    provided_signature = handler.signature
+    provided_api_key = handler.api_key
+
+    if not nonce or not isinstance(nonce, str) or len(nonce) < NONCE_MIN_LENGTH:
+        handler.conclude_request(400, {}, "Missing or invalid nonce for replay protection")
+        return "nonce"
+
+    if not request_timestamp or not isinstance(request_timestamp, (int, float)):
+        handler.conclude_request(400, {}, "Missing or invalid timestamp for replay protection")
+        return "timestamp"
+
+    replay_error = nonce_store.validate_and_store(nonce, float(request_timestamp))
+    if replay_error is not None:
+        handler.conclude_request(1001, {}, replay_error)
+        return "replay"
+
+    if not provided_signature or not isinstance(provided_signature, str):
+        handler.conclude_request(400, {}, "Missing or invalid request signature")
+        return "signature"
+
+    if not provided_api_key or not isinstance(provided_api_key, str):
+        handler.conclude_request(400, {}, "Missing or invalid API key")
+        return "api_key"
+
+    if (
+        not user.api_key
+        or not user.hmac_secret_key
+        or user.api_key != provided_api_key
+    ):
+        handler.conclude_request(1001, {}, "Invalid API key")
+        return "api_key_mismatch"
+
+    if not verify_signature(
+        user.hmac_secret_key,
+        action,
+        handler.data,
+        float(request_timestamp),
+        nonce,
+        provided_signature,
+    ):
+        handler.conclude_request(1001, {}, "Invalid request signature")
+        return "signature_mismatch"
+
+    return None
+
+
 def handle_connection(websocket: websockets.sync.server.ServerConnection):
     """
     Handle incoming WebSocket connections.
@@ -248,36 +305,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
                 this_handler.conclude_request(403, {}, "Permission denied")
                 return
 
-            # Signature verification for shutdown
-            nonce = this_handler.nonce
-            request_timestamp = this_handler.request_timestamp
-            provided_signature = this_handler.signature
-            provided_api_key = this_handler.api_key
-
-            if (
-                not nonce or not isinstance(nonce, str) or len(nonce) < NONCE_MIN_LENGTH
-                or not request_timestamp or not isinstance(request_timestamp, (int, float))
-                or not provided_signature or not isinstance(provided_signature, str)
-                or not provided_api_key or not isinstance(provided_api_key, str)
-            ):
-                this_handler.conclude_request(400, {}, "Missing replay protection fields")
-                return
-
-            replay_error = nonce_store.validate_and_store(nonce, float(request_timestamp))
-            if replay_error is not None:
-                this_handler.conclude_request(1001, {}, replay_error)
-                return
-
-            if (
-                not this_user.api_key
-                or not this_user.hmac_secret_key
-                or this_user.api_key != provided_api_key
-                or not verify_signature(
-                    this_user.hmac_secret_key, action, this_handler.data,
-                    float(request_timestamp), nonce, provided_signature,
-                )
-            ):
-                this_handler.conclude_request(1001, {}, "Invalid API key or signature")
+            if _validate_replay_and_signature(this_handler, action, this_user) is not None:
                 return
 
         # Shutdown the server
@@ -325,65 +353,9 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
             # Replay attack protection and HMAC signature verification.
             # Performed after authentication to prevent unauthenticated
             # traffic from polluting the nonce store (DoS vector).
-            nonce = this_handler.nonce
-            request_timestamp = this_handler.request_timestamp
-            provided_signature = this_handler.signature
-            provided_api_key = this_handler.api_key
-
-            if not nonce or not isinstance(nonce, str) or len(nonce) < NONCE_MIN_LENGTH:
-                this_handler.conclude_request(
-                    400, {}, "Missing or invalid nonce for replay protection"
-                )
-                return
-
-            if not request_timestamp or not isinstance(request_timestamp, (int, float)):
-                this_handler.conclude_request(
-                    400, {}, "Missing or invalid timestamp for replay protection"
-                )
-                return
-
-            replay_error = nonce_store.validate_and_store(nonce, float(request_timestamp))
-            if replay_error is not None:
-                this_handler.conclude_request(1001, {}, replay_error)
-                return
-
-            # HMAC-SHA256 signature verification
-            if not provided_signature or not isinstance(provided_signature, str):
-                this_handler.conclude_request(
-                    400, {}, "Missing or invalid request signature"
-                )
-                return
-
-            if not provided_api_key or not isinstance(provided_api_key, str):
-                this_handler.conclude_request(
-                    400, {}, "Missing or invalid API key"
-                )
-                return
-
             with Session() as session:
                 this_user = session.get(User, this_handler.username)
-                if (
-                    not this_user
-                    or not this_user.api_key
-                    or not this_user.hmac_secret_key
-                    or this_user.api_key != provided_api_key
-                ):
-                    this_handler.conclude_request(
-                        1001, {}, "Invalid API key"
-                    )
-                    return
-
-                if not verify_signature(
-                    this_user.hmac_secret_key,
-                    action,
-                    this_handler.data,
-                    float(request_timestamp),
-                    nonce,
-                    provided_signature,
-                ):
-                    this_handler.conclude_request(
-                        1001, {}, "Invalid request signature"
-                    )
+                if this_user and _validate_replay_and_signature(this_handler, action, this_user) is not None:
                     return
 
         try:

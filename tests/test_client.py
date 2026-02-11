@@ -5,7 +5,7 @@ This module provides a reusable WebSocket client for testing the CFMS server.
 """
 
 import hashlib
-import hmac as hmac_module
+import hmac
 import json
 import mmap
 import os
@@ -120,7 +120,7 @@ class CFMSTestClient:
         data_hash = hashlib.sha256(normalized_data.encode("utf-8")).hexdigest()
         payload_hash = f"{action}:{data_hash}"
         string_to_sign = f"{timestamp}:{nonce}:{payload_hash}"
-        return hmac_module.new(
+        return hmac.new(
             secret_key.encode("utf-8"),
             string_to_sign.encode("utf-8"),
             hashlib.sha256,

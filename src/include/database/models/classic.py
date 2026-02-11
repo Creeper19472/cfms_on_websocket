@@ -165,7 +165,7 @@ class User(Base):
         self.secret_key = os.urandom(64).hex()  # int/2
         self.passwd_last_modified = time.time() if not force_update_after_login else 0
 
-        # Rotate HMAC secret key on password change
+        # Rotate HMAC secret key on password change to invalidate existing signatures
         self.hmac_secret_key = secrets.token_hex(32)
 
         # 写入数据库
