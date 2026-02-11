@@ -44,8 +44,8 @@ _REQUEST_ENVELOPE_SCHEMA = {
     "properties": {
         "action": {"type": "string"},
         "data": {"type": "object"},
-        "username": {"type": "string"},
-        "token": {"type": "string"},
+        "username": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+        "token": {"anyOf": [{"type": "string"}, {"type": "null"}]},
         "nonce": {"type": "string"},
         "timestamp": {"type": "number"},
     },
