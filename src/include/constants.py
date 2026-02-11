@@ -32,5 +32,5 @@ FILE_TRANSFER_MIN_CHUNK_SIZE = 512
 FILE_TASK_DEFAULT_DURATION_SECONDS = 3600  # 1 hour
 
 # Replay Attack Protection Constants
-REPLAY_PROTECTION_TIME_WINDOW_SECONDS = 30  # Maximum age of a request timestamp
+REPLAY_PROTECTION_TIME_WINDOW_SECONDS = 15  # Maximum age of a request timestamp
 NONCE_MIN_LENGTH = 16  # Minimum length of a nonce string
