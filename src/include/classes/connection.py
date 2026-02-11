@@ -50,6 +50,10 @@ _REQUEST_ENVELOPE_SCHEMA = {
         "timestamp": {"type": "number"},
     },
     "required": ["action", "data"],
+    "dependentRequired": {
+        "username": ["token"],
+        "token": ["username"],
+    },
 }
 
 
