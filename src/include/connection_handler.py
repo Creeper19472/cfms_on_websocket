@@ -277,7 +277,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
             user = session.get(User, this_handler.username)
             if user and user.is_token_valid(this_handler.token):
                 authenticated = True
-                user_permissions = copy.deepcopy(user.all_permissions)
+                user_permissions = user.all_permissions
             else:
                 this_handler.conclude_request(401, {}, "Invalid user or token")
                 return
