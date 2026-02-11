@@ -136,12 +136,21 @@ class CFMSTestClient:
         }
         
         if include_auth:
-            request["username"] = username if username is not None else self.username
-            request["token"] = token if token is not None else self.token
-            nonce = secrets.token_hex(16)
-            timestamp = time.time()
-            request["nonce"] = nonce
-            request["timestamp"] = timestamp
+            resolved_username = username if username is not None else self.username
+            resolved_token = token if token is not None else self.token
+
+            # Only include authentication fields when we have at least one
+            # non-None credential value to avoid sending nulls that violate
+            # the request-envelope schema.
+            if resolved_username is not None or resolved_token is not None:
+                if resolved_username is not None:
+                    request["username"] = resolved_username
+                if resolved_token is not None:
+                    request["token"] = resolved_token
+                nonce = secrets.token_hex(16)
+                timestamp = time.time()
+                request["nonce"] = nonce
+                request["timestamp"] = timestamp
         
         await self.websocket.send(json.dumps(request, ensure_ascii=False))
         response_text = await self.websocket.recv()

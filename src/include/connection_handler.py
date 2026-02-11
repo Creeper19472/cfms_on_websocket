@@ -299,7 +299,11 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         return
 
     if action == "shutdown":
-        if not authenticated or "shutdown" not in user_permissions:
+        if not authenticated:
+            this_handler.conclude_request(401, {}, "Authentication required")
+            return
+
+        if "shutdown" not in user_permissions:
             this_handler.conclude_request(403, {}, "Permission denied")
             return
 
