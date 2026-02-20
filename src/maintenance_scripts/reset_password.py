@@ -23,6 +23,10 @@ import string
 import sys
 
 
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, parent_dir)
+
+
 def _build_random_password(length: int = 16) -> str:
     """Return a cryptographically-random password."""
     alphabet = string.ascii_letters + string.digits + "!@#$%^&*()-_=+[]{};:,.<>?/"
