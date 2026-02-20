@@ -5,6 +5,8 @@ import os
 import pyotp
 import secrets
 import time
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHashError
 from typing import TYPE_CHECKING, cast
 from typing import List
 from typing import Optional
@@ -22,6 +24,9 @@ from include.conf_loader import global_config
 from include.constants import DEFAULT_TOKEN_EXPIRY_SECONDS
 from include.database.handler import Base, Session
 
+# Module-level PasswordHasher instance — reused across all calls to avoid
+# repeated construction overhead.
+_password_hasher = PasswordHasher()
 
 if TYPE_CHECKING:
     from include.database.models.blocking import UserBlockEntry
@@ -33,7 +38,6 @@ class User(Base):
     # id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     username: Mapped[str] = mapped_column(VARCHAR(255), primary_key=True)
     pass_hash: Mapped[str] = mapped_column(Text)
-    salt: Mapped[str] = mapped_column(Text)
     passwd_last_modified: Mapped[float] = mapped_column(
         Float, default=0, nullable=False
     )
@@ -86,24 +90,28 @@ class User(Base):
         )
 
     def authenticate_and_create_token(self, plain_password: str) -> Optional[Token]:
-        salted = plain_password + self.salt
-        password_hash = hashlib.sha256(salted.encode("utf-8")).hexdigest()
-        if secrets.compare_digest(password_hash, self.pass_hash):
-            secret = (
-                global_config["server"]["secret_key"]
-                if not self.secret_key
-                else self.secret_key
-            )
-            token = Token(secret, self.username)
-            token.new(DEFAULT_TOKEN_EXPIRY_SECONDS)
+        try:
+            _password_hasher.verify(self.pass_hash, plain_password)
+        except (VerifyMismatchError, VerificationError, InvalidHashError):
+            return None
+        secret = (
+            global_config["server"]["secret_key"]
+            if not self.secret_key
+            else self.secret_key
+        )
+        token = Token(secret, self.username)
+        token.new(DEFAULT_TOKEN_EXPIRY_SECONDS)
 
-            session = object_session(self)
-            if session is not None:
-                self.last_login = time.time()
-                session.add(self)
-                session.commit()
-            return token
-        return
+        session = object_session(self)
+        if session is not None:
+            self.last_login = time.time()
+            # Rehash password if argon2id parameters have changed (same transaction)
+            if _password_hasher.check_needs_rehash(self.pass_hash):
+                self.pass_hash = _password_hasher.hash(plain_password)
+            session.add(self)
+            session.commit()
+
+        return token
 
     def is_token_valid(self, token: str) -> bool:
         """
@@ -141,11 +149,9 @@ class User(Base):
 
     def set_password(self, plain_password: str, force_update_after_login: bool = False):
         """
-        修改用户密码，自动生成新盐并保存哈希，写入数据库。
+        修改用户密码，使用 argon2id KDF 生成哈希并保存，写入数据库。
         """
-        self.salt = os.urandom(16).hex()
-        salted = plain_password + self.salt
-        self.pass_hash = hashlib.sha256(salted.encode("utf-8")).hexdigest()
+        self.pass_hash = _password_hasher.hash(plain_password)
 
         self.secret_key = os.urandom(64).hex()  # int/2
         self.passwd_last_modified = time.time() if not force_update_after_login else 0
