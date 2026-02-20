@@ -5,7 +5,7 @@ from include.classes.request import RequestHandler
 from include.conf_loader import global_config
 from include.constants import FAILED_LOGIN_DELAY_SECONDS
 from include.database.handler import Session
-from include.database.models.classic import User
+from include.database.models.classic import Keyring, User
 from include.util.audit import log_audit
 from include.util.pwd import check_passwd_requirements
 
@@ -90,6 +90,23 @@ class RequestLoginHandler(RequestHandler):
                         "permissions": list(user.all_permissions),
                         "groups": list(user.all_groups),
                     }
+
+                    # Return the primary keyring key if one is set, so clients
+                    # can transparently retrieve the config-encryption DEK.
+                    primary_key = (
+                        session.query(Keyring)
+                        .filter(
+                            Keyring.username == username,
+                            Keyring.is_primary == True,  # noqa: E712
+                        )
+                        .first()
+                    )
+                    if primary_key:
+                        success_data["primary_key"] = {
+                            "key_id": primary_key.key_id,
+                            "key_content": primary_key.key_content,
+                            "label": primary_key.label,
+                        }
 
                     if user.totp_enabled:
                         if not two_factor_auth_token:

@@ -81,6 +81,9 @@ class User(Base):
     audit_entries: Mapped[List["AuditEntry"]] = relationship(
         "AuditEntry", back_populates="user"
     )
+    keyrings: Mapped[List["Keyring"]] = relationship(
+        "Keyring", back_populates="user"
+    )
 
     def __repr__(self) -> str:
         return (
@@ -540,6 +543,41 @@ class AuditEntry(Base):  # 审计条目
     logged_time: Mapped[Optional[float]] = mapped_column(
         Float, nullable=False, default=time.time
     )
+
+
+class Keyring(Base):
+    """
+    Stores user-owned encryption keys (DEKs) for client configuration encryption
+    and multi-device synchronization.
+
+    Each key entry is bound to a specific user. Users can designate one key as
+    *primary*; that key is returned in the login response so any conforming client
+    can transparently retrieve the configuration-encryption DEK without having to
+    know or guess a key identifier.
+    """
+
+    __tablename__ = "keyrings"
+
+    key_id: Mapped[str] = mapped_column(
+        VARCHAR(64), primary_key=True, default=lambda: secrets.token_hex(32)
+    )
+    username: Mapped[str] = mapped_column(
+        ForeignKey("users.username"), nullable=False, index=True
+    )
+    key_content: Mapped[str] = mapped_column(Text, nullable=False)
+    label: Mapped[Optional[str]] = mapped_column(VARCHAR(255), nullable=True)
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_time: Mapped[float] = mapped_column(
+        Float, nullable=False, default=time.time
+    )
+
+    user: Mapped["User"] = relationship("User", back_populates="keyrings")
+
+    def __repr__(self) -> str:
+        return (
+            f"Keyring(key_id={self.key_id!r}, username={self.username!r}, "
+            f"label={self.label!r}, is_primary={self.is_primary!r})"
+        )
 
 
 class ObjectAccessEntry(Base):
