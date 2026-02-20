@@ -103,12 +103,11 @@ class User(Base):
         session = object_session(self)
         if session is not None:
             self.last_login = time.time()
+            # Rehash password if argon2id parameters have changed (same transaction)
+            if _ph.check_needs_rehash(self.pass_hash):
+                self.pass_hash = _ph.hash(plain_password)
             session.add(self)
             session.commit()
-
-        # Rehash password if argon2id parameters have changed
-        if _ph.check_needs_rehash(self.pass_hash):
-            self.set_password(plain_password)
 
         return token
 

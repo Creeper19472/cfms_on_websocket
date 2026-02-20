@@ -1,6 +1,7 @@
-import hashlib
 import time
 import filetype
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHashError
 from typing import Optional
 from include.constants import AVAILABLE_BLOCK_TYPES
 from include.classes.connection import ConnectionHandler
@@ -903,10 +904,13 @@ class RequestSetPasswdHandler(RequestHandler):
                 handler.conclude_request(400, {"missing": e.missing}, str(e))
                 return 400, target_username
 
-            if (
-                hashlib.sha256((new_passwd + user.salt).encode("utf-8")).hexdigest()
-                == user.pass_hash
-            ):
+            _ph = PasswordHasher()
+            try:
+                _same = _ph.verify(user.pass_hash, new_passwd)
+            except (VerifyMismatchError, VerificationError, InvalidHashError):
+                _same = False
+
+            if _same:
                 handler.conclude_request(
                     400,
                     {},

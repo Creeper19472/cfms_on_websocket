@@ -1,26 +1,17 @@
-import hashlib
-import secrets
-import string
 import time
+
+from argon2 import PasswordHasher
 
 from include.database.models.classic import User, UserMembership, UserPermission
 from include.database.handler import Session
-
-
-def get_passwd_sha256(password: str, salt: str) -> str:
-    # 使用SHA-256算法加密密码
-    sha256 = hashlib.sha256()
-    sha256.update((password + salt).encode("utf-8"))
-    return sha256.hexdigest()
 
 
 def create_user(**kwargs) -> None:
     """
     Create a new user in the system.
 
-    This utility generates a random salt, hashes the provided password
-    with the salt, and creates a user record along with associated
-    permissions and group memberships.
+    This utility hashes the provided password using argon2id and creates
+    a user record along with associated permissions and group memberships.
 
     Args:
         **kwargs: Arbitrary keyword arguments that may include:
@@ -48,16 +39,12 @@ def create_user(**kwargs) -> None:
         None: Commits the new user to the database.
     """
 
-    # 随机生成8位salt
-    alphabet = string.ascii_letters + string.digits
-    salt = "".join(secrets.choice(alphabet) for i in range(8))  # 安全化
-
-    salted_pwd = get_passwd_sha256(kwargs["password"], salt)
+    _ph = PasswordHasher()
+    pass_hash = _ph.hash(kwargs["password"])
     with Session() as session:
         user = User(
             username=kwargs["username"],
-            pass_hash=salted_pwd,
-            salt=salt,
+            pass_hash=pass_hash,
             nickname=kwargs.get("nickname", None),
             last_login=0,
             created_time=time.time(),
