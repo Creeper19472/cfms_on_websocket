@@ -49,6 +49,6 @@ class UserKey(Base):
 
     def __repr__(self) -> str:
         return (
-            f"Keyring(key_id={self.id!r}, username={self.username!r}, "
+            f"UserKey(id={self.id!r}, username={self.username!r}, "
             f"label={self.label!r})"
         )

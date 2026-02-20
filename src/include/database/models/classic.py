@@ -81,12 +81,12 @@ class User(Base):
         "AuditEntry", back_populates="user"
     )
     keyring: Mapped[List["UserKey"]] = relationship(
-        "Keyring", back_populates="user"
+        "UserKey", back_populates="user", foreign_keys="UserKey.username"
     )
 
     preference_dek_id: Mapped[Optional[str]] = mapped_column(
         VARCHAR(64),
-        ForeignKey("keyrings.key_id"),
+        ForeignKey("keyrings.id"),
         nullable=True,
         unique=True,
     )
@@ -94,6 +94,7 @@ class User(Base):
         "UserKey",
         uselist=False,
         post_update=True,
+        foreign_keys=[preference_dek_id],
     )
 
     def __repr__(self) -> str:

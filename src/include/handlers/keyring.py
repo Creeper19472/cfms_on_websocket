@@ -18,7 +18,8 @@ import time
 from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
 from include.database.handler import Session
-from include.database.models.classic import UserKey, User
+from include.database.models.classic import User
+from include.database.models.keyring import UserKey
 import include.system.messages as smsg
 
 __all__ = [

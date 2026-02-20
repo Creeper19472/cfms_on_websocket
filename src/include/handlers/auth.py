@@ -5,7 +5,8 @@ from include.classes.request import RequestHandler
 from include.conf_loader import global_config
 from include.constants import FAILED_LOGIN_DELAY_SECONDS
 from include.database.handler import Session
-from include.database.models.classic import UserKey, User
+from include.database.models.keyring import UserKey
+from include.database.models.classic import User
 from include.util.audit import log_audit
 from include.util.pwd import check_passwd_requirements
 

@@ -36,6 +36,7 @@ from include.database.models.entity import (
     Folder,
     FolderAccessRule,
 )
+from include.database.models.keyring import UserKey
 
 target_metadata = Base.metadata
 
