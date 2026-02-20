@@ -98,7 +98,7 @@ class TestKeyringOperations:
         assert upload_resp.get("code") == 200
         key_id = upload_resp["data"]["id"]
 
-        set_resp = await authenticated_client.set_primary_keyring(key_id)
+        set_resp = await authenticated_client.set_preference_keyring(key_id)
         assert set_resp.get("code") == 200, f"Expected 200, got: {set_resp}"
 
         list_resp = await authenticated_client.list_keyrings()
@@ -124,8 +124,8 @@ class TestKeyringOperations:
         second_id = second_resp["data"]["id"]
 
         # Set first as preference DEK, then switch to second
-        await authenticated_client.set_primary_keyring(first_id)
-        await authenticated_client.set_primary_keyring(second_id)
+        await authenticated_client.set_preference_keyring(first_id)
+        await authenticated_client.set_preference_keyring(second_id)
 
         list_resp = await authenticated_client.list_keyrings()
         keys = {k["id"]: k for k in list_resp["data"]["keys"]}
@@ -151,7 +151,7 @@ class TestKeyringOperations:
         assert upload_resp.get("code") == 200
         key_id = upload_resp["data"]["id"]
 
-        set_resp = await authenticated_client.set_primary_keyring(key_id)
+        set_resp = await authenticated_client.set_preference_keyring(key_id)
         assert set_resp.get("code") == 200
 
         # Login with a fresh client to get the login response data
@@ -235,7 +235,7 @@ class TestKeyringWithoutAuth:
     async def test_set_preference_keyring_without_auth(self, client: CFMSTestClient):
         response = await client.send_request(
             "set_user_preference_dek",
-            {},
+            {"id": "someid"},
             include_auth=False,
         )
         assert response.get("code") == 401
