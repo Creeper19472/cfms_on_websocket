@@ -84,11 +84,11 @@ from include.handlers.management.system import (
 from include.handlers.debugging.throw import RequestThrowExceptionHandler
 from include.handlers.search import RequestSearchHandler
 from include.handlers.keyring import (
-    RequestUploadKeyringHandler,
-    RequestGetKeyringHandler,
-    RequestDeleteKeyringHandler,
-    RequestSetPrimaryKeyringHandler,
-    RequestListKeyringsHandler,
+    RequestUploadUserKeyHandler,
+    RequestGetUserKeyHandler,
+    RequestDeleteUserKeyHandler,
+    RequestSetPreferenceDEKHandler,
+    RequestListUserKeysHandler,
 )
 
 from include.constants import CORE_VERSION, NONCE_MIN_LENGTH, PROTOCOL_VERSION
@@ -260,11 +260,11 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "lockdown": RequestLockdownHandler,
         "view_audit_logs": RequestViewAuditLogsHandler,
         # Keyring
-        "upload_keyring": RequestUploadKeyringHandler,
-        "get_keyring": RequestGetKeyringHandler,
-        "delete_keyring": RequestDeleteKeyringHandler,
-        "set_primary_keyring": RequestSetPrimaryKeyringHandler,
-        "list_keyrings": RequestListKeyringsHandler,
+        "upload_user_key": RequestUploadUserKeyHandler,
+        "get_user_key": RequestGetUserKeyHandler,
+        "delete_user_key": RequestDeleteUserKeyHandler,
+        "set_user_prefenerce_dek": RequestSetPreferenceDEKHandler,
+        "list_user_keys": RequestListUserKeysHandler,
     }
 
     # Debugging

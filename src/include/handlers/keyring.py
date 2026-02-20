@@ -18,18 +18,19 @@ import time
 from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
 from include.database.handler import Session
-from include.database.models.classic import Keyring, User
+from include.database.models.classic import UserKey, User
+import include.system.messages as smsg
 
 __all__ = [
-    "RequestUploadKeyringHandler",
-    "RequestGetKeyringHandler",
-    "RequestDeleteKeyringHandler",
-    "RequestSetPrimaryKeyringHandler",
-    "RequestListKeyringsHandler",
+    "RequestUploadUserKeyHandler",
+    "RequestGetUserKeyHandler",
+    "RequestDeleteUserKeyHandler",
+    "RequestSetPreferenceDEKHandler",
+    "RequestListUserKeysHandler",
 ]
 
 
-class RequestUploadKeyringHandler(RequestHandler):
+class RequestUploadUserKeyHandler(RequestHandler):
     """
     Upload a new key into the user's keyring.
 
@@ -38,36 +39,32 @@ class RequestUploadKeyringHandler(RequestHandler):
     ``target_username``.
 
     Request data:
-        key_content  (str, required)  – The key material / encrypted DEK.
-        label        (str, optional)  – Human-readable label.
-        is_primary   (bool, optional) – Mark this key as the primary config key
-                                        (default: false).
-        target_username (str, opt.)   – Admin-only: operate on another user.
+        content  (str, required)  - The key material / encrypted DEK.
+        label        (str, optional)  - Human-readable label.
+        target_username (str, opt.)   - Admin-only: operate on another user.
 
     Response codes:
-        200 – Key uploaded successfully; ``key_id`` is returned in data.
-        403 – Permission denied.
-        404 – Target user not found (admin path only).
+        200 - Key uploaded successfully; ``key_id`` is returned in data.
+        403 - Permission denied.
+        404 - Target user not found (admin path only).
     """
 
     data_schema = {
         "type": "object",
         "properties": {
-            "key_content": {"type": "string", "minLength": 1},
+            "content": {"type": "string", "minLength": 1},
             "label": {"type": "string"},
-            "is_primary": {"type": "boolean"},
             "target_username": {"type": "string", "minLength": 1},
         },
-        "required": ["key_content"],
+        "required": ["content"],
         "additionalProperties": False,
     }
 
     require_auth = True
 
     def handle(self, handler: ConnectionHandler):
-        key_content: str = handler.data["key_content"]
+        key_content: str = handler.data["content"]
         label: str | None = handler.data.get("label")
-        is_primary: bool = handler.data.get("is_primary", False)
         target_username: str | None = handler.data.get("target_username")
 
         with Session() as session:
@@ -87,19 +84,10 @@ class RequestUploadKeyringHandler(RequestHandler):
                 target_username = handler.username
                 owner = this_user
 
-            # Demote any existing primary key for this user when uploading a new
-            # primary key so the invariant of at most one primary per user holds.
-            if is_primary:
-                session.query(Keyring).filter(
-                    Keyring.username == target_username,
-                    Keyring.is_primary == True,  # noqa: E712
-                ).update({"is_primary": False})
-
-            key = Keyring(
+            key = UserKey(
                 username=target_username,
                 key_content=key_content,
                 label=label,
-                is_primary=is_primary,
                 created_time=time.time(),
             )
             session.add(key)
@@ -107,13 +95,13 @@ class RequestUploadKeyringHandler(RequestHandler):
 
             handler.conclude_request(
                 200,
-                {"key_id": key.key_id},
+                {"id": key.id},
                 "Key uploaded successfully",
             )
             return 200, target_username, handler.username
 
 
-class RequestGetKeyringHandler(RequestHandler):
+class RequestGetUserKeyHandler(RequestHandler):
     """
     Retrieve a single key from the keyring by its ``key_id``.
 
@@ -121,36 +109,33 @@ class RequestGetKeyringHandler(RequestHandler):
     ``manage_keyrings`` permission.
 
     Request data:
-        key_id          (str, required) – The key identifier to retrieve.
-        target_username (str, optional) – Admin-only.
+        id          (str, required) - The key identifier to retrieve.
 
     Response codes:
-        200 – Key found; key details returned in data.
-        403 – Permission denied.
-        404 – Key not found.
+        200 - Key found; key details returned in data.
+        403 - Permission denied.
+        404 - Key not found.
     """
 
     data_schema = {
         "type": "object",
         "properties": {
-            "key_id": {"type": "string", "minLength": 1},
-            "target_username": {"type": "string", "minLength": 1},
+            "id": {"type": "string", "minLength": 1},
         },
-        "required": ["key_id"],
+        "required": ["id"],
         "additionalProperties": False,
     }
 
     require_auth = True
 
     def handle(self, handler: ConnectionHandler):
-        key_id: str = handler.data["key_id"]
-        target_username: str | None = handler.data.get("target_username")
+        key_id: str = handler.data["id"]
 
         with Session() as session:
             this_user = session.get(User, handler.username)
             assert this_user is not None
 
-            key = session.get(Keyring, key_id)
+            key = session.get(UserKey, key_id)
             if not key:
                 handler.conclude_request(404, {}, "Key not found")
                 return 404, key_id, handler.username
@@ -165,11 +150,10 @@ class RequestGetKeyringHandler(RequestHandler):
             handler.conclude_request(
                 200,
                 {
-                    "key_id": key.key_id,
+                    "key_id": key.id,
                     "username": key.username,
                     "label": key.label,
-                    "key_content": key.key_content,
-                    "is_primary": key.is_primary,
+                    "key_content": key.content,
                     "created_time": key.created_time,
                 },
                 "Key retrieved successfully",
@@ -177,7 +161,7 @@ class RequestGetKeyringHandler(RequestHandler):
             return 200, key_id, handler.username
 
 
-class RequestDeleteKeyringHandler(RequestHandler):
+class RequestDeleteUserKeyHandler(RequestHandler):
     """
     Delete a key from the keyring by its ``key_id``.
 
@@ -185,35 +169,33 @@ class RequestDeleteKeyringHandler(RequestHandler):
     ``manage_keyrings`` permission.
 
     Request data:
-        key_id          (str, required) – The key identifier to delete.
-        target_username (str, optional) – Admin-only.
+        id          (str, required) - The key identifier to delete.
 
     Response codes:
-        200 – Key deleted successfully.
-        403 – Permission denied.
-        404 – Key not found.
+        200 - Key deleted successfully.
+        403 - Permission denied.
+        404 - Key not found.
     """
 
     data_schema = {
         "type": "object",
         "properties": {
-            "key_id": {"type": "string", "minLength": 1},
-            "target_username": {"type": "string", "minLength": 1},
+            "id": {"type": "string", "minLength": 1},
         },
-        "required": ["key_id"],
+        "required": ["id"],
         "additionalProperties": False,
     }
 
     require_auth = True
 
     def handle(self, handler: ConnectionHandler):
-        key_id: str = handler.data["key_id"]
+        key_id: str = handler.data["id"]
 
         with Session() as session:
             this_user = session.get(User, handler.username)
             assert this_user is not None
 
-            key = session.get(Keyring, key_id)
+            key = session.get(UserKey, key_id)
             if not key:
                 handler.conclude_request(404, {}, "Key not found")
                 return 404, key_id, handler.username
@@ -230,44 +212,42 @@ class RequestDeleteKeyringHandler(RequestHandler):
             return 200, key_id, handler.username
 
 
-class RequestSetPrimaryKeyringHandler(RequestHandler):
+class RequestSetPreferenceDEKHandler(RequestHandler):
     """
-    Designate a key as the primary configuration-encryption key for the user.
+    Designate a key as the preference data encryption key for the user.
 
-    The primary key will be returned in the login response so clients can
+    The preference DEK will be returned in the login response so clients can
     retrieve the config DEK transparently. At most one key per user is primary;
     calling this endpoint demotes any previously primary key.
 
     Request data:
-        key_id          (str, required) – The key identifier to mark primary.
-        target_username (str, optional) – Admin-only.
+        id          (str, required) - The key identifier to mark primary.
 
     Response codes:
-        200 – Primary key updated.
-        403 – Permission denied.
-        404 – Key not found.
+        200 - Primary key updated.
+        403 - Permission denied.
+        404 - Key not found.
     """
 
     data_schema = {
         "type": "object",
         "properties": {
-            "key_id": {"type": "string", "minLength": 1},
-            "target_username": {"type": "string", "minLength": 1},
+            "id": {"type": "string", "minLength": 1},
         },
-        "required": ["key_id"],
+        "required": ["id"],
         "additionalProperties": False,
     }
 
     require_auth = True
 
     def handle(self, handler: ConnectionHandler):
-        key_id: str = handler.data["key_id"]
+        key_id: str = handler.data["id"]
 
         with Session() as session:
             this_user = session.get(User, handler.username)
             assert this_user is not None
 
-            key = session.get(Keyring, key_id)
+            key = session.get(UserKey, key_id)
             if not key:
                 handler.conclude_request(404, {}, "Key not found")
                 return 404, key_id, handler.username
@@ -276,22 +256,17 @@ class RequestSetPrimaryKeyringHandler(RequestHandler):
                 if "manage_keyrings" not in this_user.all_permissions:
                     handler.conclude_request(403, {}, "Permission denied")
                     return 403, key_id, handler.username
+                
+            this_user.preference_dek = key
 
-            # Demote current primary, then promote the requested key.
-            session.query(Keyring).filter(
-                Keyring.username == key.username,
-                Keyring.is_primary == True,  # noqa: E712
-            ).update({"is_primary": False})
-
-            key.is_primary = True
             session.add(key)
             session.commit()
 
-            handler.conclude_request(200, {}, "Primary key updated successfully")
+            handler.conclude_request(200, {}, "Prefenerce DEK updated successfully")
             return 200, key_id, handler.username
 
 
-class RequestListKeyringsHandler(RequestHandler):
+class RequestListUserKeysHandler(RequestHandler):
     """
     List all keys in the authenticated user's keyring (metadata only, no key_content).
 
@@ -299,12 +274,12 @@ class RequestListKeyringsHandler(RequestHandler):
     ``manage_keyrings`` permission and pass ``target_username``.
 
     Request data:
-        target_username (str, optional) – Admin-only: list another user's keys.
+        target_username (str, optional) - Admin-only: list another user's keys.
 
     Response codes:
-        200 – List returned in ``data.keys``.
-        403 – Permission denied.
-        404 – Target user not found (admin path only).
+        200 - List returned in ``data.keys``.
+        403 - Permission denied.
+        404 - Target user not found (admin path only).
     """
 
     data_schema = {
@@ -318,25 +293,25 @@ class RequestListKeyringsHandler(RequestHandler):
     require_auth = True
 
     def handle(self, handler: ConnectionHandler):
-        target_username: str | None = handler.data.get("target_username")
+        target_username: str = handler.data.get("target_username") or handler.username
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
-            assert this_user is not None
+            target_user = session.get(User, target_username)
+            operator = session.get(User, handler.username)
+            assert operator is not None
 
-            if target_username and target_username != handler.username:
-                if "manage_keyrings" not in this_user.all_permissions:
+            if target_username != handler.username:
+                if "manage_keyrings" not in operator.all_permissions:
                     handler.conclude_request(403, {}, "Permission denied")
                     return 403, target_username, handler.username
-                if not session.get(User, target_username):
-                    handler.conclude_request(404, {}, "Target user not found")
-                    return 404, target_username, handler.username
-            else:
-                target_username = handler.username
+                
+            if not target_user:
+                handler.conclude_request(404, {}, smsg.TARGET_OBJECT_NOT_FOUND)
+                return 404, target_username, handler.username
 
             keys = (
-                session.query(Keyring)
-                .filter(Keyring.username == target_username)
+                session.query(UserKey)
+                .filter(UserKey.username == target_username)
                 .all()
             )
 
@@ -345,9 +320,9 @@ class RequestListKeyringsHandler(RequestHandler):
                 {
                     "keys": [
                         {
-                            "key_id": k.key_id,
+                            "id": k.id,
                             "label": k.label,
-                            "is_primary": k.is_primary,
+                            "is_preference_dek": target_user.preference_dek_id == k.id,
                             "created_time": k.created_time,
                         }
                         for k in keys

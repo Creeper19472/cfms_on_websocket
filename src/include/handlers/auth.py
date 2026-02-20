@@ -5,7 +5,7 @@ from include.classes.request import RequestHandler
 from include.conf_loader import global_config
 from include.constants import FAILED_LOGIN_DELAY_SECONDS
 from include.database.handler import Session
-from include.database.models.classic import Keyring, User
+from include.database.models.classic import UserKey, User
 from include.util.audit import log_audit
 from include.util.pwd import check_passwd_requirements
 
@@ -93,19 +93,16 @@ class RequestLoginHandler(RequestHandler):
 
                     # Return the primary keyring key if one is set, so clients
                     # can transparently retrieve the config-encryption DEK.
-                    primary_key = (
-                        session.query(Keyring)
-                        .filter(
-                            Keyring.username == username,
-                            Keyring.is_primary == True,  # noqa: E712
-                        )
-                        .first()
+                    preference_dek = (
+                        session.get(UserKey, user.preference_dek_id)
+                        if user.preference_dek_id
+                        else None
                     )
-                    if primary_key:
-                        success_data["primary_key"] = {
-                            "key_id": primary_key.key_id,
-                            "key_content": primary_key.key_content,
-                            "label": primary_key.label,
+                    if preference_dek:
+                        success_data["preference_dek"] = {
+                            "key_id": preference_dek.id,
+                            "key_content": preference_dek.content,
+                            "label": preference_dek.label,
                         }
 
                     if user.totp_enabled:
@@ -123,9 +120,17 @@ class RequestLoginHandler(RequestHandler):
                             }
                             should_delay = True
                         else:
-                            response = {"code": 200, "message": "Login successful", "data": success_data}
+                            response = {
+                                "code": 200,
+                                "message": "Login successful",
+                                "data": success_data,
+                            }
                     else:
-                        response = {"code": 200, "message": "Login successful", "data": success_data}
+                        response = {
+                            "code": 200,
+                            "message": "Login successful",
+                            "data": success_data,
+                        }
 
         if should_delay:
             time.sleep(FAILED_LOGIN_DELAY_SECONDS)
