@@ -263,7 +263,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "upload_user_key": RequestUploadUserKeyHandler,
         "get_user_key": RequestGetUserKeyHandler,
         "delete_user_key": RequestDeleteUserKeyHandler,
-        "set_user_prefenerce_dek": RequestSetPreferenceDEKHandler,
+        "set_user_preference_dek": RequestSetPreferenceDEKHandler,
         "list_user_keys": RequestListUserKeysHandler,
     }
 

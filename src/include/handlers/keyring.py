@@ -2,15 +2,15 @@
 Keyring handlers for CFMS.
 
 These handlers allow authenticated users to upload, query, and delete their own
-encryption keys. A key marked as *primary* is returned in the login response so
-that any compliant client can retrieve the configuration-encryption DEK without
-needing to know the key identifier in advance.
+encryption keys. A key marked as *preference* is returned in the login response
+so that any compliant client can retrieve the configuration-encryption DEK
+without needing to know the key identifier in advance.
 
 Security constraints enforced by these handlers:
 - A user may only access and manage their own keys.
 - Admins with the ``manage_keyrings`` permission may manage any user's keys.
-- At most one key per user may be marked *primary*; uploading a new primary
-  key automatically demotes the previous one.
+- At most one key per user may be marked *preference*; uploading a new
+  preference key automatically demotes the previous one.
 """
 
 import time
@@ -206,6 +206,13 @@ class RequestDeleteUserKeyHandler(RequestHandler):
                     handler.conclude_request(403, {}, "Permission denied")
                     return 403, key_id, handler.username
 
+            # If this key is set as the owner's preference DEK, clear it before deletion
+            owner_user = session.get(User, key.username)
+            if owner_user is not None:
+                # Prefer checking by id to avoid unnecessary loading of relations
+                preference_dek_id = getattr(owner_user, "preference_dek_id", None)
+                if preference_dek_id == key_id:
+                    owner_user.preference_dek = None
             session.delete(key)
             session.commit()
 
@@ -257,13 +264,14 @@ class RequestSetPreferenceDEKHandler(RequestHandler):
                 if "manage_keyrings" not in this_user.all_permissions:
                     handler.conclude_request(403, {}, "Permission denied")
                     return 403, key_id, handler.username
-                
-            this_user.preference_dek = key
 
+            key_owner = session.get(User, key.username)
+            assert key_owner is not None
+            key_owner.preference_dek = key
             session.add(key)
             session.commit()
 
-            handler.conclude_request(200, {}, "Prefenerce DEK updated successfully")
+            handler.conclude_request(200, {}, "Preference DEK updated successfully")
             return 200, key_id, handler.username
 
 

@@ -849,11 +849,11 @@ class CFMSTestClient:
     ) -> Dict[str, Any]:
         return await self.send_request("delete_user_key", {"id": key_id})
 
-    async def set_primary_keyring(
+    async def set_preference_keyring(
         self,
         key_id: str,
     ) -> Dict[str, Any]:
-        return await self.send_request("set_user_prefenerce_dek", {"id": key_id})
+        return await self.send_request("set_user_preference_dek", {"id": key_id})
 
     async def list_keyrings(
         self,

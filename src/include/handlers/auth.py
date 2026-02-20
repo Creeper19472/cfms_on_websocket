@@ -92,7 +92,7 @@ class RequestLoginHandler(RequestHandler):
                         "groups": list(user.all_groups),
                     }
 
-                    # Return the primary keyring key if one is set, so clients
+                    # Return the preference keyring key if one is set, so clients
                     # can transparently retrieve the config-encryption DEK.
                     preference_dek = (
                         session.get(UserKey, user.preference_dek_id)

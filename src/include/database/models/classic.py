@@ -86,11 +86,11 @@ class User(Base):
 
     preference_dek_id: Mapped[Optional[str]] = mapped_column(
         VARCHAR(64),
-        ForeignKey("keyrings.id"),
+        ForeignKey("keyrings.id", ondelete="SET NULL"),
         nullable=True,
         unique=True,
     )
-    preference_dek: Mapped["UserKey"] = relationship(
+    preference_dek: Mapped[Optional["UserKey"]] = relationship(
         "UserKey",
         uselist=False,
         post_update=True,

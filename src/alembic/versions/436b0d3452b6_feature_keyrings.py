@@ -36,7 +36,13 @@ def upgrade() -> None:
     with op.batch_alter_table('users', schema=None) as batch_op:
         batch_op.add_column(sa.Column('preference_dek_id', sa.VARCHAR(length=64), nullable=True))
         batch_op.create_unique_constraint(batch_op.f('uq_users_preference_dek_id'), ['preference_dek_id'])
-        batch_op.create_foreign_key(batch_op.f('fk_users_preference_dek_id_keyrings'), 'keyrings', ['preference_dek_id'], ['id'])
+        batch_op.create_foreign_key(
+            batch_op.f('fk_users_preference_dek_id_keyrings'),
+            'keyrings',
+            ['preference_dek_id'],
+            ['id'],
+            ondelete='SET NULL',
+        )
 
     # ### end Alembic commands ###
 

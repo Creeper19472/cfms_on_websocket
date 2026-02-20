@@ -2,7 +2,7 @@ import secrets
 import time
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import VARCHAR, Boolean, Float, ForeignKey, Text
+from sqlalchemy import VARCHAR, Float, ForeignKey, Text
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
 from sqlalchemy.orm import relationship
@@ -19,9 +19,9 @@ class UserKey(Base):
     and multi-device synchronization.
 
     Each key entry is bound to a specific user. Users can designate one key as
-    *primary*; that key is returned in the login response so any conforming client
-    can transparently retrieve the configuration-encryption DEK without having to
-    know or guess a key identifier.
+    their *preference* key; that key is returned in the login response so any
+    conforming client can transparently retrieve the configuration-encryption DEK
+    without having to know or guess a key identifier.
     """
 
     __tablename__ = "keyrings"

@@ -231,3 +231,11 @@ class TestKeyringWithoutAuth:
         )
         assert response.get("code") == 401
 
+    @pytest.mark.asyncio
+    async def test_set_preference_keyring_without_auth(self, client: CFMSTestClient):
+        response = await client.send_request(
+            "set_user_preference_dek",
+            {},
+            include_auth=False,
+        )
+        assert response.get("code") == 401
