@@ -1,5 +1,5 @@
 import hashlib
-import secrets as _secrets
+import secrets
 import time
 import filetype
 from argon2 import PasswordHasher
@@ -917,7 +917,7 @@ class RequestSetPasswdHandler(RequestHandler):
                 legacy_hash = hashlib.sha256(
                     (new_passwd + user.salt).encode("utf-8")
                 ).hexdigest()
-                _same = _secrets.compare_digest(legacy_hash, user.pass_hash)
+                _same = secrets.compare_digest(legacy_hash, user.pass_hash)
             else:
                 try:
                     _same = _password_hasher.verify(user.pass_hash, new_passwd)

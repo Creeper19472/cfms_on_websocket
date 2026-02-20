@@ -44,7 +44,10 @@ def downgrade() -> None:
     compatibility.
     """
     connection = op.get_bind()
-    connection.execute(sa.text("UPDATE users SET salt = '' WHERE salt IS NULL"))
+    users_table = sa.table('users', sa.column('salt', sa.TEXT()))
+    connection.execute(
+        sa.update(users_table).where(users_table.c.salt == None).values(salt='')
+    )
     with op.batch_alter_table('users', schema=None) as batch_op:
         batch_op.alter_column('salt',
                               existing_type=sa.TEXT(),
