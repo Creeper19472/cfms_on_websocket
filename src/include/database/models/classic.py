@@ -68,20 +68,23 @@ class User(Base):
     )  # JSON string of backup codes
 
     groups: Mapped[List["UserMembership"]] = relationship(
-        "UserMembership", back_populates="user"
+        "UserMembership", back_populates="user", cascade="all, delete-orphan"
     )
     rights: Mapped[List["UserPermission"]] = relationship(
-        "UserPermission", back_populates="user"
+        "UserPermission", back_populates="user", cascade="all, delete-orphan"
     )
 
     block_entries: Mapped[List["UserBlockEntry"]] = relationship(
-        "UserBlockEntry", back_populates="user"
+        "UserBlockEntry", back_populates="user", cascade="all, delete-orphan"
     )
     audit_entries: Mapped[List["AuditEntry"]] = relationship(
         "AuditEntry", back_populates="user"
     )
     keyring: Mapped[List["UserKey"]] = relationship(
-        "UserKey", back_populates="user", foreign_keys="UserKey.username"
+        "UserKey",
+        back_populates="user",
+        foreign_keys="UserKey.username",
+        cascade="all, delete-orphan",
     )
 
     preference_dek_id: Mapped[Optional[str]] = mapped_column(
@@ -361,7 +364,9 @@ class User(Base):
 class UserPermission(Base):
     __tablename__ = "user_permissions"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    username: Mapped[str] = mapped_column(ForeignKey("users.username"))
+    username: Mapped[str] = mapped_column(
+        ForeignKey("users.username", ondelete="CASCADE")
+    )
     permission: Mapped[str] = mapped_column(VARCHAR(255))
     granted: Mapped[bool] = mapped_column(
         Boolean, default=True
@@ -402,13 +407,18 @@ def filter_permissions_on_load(target, context):
 class UserMembership(Base):
     __tablename__ = "user_memberships"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    username: Mapped[str] = mapped_column(ForeignKey("users.username"))
-    group_name: Mapped[str] = mapped_column(ForeignKey("user_groups.group_name"))
+    username: Mapped[str] = mapped_column(
+        ForeignKey("users.username", ondelete="CASCADE")
+    )
+    group_name: Mapped[str] = mapped_column(
+        ForeignKey("user_groups.group_name", ondelete="CASCADE")
+    )
     start_time: Mapped[float] = mapped_column(Float, nullable=False)  # 加入组的时间戳
     end_time: Mapped[Optional[float]] = mapped_column(
         Float, nullable=True
     )  # 离开组的时间戳
     user: Mapped["User"] = relationship("User", back_populates="groups")
+    group: Mapped["UserGroup"] = relationship("UserGroup", back_populates="memberships")
 
     def __repr__(self) -> str:
         return (
@@ -434,7 +444,10 @@ class UserGroup(Base):
     )
 
     permissions: Mapped[List["UserGroupPermission"]] = relationship(
-        "UserGroupPermission", back_populates="group"
+        "UserGroupPermission", back_populates="group", cascade="all, delete-orphan"
+    )
+    memberships: Mapped[List["UserMembership"]] = relationship(
+        "UserMembership", back_populates="group", cascade="all, delete"
     )
 
     @property
@@ -517,7 +530,9 @@ class UserGroup(Base):
 class UserGroupPermission(Base):
     __tablename__ = "group_permissions"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    group_name: Mapped[str] = mapped_column(ForeignKey("user_groups.group_name"))
+    group_name: Mapped[str] = mapped_column(
+        ForeignKey("user_groups.group_name", ondelete="CASCADE")
+    )
     permission: Mapped[str] = mapped_column(VARCHAR(255))
     granted: Mapped[bool] = mapped_column(
         Boolean, default=True

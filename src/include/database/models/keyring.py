@@ -30,7 +30,7 @@ class UserKey(Base):
         VARCHAR(64), primary_key=True, default=lambda: secrets.token_hex(32)
     )
     username: Mapped[str] = mapped_column(
-        ForeignKey("users.username"), nullable=False, index=True
+        ForeignKey("users.username", ondelete="CASCADE"), nullable=False, index=True
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
 

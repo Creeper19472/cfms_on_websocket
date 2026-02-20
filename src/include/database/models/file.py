@@ -30,7 +30,9 @@ class File(Base):
     created_time: Mapped[float] = mapped_column(
         Float, nullable=False, default=lambda: time.time()
     )
-    tasks: Mapped[List["FileTask"]] = relationship("FileTask", back_populates="file")
+    tasks: Mapped[List["FileTask"]] = relationship(
+        "FileTask", back_populates="file", cascade="all, delete-orphan"
+    )
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     @property
@@ -116,7 +118,7 @@ class FileTask(Base):
         VARCHAR(255), primary_key=True, default=lambda: secrets.token_hex(32)
     )
     file_id: Mapped[str] = mapped_column(
-        VARCHAR(255), ForeignKey("files.id"), nullable=False
+        VARCHAR(255), ForeignKey("files.id", ondelete="CASCADE"), nullable=False
     )
     # 0: 等待中, 1: 已完成, 2: 已取消
     status: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
