@@ -16,7 +16,7 @@ __all__ = [
 ]
 
 CORE_VERSION = Version("0.1.0.260220_alpha")
-PROTOCOL_VERSION = 8
+PROTOCOL_VERSION = 9
 
 AVAILABLE_ACCESS_TYPES = ["read", "write", "move", "manage"]
 AVAILABLE_BLOCK_TYPES: set = {"read", "write", "move"}
