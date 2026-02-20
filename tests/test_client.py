@@ -821,3 +821,45 @@ class CFMSTestClient:
             "object_type": object_type,
             "object_identifier": object_identifier
         })
+
+    # Keyring methods
+
+    async def upload_keyring(
+        self,
+        key_content: str,
+        label: Optional[str] = None,
+        target_username: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        data: Dict[str, Any] = {"content": key_content}
+        if label is not None:
+            data["label"] = label
+        if target_username is not None:
+            data["target_username"] = target_username
+        return await self.send_request("upload_user_key", data)
+
+    async def get_keyring(
+        self,
+        key_id: str,
+    ) -> Dict[str, Any]:
+        return await self.send_request("get_user_key", {"id": key_id})
+
+    async def delete_keyring(
+        self,
+        key_id: str,
+    ) -> Dict[str, Any]:
+        return await self.send_request("delete_user_key", {"id": key_id})
+
+    async def set_preference_keyring(
+        self,
+        key_id: str,
+    ) -> Dict[str, Any]:
+        return await self.send_request("set_user_preference_dek", {"id": key_id})
+
+    async def list_keyrings(
+        self,
+        target_username: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        data: Dict[str, Any] = {}
+        if target_username is not None:
+            data["target_username"] = target_username
+        return await self.send_request("list_user_keys", data)

@@ -12,10 +12,12 @@ if TYPE_CHECKING:
 class UserBlockEntry(Base):
     __tablename__ = "userblock_entries"
     block_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    username: Mapped[str] = mapped_column(ForeignKey("users.username"))
+    username: Mapped[str] = mapped_column(
+        ForeignKey("users.username", ondelete="CASCADE")
+    )
     user: Mapped["User"] = relationship("User", back_populates="block_entries")
     sub_entries: Mapped[list["UserBlockSubEntry"]] = relationship(
-        "UserBlockSubEntry", back_populates="parent_entry"
+        "UserBlockSubEntry", back_populates="parent_entry", cascade="all, delete-orphan"
     )
     timestamp: Mapped[float] = mapped_column(Float, nullable=False)
     expiry: Mapped[float] = mapped_column(Float, nullable=False)
@@ -29,7 +31,9 @@ class UserBlockEntry(Base):
 class UserBlockSubEntry(Base):
     __tablename__ = "userblock_sub_entries"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    parent_id: Mapped[int] = mapped_column(ForeignKey("userblock_entries.block_id"))
+    parent_id: Mapped[int] = mapped_column(
+        ForeignKey("userblock_entries.block_id", ondelete="CASCADE")
+    )
     parent_entry: Mapped[UserBlockEntry] = relationship(
         "UserBlockEntry", back_populates="sub_entries"
     )

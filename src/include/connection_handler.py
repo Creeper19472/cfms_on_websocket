@@ -83,6 +83,13 @@ from include.handlers.management.system import (
 )
 from include.handlers.debugging.throw import RequestThrowExceptionHandler
 from include.handlers.search import RequestSearchHandler
+from include.handlers.keyring import (
+    RequestUploadUserKeyHandler,
+    RequestGetUserKeyHandler,
+    RequestDeleteUserKeyHandler,
+    RequestSetPreferenceDEKHandler,
+    RequestListUserKeysHandler,
+)
 
 from include.constants import CORE_VERSION, NONCE_MIN_LENGTH, PROTOCOL_VERSION
 from include.nonce_store import nonce_store
@@ -252,6 +259,12 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         # 系统类
         "lockdown": RequestLockdownHandler,
         "view_audit_logs": RequestViewAuditLogsHandler,
+        # Keyring
+        "upload_user_key": RequestUploadUserKeyHandler,
+        "get_user_key": RequestGetUserKeyHandler,
+        "delete_user_key": RequestDeleteUserKeyHandler,
+        "set_user_preference_dek": RequestSetPreferenceDEKHandler,
+        "list_user_keys": RequestListUserKeysHandler,
     }
 
     # Debugging
