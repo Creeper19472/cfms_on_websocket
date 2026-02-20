@@ -281,17 +281,19 @@ class Folder(BaseObject):  # 文档文件夹
         Float, nullable=False, default=lambda: time.time()
     )
     parent_id: Mapped[Optional[str]] = mapped_column(
-        VARCHAR(255), ForeignKey("folders.id")
+        VARCHAR(255), ForeignKey("folders.id", ondelete="CASCADE")
     )  # 父文件夹ID
     parent: Mapped[Optional["Folder"]] = relationship(
         "Folder", back_populates="children", remote_side=[id]
     )
-    children: Mapped[List["Folder"]] = relationship("Folder", back_populates="parent")
+    children: Mapped[List["Folder"]] = relationship(
+        "Folder", back_populates="parent", cascade="all, delete-orphan"
+    )
     access_rules: Mapped[List["FolderAccessRule"]] = relationship(
         "FolderAccessRule", back_populates="folder", cascade="all, delete-orphan"
     )
     documents: Mapped[List["Document"]] = relationship(
-        "Document", back_populates="folder"
+        "Document", back_populates="folder", cascade="all, delete-orphan"
     )
     inherit: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
@@ -354,7 +356,7 @@ class Document(BaseObject):
         Float, nullable=False, default=lambda: time.time()
     )
     folder_id: Mapped[Optional[str]] = mapped_column(
-        VARCHAR(255), ForeignKey("folders.id"), nullable=True
+        VARCHAR(255), ForeignKey("folders.id", ondelete="CASCADE"), nullable=True
     )  # 文档所属文件夹ID
     folder: Mapped[Optional["Folder"]] = relationship(
         "Folder", back_populates="documents"
