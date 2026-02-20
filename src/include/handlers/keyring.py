@@ -87,7 +87,7 @@ class RequestUploadUserKeyHandler(RequestHandler):
 
             key = UserKey(
                 username=target_username,
-                key_content=key_content,
+                content=key_content,
                 label=label,
                 created_time=time.time(),
             )
