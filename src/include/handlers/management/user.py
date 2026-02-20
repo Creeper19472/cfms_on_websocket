@@ -1,5 +1,3 @@
-import hashlib
-import secrets
 import time
 import filetype
 from argon2 import PasswordHasher
@@ -9,6 +7,7 @@ from typing import Optional
 # Module-level PasswordHasher instance — reused across all calls to avoid
 # repeated construction overhead.
 _password_hasher = PasswordHasher()
+
 from include.constants import AVAILABLE_BLOCK_TYPES
 from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
@@ -910,22 +909,10 @@ class RequestSetPasswdHandler(RequestHandler):
                 handler.conclude_request(400, {"missing": e.missing}, str(e))
                 return 400, target_username
 
-            # Check whether the new password is the same as the current one.
-            # Handles both legacy SHA-256+salt hashes and current argon2id hashes.
-            if user.salt is not None:
-                # Legacy SHA-256 path
-                legacy_hash = hashlib.sha256(
-                    (new_passwd + user.salt).encode("utf-8")
-                ).hexdigest()
-                _same = secrets.compare_digest(legacy_hash, user.pass_hash)
-            else:
-                try:
-                    _same = _password_hasher.verify(user.pass_hash, new_passwd)
-                except VerifyMismatchError:
-                    _same = False
-                except (VerificationError, InvalidHashError):
-                    # Unrecognised hash format; skip the same-password check
-                    _same = False
+            try:
+                _same = _password_hasher.verify(user.pass_hash, new_passwd)
+            except (VerifyMismatchError, VerificationError, InvalidHashError):
+                _same = False
 
             if _same:
                 handler.conclude_request(
