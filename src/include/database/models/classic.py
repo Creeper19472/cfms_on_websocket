@@ -31,6 +31,7 @@ _password_hasher = PasswordHasher()
 if TYPE_CHECKING:
     from include.database.models.blocking import UserBlockEntry
     from include.database.models.file import File
+    from include.database.models.keyring import UserKey
 
 
 class User(Base):
@@ -61,9 +62,7 @@ class User(Base):
     totp_secret: Mapped[Optional[str]] = mapped_column(
         VARCHAR(32), nullable=True, default=None
     )
-    totp_enabled: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False
-    )
+    totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     totp_backup_codes: Mapped[Optional[str]] = mapped_column(
         Text, nullable=True, default=None
     )  # JSON string of backup codes
@@ -80,6 +79,22 @@ class User(Base):
     )
     audit_entries: Mapped[List["AuditEntry"]] = relationship(
         "AuditEntry", back_populates="user"
+    )
+    keyring: Mapped[List["UserKey"]] = relationship(
+        "UserKey", back_populates="user", foreign_keys="UserKey.username"
+    )
+
+    preference_dek_id: Mapped[Optional[str]] = mapped_column(
+        VARCHAR(64),
+        ForeignKey("keyrings.id", ondelete="SET NULL"),
+        nullable=True,
+        unique=True,
+    )
+    preference_dek: Mapped[Optional["UserKey"]] = relationship(
+        "UserKey",
+        uselist=False,
+        post_update=True,
+        foreign_keys=[preference_dek_id],
     )
 
     def __repr__(self) -> str:
@@ -262,9 +277,7 @@ class User(Base):
             return None
 
         totp = pyotp.TOTP(self.totp_secret)
-        return totp.provisioning_uri(
-            name=self.username, issuer_name="CFMS"
-        )
+        return totp.provisioning_uri(name=self.username, issuer_name="CFMS")
 
     @property
     def all_groups(self):
