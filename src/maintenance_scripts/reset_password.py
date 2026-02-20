@@ -98,7 +98,7 @@ def main() -> None:
     else:
         print(f"Password for '{username}' has been reset.")
         print(f"New password: {new_password}")
-        print("Store this password in a safe place – it will not be shown again.")
+        print("Store this password in a safe place - it will not be shown again.")
 
 
 if __name__ == "__main__":
