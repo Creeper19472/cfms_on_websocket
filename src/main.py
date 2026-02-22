@@ -42,6 +42,7 @@ from include.database.handler import engine
 from include.database.models.entity import Document, DocumentRevision, Folder
 from include.database.models.file import File
 from include.util.log import getCustomLogger
+from include.util.rule.applying import set_access_rules
 
 
 def ensure_root_folder():
@@ -50,11 +51,30 @@ def ensure_root_folder():
     This record carries no children of its own; it exists solely so that
     access rules (and ObjectAccessEntries) can be attached to the root directory
     through the normal access-control machinery.
+
+    On creation the root folder is configured with default access rules that
+    restrict read, write and manage access to the ``sysop`` group only.
     """
+    _sysop_rule = {
+        "match": "all",
+        "match_groups": [
+            {
+                "match": "all",
+                "groups": {"match": "all", "require": ["sysop"]},
+            }
+        ],
+    }
+    _DEFAULT_ROOT_ACCESS_RULES = {
+        "read": [_sysop_rule],
+        "write": [_sysop_rule],
+        "manage": [_sysop_rule],
+    }
+
     with Session() as session:
         if not session.get(Folder, ROOT_FOLDER_ID):
             root = Folder(id=ROOT_FOLDER_ID, name="/")
             session.add(root)
+            set_access_rules(root, _DEFAULT_ROOT_ACCESS_RULES)
             session.commit()
 
 
