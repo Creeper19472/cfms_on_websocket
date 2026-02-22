@@ -167,7 +167,11 @@ class BaseObject(Base):
                 _session.query(UserBlockEntry)
                 .filter(
                     UserBlockEntry.username == user.username,
-                    UserBlockEntry.expiry >= time.time(),
+                    UserBlockEntry.not_before <= time.time(),
+                    (
+                        UserBlockEntry.not_after == -1
+                        or UserBlockEntry.not_after >= time.time()
+                    ),
                 )
                 .all()
             )

@@ -1,3 +1,4 @@
+import math
 import time
 import filetype
 from argon2 import PasswordHasher
@@ -403,9 +404,10 @@ class RequestBlockUserHandler(RequestHandler):
                 "minItems": 1,
                 "items": {"type": "string"},  # not empty
             },
-            "duration": {"type": "number"},
+            "not_before": {"type": "number", "minimum": 0},
+            "not_after": {"type": "number"},
         },
-        "required": ["username", "block_types", "duration", "target"],
+        "required": ["username", "block_types", "target"],
         "additionalProperties": False,
     }
 
@@ -415,12 +417,19 @@ class RequestBlockUserHandler(RequestHandler):
 
         target_username: str = handler.data["username"]
         block_types: list[str] = handler.data["block_types"]
-        duration: int | float = handler.data["duration"]
+
+        not_before: int | float = handler.data.get("not_before", 0)
+        not_after: int | float = handler.data.get("not_after", -1)
+        
         target_type: str = handler.data["target"]["type"]
         target_id: Optional[str] = handler.data["target"].get("id")
 
         if not set(block_types).issubset(AVAILABLE_BLOCK_TYPES):
             handler.conclude_request(400, {}, "Unsupported block type(s)")
+            return 400, target_username
+
+        if not_after >= 0 and not_after <= not_before:
+            handler.conclude_request(400, {}, "`not_after` must be later than `not_before`")
             return 400, target_username
 
         with Session() as session:
@@ -441,7 +450,8 @@ class RequestBlockUserHandler(RequestHandler):
             block_entry = UserBlockEntry(
                 username=target_username,
                 timestamp=now,
-                expiry=now + duration,
+                not_before=not_before,
+                not_after=not_after,
                 target_type=target_type,
                 target_id=target_id,
             )
@@ -502,7 +512,7 @@ class RequestUnblockUserHandler(RequestHandler):
                 handler.conclude_request(404, {}, "Specified entry not found")
                 return 404, block_id, handler.username
 
-            if block_entry.expiry < time.time():
+            if 0 <= block_entry.not_after < time.time():
                 handler.conclude_request(400, {}, "The specified block has ended")
                 return 400, block_id, handler.username
 
@@ -568,10 +578,13 @@ class RequestListUserBlocksHandler(RequestHandler):
                     {
                         "block_id": entry.block_id,
                         "timestamp": entry.timestamp,
-                        "expiry": entry.expiry,
+                        "not_before": entry.not_before,
+                        "not_after": entry.not_after,
                         "target_type": entry.target_type,
                         "target_id": entry.target_id,
-                        "block_types": [sub_entry.block_type for sub_entry in sub_entries],
+                        "block_types": [
+                            sub_entry.block_type for sub_entry in sub_entries
+                        ],
                     }
                 )
 

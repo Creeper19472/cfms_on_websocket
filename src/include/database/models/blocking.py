@@ -20,7 +20,10 @@ class UserBlockEntry(Base):
         "UserBlockSubEntry", back_populates="parent_entry", cascade="all, delete-orphan"
     )
     timestamp: Mapped[float] = mapped_column(Float, nullable=False)
-    expiry: Mapped[float] = mapped_column(Float, nullable=False)
+    
+    not_before: Mapped[float] = mapped_column(Float, nullable=False)
+    not_after: Mapped[float] = mapped_column(Float, nullable=False)
+
     # Due to technical issues in the implementation of ORM, target_type and target_id are
     # stored as two separate columns, but when 'target_type' is 'all', target_id can be
     # left empty.
