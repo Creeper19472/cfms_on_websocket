@@ -4,7 +4,7 @@ import jsonschema
 from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
 from include.conf_loader import global_config
-from include.constants import ROOT_FOLDER_ID
+from include.constants import ROOT_DIRECTORY_ID
 from include.database.handler import Session
 from include.database.models.classic import User
 from include.database.models.entity import Folder, Document
@@ -52,14 +52,14 @@ class RequestListDirectoryHandler(RequestHandler):
                 children = (
                     session.query(Folder)
                     .filter(
-                        Folder.parent_id.is_(None), Folder.id != ROOT_FOLDER_ID
+                        Folder.parent_id.is_(None), Folder.id != ROOT_DIRECTORY_ID
                     )
                     .all()
                 )
                 documents = (
                     session.query(Document).filter(Document.folder_id.is_(None)).all()
                 )
-                root_folder = session.get(Folder, ROOT_FOLDER_ID)
+                root_folder = session.get(Folder, ROOT_DIRECTORY_ID)
                 has_permission = "super_list_directory" in this_user.all_permissions or (
                     root_folder is not None
                     and root_folder.check_access_requirements(this_user, "read")
@@ -322,7 +322,7 @@ class RequestCreateDirectoryHandler(RequestHandler):
 
             else:
                 parent = None
-                root_folder = session.get(Folder, ROOT_FOLDER_ID)
+                root_folder = session.get(Folder, ROOT_DIRECTORY_ID)
                 if root_folder is not None and not root_folder.check_access_requirements(
                     this_user, "write"
                 ):
@@ -455,7 +455,7 @@ class RequestDeleteDirectoryHandler(RequestHandler):
         # Parse the directory deletion request
         folder_id = handler.data["folder_id"]  # Get the folder ID from the request data
 
-        if folder_id == ROOT_FOLDER_ID:
+        if folder_id == ROOT_DIRECTORY_ID:
             handler.conclude_request(
                 **{"code": 403, "message": "The root directory cannot be deleted", "data": {}}
             )
@@ -536,7 +536,7 @@ class RequestRenameDirectoryHandler(RequestHandler):
         folder_id = handler.data["folder_id"]
         new_name = handler.data["new_name"]
 
-        if folder_id == ROOT_FOLDER_ID:
+        if folder_id == ROOT_DIRECTORY_ID:
             handler.conclude_request(
                 **{"code": 403, "message": "The root directory cannot be renamed", "data": {}}
             )
@@ -654,7 +654,7 @@ class RequestMoveDirectoryHandler(RequestHandler):
         folder_id: str = handler.data["folder_id"]
         target_folder_id: Optional[str] = handler.data.get("target_folder_id")
 
-        if folder_id == ROOT_FOLDER_ID:
+        if folder_id == ROOT_DIRECTORY_ID:
             handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MOVE_DIRECTORY)
             return 403, folder_id
 
@@ -767,7 +767,7 @@ class RequestMoveDirectoryHandler(RequestHandler):
 
                 folder.parent = target_folder
             else:
-                root_folder = session.get(Folder, ROOT_FOLDER_ID)
+                root_folder = session.get(Folder, ROOT_DIRECTORY_ID)
                 if root_folder is not None and not root_folder.check_access_requirements(
                     user, "write"
                 ):

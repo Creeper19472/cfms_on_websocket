@@ -13,7 +13,7 @@ __all__ = [
     "FILE_TASK_DEFAULT_DURATION_SECONDS",
     "REPLAY_PROTECTION_TIME_WINDOW_SECONDS",
     "NONCE_MIN_LENGTH",
-    "ROOT_FOLDER_ID",
+    "ROOT_DIRECTORY_ID",
 ]
 
 CORE_VERSION = Version("0.1.0.260222_alpha")
@@ -37,4 +37,4 @@ REPLAY_PROTECTION_TIME_WINDOW_SECONDS = 15  # Maximum age of a request timestamp
 NONCE_MIN_LENGTH = 16  # Minimum length of a nonce string
 
 # Root directory virtual folder ID — used to store access rules for the root directory
-ROOT_FOLDER_ID = "/"
+ROOT_DIRECTORY_ID = "/"

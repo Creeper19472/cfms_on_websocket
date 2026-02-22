@@ -35,7 +35,7 @@ from include.conf_loader import global_config
 from include.connection_handler import handle_connection
 from include.constants import CORE_VERSION
 from include.constants import DEFAULT_SSL_CERT_VALIDITY_DAYS
-from include.constants import ROOT_FOLDER_ID
+from include.constants import ROOT_DIRECTORY_ID
 from include.database.handler import Base
 from include.database.handler import Session
 from include.database.handler import engine
@@ -71,8 +71,8 @@ def ensure_root_folder():
     }
 
     with Session() as session:
-        if not session.get(Folder, ROOT_FOLDER_ID):
-            root = Folder(id=ROOT_FOLDER_ID, name="/")
+        if not session.get(Folder, ROOT_DIRECTORY_ID):
+            root = Folder(id=ROOT_DIRECTORY_ID, name="/")
             session.add(root)
             set_access_rules(root, _DEFAULT_ROOT_ACCESS_RULES)
             session.commit()

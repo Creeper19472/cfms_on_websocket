@@ -9,7 +9,7 @@ from include.classes.request import RequestHandler
 from include.conf_loader import global_config
 from include.constants import AVAILABLE_ACCESS_TYPES
 from include.constants import FILE_TASK_DEFAULT_DURATION_SECONDS
-from include.constants import ROOT_FOLDER_ID
+from include.constants import ROOT_DIRECTORY_ID
 from include.database.handler import Session
 from include.database.models.classic import User
 from include.database.models.entity import (
@@ -293,7 +293,7 @@ class RequestCreateDocumentHandler(RequestHandler):
                     handler.conclude_request(403, {}, "Access denied to the folder")
                     return 403, folder_id, {"title": title}, handler.username
             else:
-                root_folder = session.get(Folder, ROOT_FOLDER_ID)
+                root_folder = session.get(Folder, ROOT_DIRECTORY_ID)
                 if (
                     root_folder is not None
                     and not root_folder.check_access_requirements(user, access_type="write")
@@ -983,7 +983,7 @@ class RequestMoveDocumentHandler(RequestHandler):
 
                 document.folder = target_folder
             else:
-                root_folder = session.get(Folder, ROOT_FOLDER_ID)
+                root_folder = session.get(Folder, ROOT_DIRECTORY_ID)
                 if root_folder is not None and not root_folder.check_access_requirements(
                     user, "write"
                 ):
