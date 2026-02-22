@@ -45,6 +45,7 @@ class RequestListDirectoryHandler(RequestHandler):
             this_user = session.get(User, handler.username)
             assert this_user is not None
 
+            # Determine parent folder and fetch children/documents
             if not folder_id:
                 parent = None
                 children = (
@@ -53,28 +54,27 @@ class RequestListDirectoryHandler(RequestHandler):
                 documents = (
                     session.query(Document).filter(Document.folder_id.is_(None)).all()
                 )
+                has_permission = (
+                    "super_list_directory" in this_user.all_permissions
+                    or Folder().check_access_requirements(this_user, "read")
+                )
             else:
                 folder = session.get(Folder, folder_id)
                 if not folder:
-                    handler.conclude_request(
-                        **{
-                            "code": 404,
-                            "message": "Directory not found",
-                            "data": {},
-                        }
-                    )
+                    handler.conclude_request(404, {}, "Directory not found")
                     return 404, folder_id, handler.username
-                if (
-                    not "super_list_directory" in this_user.all_permissions
-                    and not folder.check_access_requirements(this_user, "read")
-                ):
-                    handler.conclude_request(
-                        **{"code": 403, "message": "Access denied", "data": {}}
-                    )
-                    return 403, folder_id, handler.username
+
+                has_permission = (
+                    "super_list_directory" in this_user.all_permissions
+                    or folder.check_access_requirements(this_user, "read")
+                )
                 parent = folder.parent
                 children = folder.children
                 documents = folder.documents
+
+            if not has_permission:
+                handler.conclude_request(403, {}, "Access denied")
+                return 403, folder_id, handler.username
 
             active_documents = [document for document in documents if document.active]
 

@@ -1,3 +1,4 @@
+import secrets
 from typing import TYPE_CHECKING
 from sqlalchemy import VARCHAR, Float, ForeignKey, Integer
 from include.database.handler import Base
@@ -11,7 +12,9 @@ if TYPE_CHECKING:
 
 class UserBlockEntry(Base):
     __tablename__ = "userblock_entries"
-    block_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    block_id: Mapped[str] = mapped_column(
+        VARCHAR(32), primary_key=True, default=lambda: secrets.token_hex(16)
+    )
     username: Mapped[str] = mapped_column(
         ForeignKey("users.username", ondelete="CASCADE")
     )
@@ -20,7 +23,7 @@ class UserBlockEntry(Base):
         "UserBlockSubEntry", back_populates="parent_entry", cascade="all, delete-orphan"
     )
     timestamp: Mapped[float] = mapped_column(Float, nullable=False)
-    
+
     not_before: Mapped[float] = mapped_column(Float, nullable=False)
     not_after: Mapped[float] = mapped_column(Float, nullable=False)
 
@@ -34,7 +37,7 @@ class UserBlockEntry(Base):
 class UserBlockSubEntry(Base):
     __tablename__ = "userblock_sub_entries"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    parent_id: Mapped[int] = mapped_column(
+    parent_id: Mapped[str] = mapped_column(
         ForeignKey("userblock_entries.block_id", ondelete="CASCADE")
     )
     parent_entry: Mapped[UserBlockEntry] = relationship(

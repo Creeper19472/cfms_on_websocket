@@ -55,7 +55,7 @@ class User(Base):
     # 这是对应每个用户的 secret_key. 每次更改密码时将重新生成，如果该属性不为空，则在验证 token 时使用此
     # 密钥，否则，使用从 config.toml 加载的全局密钥。
     secret_key: Mapped[str] = mapped_column(
-        VARCHAR(32), default=secrets.token_hex(32), nullable=True
+        VARCHAR(32), default=lambda: secrets.token_hex(32), nullable=True
     )
 
     # Two-Factor Authentication (TOTP) fields

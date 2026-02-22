@@ -163,29 +163,24 @@ class BaseObject(Base):
 
         # check user blocks first
         if access_type in AVAILABLE_BLOCK_TYPES:
-            block_entries = (
-                _session.query(UserBlockEntry)
+            exists_sub = (
+                _session.query(UserBlockSubEntry)
+                .join(
+                    UserBlockEntry,
+                    UserBlockSubEntry.parent_id == UserBlockEntry.block_id,
+                )
                 .filter(
                     UserBlockEntry.username == user.username,
                     UserBlockEntry.not_before <= time.time(),
-                    (
-                        UserBlockEntry.not_after == -1
-                        or UserBlockEntry.not_after >= time.time()
-                    ),
+                    (UserBlockEntry.not_after == -1)
+                    | (UserBlockEntry.not_after >= time.time()),
+                    UserBlockSubEntry.block_type == access_type,
                 )
-                .all()
+                .first()
+                is not None
             )
-            for entry in block_entries:
-                filtered_sub_entries = (
-                    _session.query(UserBlockSubEntry)
-                    .filter(
-                        UserBlockSubEntry.parent_id == entry.block_id,
-                        UserBlockSubEntry.block_type == access_type,
-                    )
-                    .all()
-                )
-                if filtered_sub_entries:
-                    return False
+            if exists_sub:
+                return False
 
         # then check special access entries
         user_access_entries = (
