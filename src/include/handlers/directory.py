@@ -4,6 +4,7 @@ import jsonschema
 from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
 from include.conf_loader import global_config
+from include.constants import ROOT_DIRECTORY_ID
 from include.database.handler import Session
 from include.database.models.classic import User
 from include.database.models.entity import Folder, Document
@@ -48,15 +49,23 @@ class RequestListDirectoryHandler(RequestHandler):
             # Determine parent folder and fetch children/documents
             if not folder_id:
                 parent = None
+                # NOTE: Root-level folders have parent_id=None, not parent_id=ROOT_DIRECTORY_ID.
+                # The sentinel record exists only for access control purposes; it does not
+                # participate in the parent/child hierarchy of ordinary folders.
                 children = (
-                    session.query(Folder).filter(Folder.parent_id.is_(None)).all()
+                    session.query(Folder)
+                    .filter(
+                        Folder.parent_id.is_(None), Folder.id != ROOT_DIRECTORY_ID
+                    )
+                    .all()
                 )
                 documents = (
                     session.query(Document).filter(Document.folder_id.is_(None)).all()
                 )
-                has_permission = (
-                    "super_list_directory" in this_user.all_permissions
-                    or Folder().check_access_requirements(this_user, "read")
+                root_folder = session.get(Folder, ROOT_DIRECTORY_ID)
+                has_permission = "super_list_directory" in this_user.all_permissions or (
+                    root_folder is not None
+                    and root_folder.check_access_requirements(this_user, "read")
                 )
             else:
                 folder = session.get(Folder, folder_id)
@@ -316,6 +325,16 @@ class RequestCreateDirectoryHandler(RequestHandler):
 
             else:
                 parent = None
+                root_folder = session.get(Folder, ROOT_DIRECTORY_ID)
+                if (
+                    root_folder is not None
+                    and not root_folder.check_access_requirements(this_user, "write")
+                    and "super_create_directory" not in this_user.all_permissions
+                ):
+                    handler.conclude_request(
+                        **{"code": 403, "message": "Access denied", "data": {}}
+                    )
+                    return 403, parent_id, handler.username
 
             if "create_directory" not in this_user.all_permissions:
                 handler.conclude_request(
@@ -441,6 +460,12 @@ class RequestDeleteDirectoryHandler(RequestHandler):
         # Parse the directory deletion request
         folder_id = handler.data["folder_id"]  # Get the folder ID from the request data
 
+        if folder_id == ROOT_DIRECTORY_ID:
+            handler.conclude_request(
+                **{"code": 403, "message": "The root directory cannot be deleted", "data": {}}
+            )
+            return 403, folder_id
+
         with Session() as session:
             this_user = session.get(User, handler.username)
             if not this_user or not this_user.is_token_valid(handler.token):
@@ -515,6 +540,12 @@ class RequestRenameDirectoryHandler(RequestHandler):
         # Parse the directory renaming request
         folder_id = handler.data["folder_id"]
         new_name = handler.data["new_name"]
+
+        if folder_id == ROOT_DIRECTORY_ID:
+            handler.conclude_request(
+                **{"code": 403, "message": "The root directory cannot be renamed", "data": {}}
+            )
+            return 403, folder_id
 
         with Session() as session:
             this_user = session.get(User, handler.username)
@@ -628,6 +659,10 @@ class RequestMoveDirectoryHandler(RequestHandler):
         folder_id: str = handler.data["folder_id"]
         target_folder_id: Optional[str] = handler.data.get("target_folder_id")
 
+        if folder_id == ROOT_DIRECTORY_ID:
+            handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MOVE_DIRECTORY)
+            return 403, folder_id
+
         with Session() as session:
             user = session.get(User, handler.username)
             if not user or not user.is_token_valid(handler.token):
@@ -737,7 +772,16 @@ class RequestMoveDirectoryHandler(RequestHandler):
 
                 folder.parent = target_folder
             else:
-                # 未来添加有关根目录写入的规则
+                root_folder = session.get(Folder, ROOT_DIRECTORY_ID)
+                if (
+                    root_folder is not None
+                    and not root_folder.check_access_requirements(user, "write")
+                    and "super_create_directory" not in user.all_permissions
+                ):
+                    handler.conclude_request(
+                        403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY
+                    )
+                    return 403, folder_id, handler.username
                 folder.parent = None
 
             session.commit()
