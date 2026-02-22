@@ -65,7 +65,7 @@ def ensure_root_folder():
         ],
     }
     _DEFAULT_ROOT_ACCESS_RULES = {
-        "read": [_sysop_rule],
+        "read": [],
         "write": [_sysop_rule],
         "manage": [_sysop_rule],
     }
