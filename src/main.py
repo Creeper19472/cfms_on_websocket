@@ -110,7 +110,8 @@ def server_init():
             {"permission": "view_revision"},
             {"permission": "set_current_revision"},
             {"permission": "delete_revision"},
-            {"permission": "manage_keyrings"}
+            {"permission": "manage_keyrings"},
+            {"permission": "list_user_blocks"},
         ],
     )
     with Session() as session:

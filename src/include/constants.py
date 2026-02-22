@@ -15,7 +15,7 @@ __all__ = [
     "NONCE_MIN_LENGTH",
 ]
 
-CORE_VERSION = Version("0.1.0.260220_alpha")
+CORE_VERSION = Version("0.1.0.260222_alpha")
 PROTOCOL_VERSION = 9
 
 AVAILABLE_ACCESS_TYPES = ["read", "write", "move", "manage"]

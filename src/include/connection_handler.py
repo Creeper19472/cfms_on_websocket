@@ -56,6 +56,7 @@ from include.handlers.management.user import (
     RequestCreateUserHandler,
     RequestDeleteUserHandler,
     RequestBlockUserHandler,
+    RequestListUserBlocksHandler,
     RequestGetUserAvatarHandler,
     RequestSetUserAvatarHandler,
     RequestUnblockUserHandler,
@@ -236,6 +237,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         # Users
         "block_user": RequestBlockUserHandler,
         "unblock_user": RequestUnblockUserHandler,
+        "list_user_blocks": RequestListUserBlocksHandler,
         "list_users": RequestListUsersHandler,
         "create_user": RequestCreateUserHandler,
         "delete_user": RequestDeleteUserHandler,

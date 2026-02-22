@@ -516,6 +516,69 @@ class RequestUnblockUserHandler(RequestHandler):
         return 200, block_id, handler.username
 
 
+class RequestListUserBlocksHandler(RequestHandler):
+    data_schema = {
+        "type": "object",
+        "properties": {
+            "username": {
+                "type": "string",
+                "minLength": 1,
+            },
+        },
+        "required": ["username"],
+        "additionalProperties": False,
+    }
+
+    require_auth = True
+
+    def handle(self, handler: ConnectionHandler):
+
+        target_username: str = handler.data["username"]
+
+        with Session() as session:
+            this_user = session.get(User, handler.username)
+
+            if not this_user or not this_user.is_token_valid(handler.token):
+                handler.conclude_request(401, {}, "Invaild user or token")
+                return 401, target_username
+
+            if (
+                "list_user_blocks" not in this_user.all_permissions
+                and target_username != this_user.username
+            ):
+                handler.conclude_request(
+                    403, {}, "You do not have permission to list user blocks"
+                )
+                return 403, target_username, handler.username
+
+            block_entries = (
+                session.query(UserBlockEntry)
+                .filter(UserBlockEntry.username == target_username)
+                .all()
+            )
+
+            blocks_data = []
+            for entry in block_entries:
+                sub_entries = (
+                    session.query(UserBlockSubEntry)
+                    .filter(UserBlockSubEntry.parent_id == entry.block_id)
+                    .all()
+                )
+                blocks_data.append(
+                    {
+                        "block_id": entry.block_id,
+                        "timestamp": entry.timestamp,
+                        "expiry": entry.expiry,
+                        "target_type": entry.target_type,
+                        "target_id": entry.target_id,
+                        "block_types": [sub_entry.block_type for sub_entry in sub_entries],
+                    }
+                )
+
+        handler.conclude_request(200, {"blocks": blocks_data}, "List of user blocks")
+        return 200, target_username, handler.username
+
+
 class RequestGetUserInfoHandler(RequestHandler):
     data_schema = {
         "type": "object",
