@@ -9,6 +9,7 @@ from include.classes.request import RequestHandler
 from include.conf_loader import global_config
 from include.constants import AVAILABLE_ACCESS_TYPES
 from include.constants import FILE_TASK_DEFAULT_DURATION_SECONDS
+from include.constants import ROOT_FOLDER_ID
 from include.database.handler import Session
 from include.database.models.classic import User
 from include.database.models.entity import (
@@ -287,6 +288,15 @@ class RequestCreateDocumentHandler(RequestHandler):
 
                 if (
                     not folder.check_access_requirements(user, access_type="write")
+                    and "super_create_document" not in user.all_permissions
+                ):
+                    handler.conclude_request(403, {}, "Access denied to the folder")
+                    return 403, folder_id, {"title": title}, handler.username
+            else:
+                root_folder = session.get(Folder, ROOT_FOLDER_ID)
+                if (
+                    root_folder is not None
+                    and not root_folder.check_access_requirements(user, access_type="write")
                     and "super_create_document" not in user.all_permissions
                 ):
                     handler.conclude_request(403, {}, "Access denied to the folder")
@@ -973,6 +983,19 @@ class RequestMoveDocumentHandler(RequestHandler):
 
                 document.folder = target_folder
             else:
+                root_folder = session.get(Folder, ROOT_FOLDER_ID)
+                if root_folder is not None and not root_folder.check_access_requirements(
+                    user, "write"
+                ):
+                    handler.conclude_request(
+                        403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY
+                    )
+                    return (
+                        403,
+                        document_id,
+                        {"target_folder_id": target_folder_id},
+                        handler.username,
+                    )
                 document.folder = None
 
             session.commit()
