@@ -49,6 +49,9 @@ class RequestListDirectoryHandler(RequestHandler):
             # Determine parent folder and fetch children/documents
             if not folder_id:
                 parent = None
+                # NOTE: Root-level folders have parent_id=None, not parent_id=ROOT_DIRECTORY_ID.
+                # The sentinel record exists only for access control purposes; it does not
+                # participate in the parent/child hierarchy of ordinary folders.
                 children = (
                     session.query(Folder)
                     .filter(
@@ -323,8 +326,10 @@ class RequestCreateDirectoryHandler(RequestHandler):
             else:
                 parent = None
                 root_folder = session.get(Folder, ROOT_DIRECTORY_ID)
-                if root_folder is not None and not root_folder.check_access_requirements(
-                    this_user, "write"
+                if (
+                    root_folder is not None
+                    and not root_folder.check_access_requirements(this_user, "write")
+                    and "super_create_directory" not in this_user.all_permissions
                 ):
                     handler.conclude_request(
                         **{"code": 403, "message": "Access denied", "data": {}}
@@ -768,8 +773,10 @@ class RequestMoveDirectoryHandler(RequestHandler):
                 folder.parent = target_folder
             else:
                 root_folder = session.get(Folder, ROOT_DIRECTORY_ID)
-                if root_folder is not None and not root_folder.check_access_requirements(
-                    user, "write"
+                if (
+                    root_folder is not None
+                    and not root_folder.check_access_requirements(user, "write")
+                    and "super_create_directory" not in user.all_permissions
                 ):
                     handler.conclude_request(
                         403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY

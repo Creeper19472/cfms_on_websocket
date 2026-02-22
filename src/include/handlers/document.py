@@ -984,8 +984,10 @@ class RequestMoveDocumentHandler(RequestHandler):
                 document.folder = target_folder
             else:
                 root_folder = session.get(Folder, ROOT_DIRECTORY_ID)
-                if root_folder is not None and not root_folder.check_access_requirements(
-                    user, "write"
+                if (
+                    root_folder is not None
+                    and not root_folder.check_access_requirements(user, "write")
+                    and "super_create_document" not in user.all_permissions
                 ):
                     handler.conclude_request(
                         403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY

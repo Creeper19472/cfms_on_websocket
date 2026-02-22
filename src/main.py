@@ -65,7 +65,7 @@ def ensure_root_folder():
         ],
     }
     _DEFAULT_ROOT_ACCESS_RULES = {
-        "read": [],
+        "read": [_sysop_rule],
         "write": [_sysop_rule],
         "manage": [_sysop_rule],
     }
@@ -74,7 +74,7 @@ def ensure_root_folder():
         if not session.get(Folder, ROOT_DIRECTORY_ID):
             root = Folder(id=ROOT_DIRECTORY_ID, name="/")
             session.add(root)
-            set_access_rules(root, _DEFAULT_ROOT_ACCESS_RULES)
+            set_access_rules(root, _DEFAULT_ROOT_ACCESS_RULES, inherit_parent=False)
             session.commit()
 
 
