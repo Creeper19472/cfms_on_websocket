@@ -282,7 +282,7 @@ class RequestCreateDocumentHandler(RequestHandler):
             folder = None
             if folder_id:
                 folder = session.get(Folder, folder_id)
-                if not folder:
+                if not folder or folder.id == ROOT_DIRECTORY_ID:
                     handler.conclude_request(404, {}, "Folder not found")
                     return 404, folder_id, {"title": title}, handler.username
 
@@ -296,7 +296,9 @@ class RequestCreateDocumentHandler(RequestHandler):
                 root_folder = session.get(Folder, ROOT_DIRECTORY_ID)
                 if (
                     root_folder is not None
-                    and not root_folder.check_access_requirements(user, access_type="write")
+                    and not root_folder.check_access_requirements(
+                        user, access_type="write"
+                    )
                     and "super_create_document" not in user.all_permissions
                 ):
                     handler.conclude_request(403, {}, "Access denied to the folder")
@@ -840,24 +842,16 @@ class RequestMoveDocumentHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
 
         document_id: str = handler.data["document_id"]
         target_folder_id: str = handler.data.get("target_folder_id", "")
 
-        if not handler.username or not handler.token:
-            handler.conclude_request(
-                **{"code": 403, "message": smsg.MISSING_USERNAME_OR_TOKEN, "data": {}}
-            )
-            return 401, document_id, {"target_folder_id": target_folder_id}
-
         with Session() as session:
             user = session.get(User, handler.username)
-            if not user or not user.is_token_valid(handler.token):
-                handler.conclude_request(
-                    **{"code": 403, "message": smsg.INVALID_USER_OR_TOKEN, "data": {}}
-                )
-                return 401, document_id, {"target_folder_id": target_folder_id}
+            assert user is not None
 
             if "move" not in user.all_permissions:
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MOVE_DOCUMENT)
@@ -953,7 +947,7 @@ class RequestMoveDocumentHandler(RequestHandler):
 
             if target_folder_id:
                 target_folder = session.get(Folder, target_folder_id)
-                if not target_folder:
+                if not target_folder or target_folder.id == ROOT_DIRECTORY_ID:
                     handler.conclude_request(
                         **{
                             "code": 404,

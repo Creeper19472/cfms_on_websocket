@@ -69,8 +69,8 @@ class RequestListDirectoryHandler(RequestHandler):
                 )
             else:
                 folder = session.get(Folder, folder_id)
-                if not folder:
-                    handler.conclude_request(404, {}, "Directory not found")
+                if not folder or folder.id == ROOT_DIRECTORY_ID:
+                    handler.conclude_request(404, {}, smsg.DIRECTORY_NOT_FOUND)
                     return 404, folder_id, handler.username
 
                 has_permission = (
@@ -82,7 +82,7 @@ class RequestListDirectoryHandler(RequestHandler):
                 documents = folder.documents
 
             if not has_permission:
-                handler.conclude_request(403, {}, "Access denied")
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                 return 403, folder_id, handler.username
 
             active_documents = [document for document in documents if document.active]
@@ -125,8 +125,7 @@ class RequestListDirectoryHandler(RequestHandler):
 
         # Send the response back to the client
         handler.conclude_request(**response)
-        # handler.broadcast(r'{"code": 999, "action": "lockdown", "status": true}', raise_exceptions=True)
-        return 0, folder_id, handler.username
+        return 200, folder_id, handler.username
 
 
 class RequestGetDirectoryInfoHandler(RequestHandler):
@@ -151,6 +150,8 @@ class RequestGetDirectoryInfoHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
 
         directory_id: str = handler.data["directory_id"]
@@ -159,22 +160,14 @@ class RequestGetDirectoryInfoHandler(RequestHandler):
             handler.conclude_request(400, {}, "Directory ID is required")
             return
 
-        if not handler.username:
-            handler.conclude_request(
-                **{"code": 401, "message": "Authentication is required", "data": {}}
-            )
-            return 401, directory_id
-
         with Session() as session:
             user = session.get(User, handler.username)
+            assert user is not None  # require_auth ensures this
+
             directory = session.get(Folder, directory_id)
 
-            if user is None or not user.is_token_valid(handler.token):
-                handler.conclude_request(403, {}, "Invalid user or token")
-                return 401, directory_id
-
-            if not directory:
-                handler.conclude_request(404, {}, "Directory not found")
+            if not directory or directory.id == ROOT_DIRECTORY_ID:
+                handler.conclude_request(404, {}, smsg.DIRECTORY_NOT_FOUND)
                 return 404, directory_id, handler.username
 
             if not directory.check_access_requirements(user, access_type="read"):
@@ -301,6 +294,12 @@ class RequestCreateDirectoryHandler(RequestHandler):
         )
         exists_ok = handler.data.get("exists_ok", False)
         inherit_parent: bool = handler.data.get("inherit_parent", True)
+
+        if parent_id == ROOT_DIRECTORY_ID:
+            handler.conclude_request(
+                404, {}, smsg.DIRECTORY_NOT_FOUND
+            )
+            return 404, parent_id, handler.username
 
         with Session() as session:
             this_user = session.get(User, handler.username)
@@ -462,9 +461,9 @@ class RequestDeleteDirectoryHandler(RequestHandler):
 
         if folder_id == ROOT_DIRECTORY_ID:
             handler.conclude_request(
-                **{"code": 403, "message": "The root directory cannot be deleted", "data": {}}
+                404, {}, smsg.DIRECTORY_NOT_FOUND
             )
-            return 403, folder_id
+            return 404, folder_id, handler.username
 
         with Session() as session:
             this_user = session.get(User, handler.username)
@@ -535,6 +534,8 @@ class RequestRenameDirectoryHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
 
         # Parse the directory renaming request
@@ -543,21 +544,18 @@ class RequestRenameDirectoryHandler(RequestHandler):
 
         if folder_id == ROOT_DIRECTORY_ID:
             handler.conclude_request(
-                **{"code": 403, "message": "The root directory cannot be renamed", "data": {}}
+                404, {}, smsg.DIRECTORY_NOT_FOUND
             )
-            return 403, folder_id
+            return 404, folder_id, handler.username
 
         with Session() as session:
             this_user = session.get(User, handler.username)
-            if not this_user or not this_user.is_token_valid(handler.token):
-                handler.conclude_request(
-                    **{"code": 403, "message": "Invalid user or token", "data": {}}
-                )
-                return 401, folder_id
+            assert this_user is not None  # require_auth ensures this
+
             folder = session.get(Folder, folder_id)
             if not folder:
                 handler.conclude_request(
-                    **{"code": 404, "message": "Directory not found", "data": {}}
+                    404, {}, smsg.DIRECTORY_NOT_FOUND
                 )
                 return 404, folder_id, handler.username
             if (
@@ -654,22 +652,20 @@ class RequestMoveDirectoryHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
 
         folder_id: str = handler.data["folder_id"]
         target_folder_id: Optional[str] = handler.data.get("target_folder_id")
 
         if folder_id == ROOT_DIRECTORY_ID:
-            handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MOVE_DIRECTORY)
-            return 403, folder_id
+            handler.conclude_request(404, {}, smsg.DIRECTORY_NOT_FOUND)
+            return 404, folder_id, handler.username
 
         with Session() as session:
             user = session.get(User, handler.username)
-            if not user or not user.is_token_valid(handler.token):
-                handler.conclude_request(
-                    **{"code": 403, "message": smsg.INVALID_USER_OR_TOKEN, "data": {}}
-                )
-                return 401, folder_id
+            assert user is not None  # require_auth ensures this
 
             if "move" not in user.all_permissions:
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MOVE_DIRECTORY)
@@ -810,6 +806,8 @@ class RequestSetDirectoryRulesHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
         """
         Handles the directory access rules setting request from the client.
@@ -826,11 +824,7 @@ class RequestSetDirectoryRulesHandler(RequestHandler):
 
         with Session() as session:
             user = session.get(User, handler.username)
-            if not user or not user.is_token_valid(handler.token):
-                handler.conclude_request(
-                    **{"code": 403, "message": "Invalid user or token", "data": {}}
-                )
-                return 401, directory_id
+            assert user is not None  # require_auth ensures this
 
             directory = session.get(Folder, directory_id)
 

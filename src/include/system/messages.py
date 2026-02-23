@@ -8,6 +8,7 @@ SUCCESS = _("Success")
 
 SUBJECT_DIRECTORY_NOT_FOUND = _("Subject directory not found")
 
+DIRECTORY_NOT_FOUND = _("Directory not found")
 TARGET_OBJECT_NOT_FOUND = _("Target object not found")
 TARGET_DIRECTORY_NOT_FOUND = _("Target directory not found")
 TARGET_DOCUMENT_NOT_FOUND = _("Target document not found")
