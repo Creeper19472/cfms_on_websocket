@@ -90,7 +90,10 @@ class RequestSearchHandler(RequestHandler):
             )
 
             # Search documents
-            if search_documents and not is_globally_blocked:
+            if search_documents and (
+                not is_globally_blocked
+                or "super_list_directory" in user.all_permissions
+            ):
                 documents, doc_ancestors, doc_oaes = search_documents_with_access(
                     session, query, now
                 )
@@ -103,7 +106,10 @@ class RequestSearchHandler(RequestHandler):
                 for document in documents:
                     if not document.active:
                         continue
-                    if document.id in blocked_ids:
+                    if (
+                        document.id in blocked_ids
+                        and "super_list_directory" not in user.all_permissions
+                    ):  # This is because people who have `super_list_directory` can still see blocked documents via `list_directory`.
                         continue
                     if document.id in explicitly_granted_doc_ids:
                         pass
@@ -141,7 +147,10 @@ class RequestSearchHandler(RequestHandler):
                     )
 
             # Search directories
-            if search_directories and not is_globally_blocked:
+            if search_directories and (
+                not is_globally_blocked
+                or "super_list_directory" in user.all_permissions
+            ):
                 directories, dir_ancestors, dir_oaes = search_folders_with_access(
                     session, query, now
                 )
@@ -152,7 +161,10 @@ class RequestSearchHandler(RequestHandler):
                 )
 
                 for directory in directories:
-                    if directory.id in blocked_ids:
+                    if (
+                        directory.id in blocked_ids
+                        and "super_list_directory" not in user.all_permissions
+                    ):
                         continue
 
                     if directory.id in explicitly_granted_dir_ids:
