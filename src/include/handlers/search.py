@@ -18,6 +18,12 @@ from include.database.models.blocking import UserBlockEntry, UserBlockSubEntry
 from include.database.models.classic import ObjectAccessEntry, User
 from include.database.models.entity import Document, Folder, NoActiveRevisionsError
 from include.constants import AVAILABLE_BLOCK_TYPES
+from include.util.recursive.ancestors import (
+    search_documents_with_access,
+    search_folders_with_access,
+)
+from include.util.recursive.check import check_access_for_object
+
 
 __all__ = ["RequestSearchHandler"]
 
@@ -161,32 +167,22 @@ class RequestSearchHandler(RequestHandler):
                 "directories": [],
             }
 
-            # ------------------------------------------------------------------ #
             # Preload block entries
-            # ------------------------------------------------------------------ #
             is_globally_blocked, blocked_ids = _prefetch_user_blocks(
                 session, user, "read", now
             )
 
             # Search documents
             if search_documents and not is_globally_blocked:
-                documents = (
-                    session.query(Document)
-                    .filter(Document.title.ilike(f"%{query}%"))
-                    .all()
+                documents, doc_ancestors, doc_oaes = search_documents_with_access(
+                    session, query, now
                 )
 
-                # ------------------------------------------------------------------ #
-                # Preload explicitly granted document IDs for the user in a single batch query
-                # ------------------------------------------------------------------ #
                 doc_ids = [doc.id for doc in documents]
                 explicitly_granted_doc_ids = _batch_prefetch_granted_ids(
                     session, user, doc_ids, "document", "read", now
                 )
 
-                # ------------------------------------------------------------------ #
-                # Query loop with in-memory permission checks using preloaded data, avoiding N+1 queries
-                # ------------------------------------------------------------------ #
                 for document in documents:
                     if not document.active:
                         continue
@@ -194,14 +190,16 @@ class RequestSearchHandler(RequestHandler):
                         continue
                     if document.id in explicitly_granted_doc_ids:
                         pass
-                    elif (
-                        not document.access_rules
-                        and not global_config["access"]["enable_access_recursive_check"]
-                    ):
-                        pass
                     else:
-                        if not document.check_access_requirements(
-                            user, access_type="read"
+                        if not check_access_for_object(
+                            document,
+                            user,
+                            "read",
+                            doc_ancestors,
+                            doc_oaes,
+                            recursive=global_config["access"][
+                                "enable_access_recursive_check"
+                            ],
                         ):
                             continue
 
@@ -227,8 +225,8 @@ class RequestSearchHandler(RequestHandler):
 
             # Search directories
             if search_directories and not is_globally_blocked:
-                directories = (
-                    session.query(Folder).filter(Folder.name.ilike(f"%{query}%")).all()
+                directories, dir_ancestors, dir_oaes = search_folders_with_access(
+                    session, query, now
                 )
 
                 dir_ids = [d.id for d in directories]
@@ -242,14 +240,16 @@ class RequestSearchHandler(RequestHandler):
 
                     if directory.id in explicitly_granted_dir_ids:
                         pass
-                    elif (
-                        not directory.access_rules
-                        and not global_config["access"]["enable_access_recursive_check"]
-                    ):
-                        pass
                     else:
-                        if not directory.check_access_requirements(
-                            user, access_type="read"
+                        if not check_access_for_object(
+                            directory,
+                            user,
+                            "read",
+                            dir_ancestors,
+                            dir_oaes,
+                            recursive=global_config["access"][
+                                "enable_access_recursive_check"
+                            ],
                         ):
                             continue
 
