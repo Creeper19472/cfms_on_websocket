@@ -123,7 +123,7 @@ def search_documents_with_access(
     documents = (
         session.query(Document)
         .options(joinedload(Document.access_rules))
-        .filter(Document.title.contains(keyword))
+        .filter(Document.title.ilike(f"%{keyword}%"))
         .all()
     )
     if not documents:
@@ -167,7 +167,7 @@ def search_folders_with_access(
     matched_folders = (
         session.query(Folder)
         .options(joinedload(Folder.access_rules))
-        .filter(Folder.name.contains(keyword))
+        .filter(Folder.name.ilike(f"%{keyword}%"))
         .all()
     )
     if not matched_folders:

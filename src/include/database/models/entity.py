@@ -141,33 +141,6 @@ class BaseObject(Base):
 
         now = time.time()
 
-        if (
-            global_config["access"]["enable_access_recursive_check"]
-            and self.inherit
-            and not _no_recursive_check
-        ):
-            # check all parent folders' access rules
-            parent = None
-            if type(self) == Document:
-                parent = self.folder
-            elif type(self) == Folder:
-                parent = self.parent
-
-            visited_folder_ids = set()
-            while parent is not None:
-                if parent.id in visited_folder_ids:
-                    # Cycle detected; break to prevent an infinite loop
-                    raise RuntimeError("Cycle detected in folder hierarchy")
-                visited_folder_ids.add(parent.id)
-
-                if not parent.check_access_requirements(user, access_type=access_type):
-                    return False
-
-                if not parent.inherit:
-                    break  # if the parent folder does not inherit, stop checking further up
-
-                parent = parent.parent
-
         # check user blocks first
         if access_type in AVAILABLE_BLOCK_TYPES:
             exists_sub = (
@@ -230,6 +203,33 @@ class BaseObject(Base):
             )
             if group_access_entries:
                 return True
+            
+        if (
+            global_config["access"]["enable_access_recursive_check"]
+            and self.inherit
+            and not _no_recursive_check
+        ):
+            # check all parent folders' access rules
+            parent = None
+            if type(self) == Document:
+                parent = self.folder
+            elif type(self) == Folder:
+                parent = self.parent
+
+            visited_folder_ids = set()
+            while parent is not None:
+                if parent.id in visited_folder_ids:
+                    # Cycle detected; break to prevent an infinite loop
+                    raise RuntimeError("Cycle detected in folder hierarchy")
+                visited_folder_ids.add(parent.id)
+
+                if not parent.check_access_requirements(user, access_type=access_type):
+                    return False
+
+                if not parent.inherit:
+                    break  # if the parent folder does not inherit, stop checking further up
+
+                parent = parent.parent
 
         if not self.access_rules:
             return True

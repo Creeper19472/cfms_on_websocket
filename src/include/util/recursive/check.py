@@ -12,41 +12,43 @@ def check_access_for_object(
     oae_by_target: dict,
     recursive: bool = True,
 ) -> bool:
-    """
-    对单个文档或文件夹做完整的访问权限检查，包含逐级上溯。
 
-    参数：
-        obj           - 要检查的目标对象（Document 或 Folder）
-        user          - 当前用户
-        access_type   - 访问类型，如 "read" / "write" / "manage" / "move"
-        all_folders   - 由 search_*_with_access 预取的所有祖先文件夹列表
-        oae_by_target - 由 search_*_with_access 预取的 OAE 字典
-
-    返回：
-        True  - 用户有权访问
-        False - 用户无权访问
-    """
     if access_type not in AVAILABLE_ACCESS_TYPES:
         raise ValueError(f"Invalid access type: {access_type}")
 
-    # 将 all_folders 转成以 id 为键的字典，方便后续 O(1) 查找
     folder_map = {f.id: f for f in all_folders}
 
-    # ── 内部复用：对单个节点（文档或文件夹）做权限检查 ──────────────────────
     def _check_single_node(node: Document | Folder) -> bool:
         """
-        检查单个节点（不含上溯），分三步：
-          1. 查 OAE（特殊授权），命中则直接返回 True
-          2. 若 access_rules 为空��默认放行
-          3. 逐条检查 access_rules
+        Check if the current user has the specified access type to a single node (document or folder).
+        This function performs a three-step access control check:
+        1. **Object Access Entry (OAE) Check**: Evaluates special authorization rules with highest priority.
+           - First checks if the user has a direct OAE matching the target node, access type, and entity type.
+           - Then checks if any of the user's groups have a matching OAE.
+           - Returns True immediately if a matching OAE is found.
+        2. **Default Allow Rule**: If no access rules are defined on the node, access is granted by default.
+        3. **Access Rules Validation**: Iterates through all access rules defined on the node.
+           - Filters rules based on the requested access_type (read, write, move, manage).
+           - Checks if the user matches the primary and sub-group requirements of each rule.
+           - Returns False if any rule fails the matching check.
+        Args:
+            node: A Document or Folder object to check access permissions for.
+        Returns:
+            bool: True if the user has the specified access type to the node, False otherwise.
+        Raises:
+            NotImplementedError: If an unsupported access_type is encountered.
+        Note:
+            This function relies on external context: `user`, `access_type`, `oae_by_target`,
+            and the helper function `_match_primary_sub_group`.
         """
+
         _TARGET_TYPE_MAPPING = {"folders": "directory", "documents": "document"}
         target_type = _TARGET_TYPE_MAPPING[node.__tablename__]
 
-        # ── Step 1：检查 OAE（特殊授权优先） ──────────────────────────────
+        # check OAE first (highest priority)
         entries: list[ObjectAccessEntry] = oae_by_target.get(node.id, [])
 
-        # 检查用户自身的 OAE
+        # check user's direct OAE
         for entry in entries:
             if (
                 entry.entity_type == "user"
@@ -56,7 +58,7 @@ def check_access_for_object(
             ):
                 return True
 
-        # 检查用户所属组的 OAE
+        # check user's group OAE
         user_groups = user.all_groups  # set[str]
         for entry in entries:
             if (
@@ -67,17 +69,17 @@ def check_access_for_object(
             ):
                 return True
 
-        # ── Step 2：access_rules 为空时默认放行 ───────────────────────────
+        # If there are no access rules defined on the node, allow access by default
         if not node.access_rules:
             return True
 
-        # ── Step 3：逐条检查 access_rules ─────────────────────────────────
+        # check access rules
         for rule in node.access_rules:
             rule: AccessRuleBase
             if not rule.rule_data:
                 continue
 
-            # 根据 access_type 决定哪些 rule 参与检查（与原逻辑一致）
+            # filter by access_type
             match access_type:
                 case "read":
                     if rule.access_type != "read":
@@ -99,25 +101,20 @@ def check_access_for_object(
 
         return True
 
-    # ── 主逻辑：先检查对象自身，再逐级上溯 ──────────────────────────────────
-
-    # 1. 检查对象自身
+    # check the object itself first
     if not _check_single_node(obj):
         return False
 
-    # 2. 如果对象不继承父级规则，直接结束
+    # if not recursive or the object does not inherit permissions, stop here
     if not recursive or not obj.inherit:
         return True
 
-    # 3. 沿祖先链逐级上溯
-    #    - Document 的直接父级是 folder_id 指向的 Folder
-    #    - Folder   的直接父级是 parent_id 指向的 Folder
     if isinstance(obj, Document):
         current_folder_id = obj.folder_id
     else:  # Folder
         current_folder_id = obj.parent_id
 
-    visited_ids = set()  # 防止万一数据库存在环形引用导致死循环
+    visited_ids = set()  # prevent potential cycles in folder hierarchy
 
     while current_folder_id is not None:
         if current_folder_id in visited_ids:
@@ -126,14 +123,16 @@ def check_access_for_object(
 
         current_folder = folder_map.get(current_folder_id)
         if current_folder is None:
-            # 祖先数据不在预取结果里（理论上不应发生，除非调用方传入的 all_folders 不完整）
+            # This should not happen if the folder hierarchy is consistent,
+            # but we handle it gracefully just in case
             break
 
-        # 检查当前这一级
+        # check access for the current folder node
         if not _check_single_node(current_folder):
             return False
 
-        # 如果这一级不继承，停止向上
+        # If the current folder does not inherit permissions, stop checking
+        # further up the hierarchy
         if not current_folder.inherit:
             break
 
@@ -142,7 +141,6 @@ def check_access_for_object(
     return True
 
 
-# ── 规则匹配逻辑（从原 check_access_requirements 提取，保持完全一致） ──────────
 def _match_primary_sub_group(rule_data: dict, user: User) -> bool:
     def match_rights(sub_rights_group):
         if not sub_rights_group:
@@ -176,7 +174,9 @@ def _match_primary_sub_group(rule_data: dict, user: User) -> bool:
         sub_match_mode = sub_group.get("match", "all")
         sub_rights_group = sub_group.get("rights", {})
         sub_groups_group = sub_group.get("groups", {})
-        if not sub_rights_group.get("require", []) or not sub_groups_group.get("require", []):
+        if not sub_rights_group.get("require", []) or not sub_groups_group.get(
+            "require", []
+        ):
             sub_match_mode = "all"
         if sub_match_mode == "any":
             return match_rights(sub_rights_group) or match_groups(sub_groups_group)
