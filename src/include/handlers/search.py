@@ -6,13 +6,19 @@ with permission filtering, result limiting, and sorting capabilities.
 """
 
 from typing import List, Dict, Any
+from sqlalchemy.orm import selectinload, joinedload
 from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
 from include.database.handler import Session
 from include.database.models.classic import User
-from include.database.models.entity import Document, Folder, NoActiveRevisionsError
+from include.database.models.entity import Document, DocumentRevision, Folder, NoActiveRevisionsError
 
 __all__ = ["RequestSearchHandler"]
+
+# Multiplier for the SQL-level pre-limit on search queries.
+# Fetching more rows than the final limit leaves room for permission filtering
+# to discard some results while still satisfying the requested limit.
+_SEARCH_OVERQUERY_MULTIPLIER = 10
 
 
 class RequestSearchHandler(RequestHandler):
@@ -78,10 +84,27 @@ class RequestSearchHandler(RequestHandler):
             # Search documents
             if search_documents:
                 # Query documents matching the search query (case-insensitive)
-                documents_query = session.query(Document).filter(
-                    Document.title.ilike(f"%{query}%")
+                documents_query = (
+                    session.query(Document)
+                    .options(
+                        selectinload(Document.access_rules),
+                        selectinload(Document.revisions).joinedload(DocumentRevision.file),
+                        joinedload(Document.current_revision).joinedload(DocumentRevision.file),
+                    )
+                    .filter(Document.title.ilike(f"%{query}%"))
                 )
-                
+
+                if sort_by == "name":
+                    documents_query = documents_query.order_by(
+                        Document.title.desc() if sort_order == "desc" else Document.title
+                    )
+                elif sort_by == "created_time":
+                    documents_query = documents_query.order_by(
+                        Document.created_time.desc() if sort_order == "desc" else Document.created_time
+                    )
+
+                documents_query = documents_query.limit(limit * _SEARCH_OVERQUERY_MULTIPLIER)
+
                 documents = documents_query.all()
                 
                 # Filter by permissions and active status
@@ -115,10 +138,23 @@ class RequestSearchHandler(RequestHandler):
             # Search directories
             if search_directories:
                 # Query folders matching the search query (case-insensitive)
-                directories_query = session.query(Folder).filter(
-                    Folder.name.ilike(f"%{query}%")
+                directories_query = (
+                    session.query(Folder)
+                    .options(selectinload(Folder.access_rules))
+                    .filter(Folder.name.ilike(f"%{query}%"))
                 )
-                
+
+                if sort_by == "name":
+                    directories_query = directories_query.order_by(
+                        Folder.name.desc() if sort_order == "desc" else Folder.name
+                    )
+                elif sort_by == "created_time":
+                    directories_query = directories_query.order_by(
+                        Folder.created_time.desc() if sort_order == "desc" else Folder.created_time
+                    )
+
+                directories_query = directories_query.limit(limit * _SEARCH_OVERQUERY_MULTIPLIER)
+
                 directories = directories_query.all()
                 
                 # Filter by permissions
