@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Literal, cast
 from typing import Optional
 
 import secrets
@@ -18,6 +18,7 @@ from sqlalchemy import JSON
 from include.database.models.file import File
 from include.database.models.classic import User, ObjectAccessEntry
 from include.database.models.blocking import UserBlockEntry, UserBlockSubEntry
+from include.util.fetch.fetch import batch_prefetch_granted_ids, prefetch_user_blocks
 
 
 class BaseObject(Base):
@@ -29,12 +30,15 @@ class BaseObject(Base):
     # Whether to inherit access rules from parent folders. Useful when enabling recursion check.
     inherit: Mapped[bool]
 
-    def check_access_requirements(self, user: User, access_type: str = "read") -> bool:
+    def check_access_requirements(
+        self, user: User, access_type: str = "read", _no_recursive_check=False
+    ) -> bool:
         """
         Checks if a given user meets the access requirements for a specific access type based on defined access rules.
         Args:
             user (User): The user object whose permissions and groups are to be checked.
             access_type (int, optional): The type of access to check for. Defaults to `"read"`.
+            _no_recursive_check (bool, optional): Useful when performing batch queries. Defaults to False.
         Returns:
             bool: True if the user meets all access requirements for the specified access type, False otherwise.
         Raises:
@@ -138,7 +142,29 @@ class BaseObject(Base):
 
         now = time.time()
 
-        if global_config["access"]["enable_access_recursive_check"] and self.inherit:
+        # check user blocks first
+        is_globally_blocked, blocked_ids = prefetch_user_blocks(
+            _session, user, access_type, now
+        )
+        if is_globally_blocked or self.id in blocked_ids:
+            return False
+
+        # then check special access entries
+        self_type = cast(
+            Literal["document", "directory"], _TARGET_TYPE_MAPPING[self.__tablename__]
+        )
+        explicitly_granted_ids = batch_prefetch_granted_ids(
+            _session, user, [self.id], self_type, access_type, now
+        )
+
+        if self.id in explicitly_granted_ids:
+            return True
+
+        if (
+            global_config["access"]["enable_access_recursive_check"]
+            and self.inherit
+            and not _no_recursive_check
+        ):
             # check all parent folders' access rules
             parent = None
             if type(self) == Document:
@@ -160,69 +186,6 @@ class BaseObject(Base):
                     break  # if the parent folder does not inherit, stop checking further up
 
                 parent = parent.parent
-
-        # check user blocks first
-        if access_type in AVAILABLE_BLOCK_TYPES:
-            exists_sub = (
-                _session.query(UserBlockSubEntry)
-                .join(
-                    UserBlockEntry,
-                    UserBlockSubEntry.parent_id == UserBlockEntry.block_id,
-                )
-                .filter(
-                    UserBlockEntry.username == user.username,
-                    UserBlockEntry.not_before <= time.time(),
-                    (UserBlockEntry.not_after == -1)
-                    | (UserBlockEntry.not_after >= time.time()),
-                    UserBlockSubEntry.block_type == access_type,
-                )
-                .first()
-                is not None
-            )
-            if exists_sub:
-                return False
-
-        # then check special access entries
-        user_access_entries = (
-            _session.query(ObjectAccessEntry)
-            .filter(
-                ObjectAccessEntry.entity_type == "user",
-                ObjectAccessEntry.entity_identifier == user.username,
-                ObjectAccessEntry.target_type
-                == _TARGET_TYPE_MAPPING[self.__tablename__],
-                ObjectAccessEntry.target_identifier == self.id,
-                ObjectAccessEntry.access_type == access_type,
-                ObjectAccessEntry.start_time <= now,
-                (
-                    (ObjectAccessEntry.end_time == None)
-                    | (ObjectAccessEntry.end_time >= now)
-                ),
-            )
-            .all()
-        )
-        if user_access_entries:
-            return True
-
-        for group in user.groups:
-            group_access_entries = (
-                _session.query(ObjectAccessEntry)
-                .filter(
-                    ObjectAccessEntry.entity_type == "group",
-                    ObjectAccessEntry.entity_identifier == group.group_name,
-                    ObjectAccessEntry.target_type
-                    == _TARGET_TYPE_MAPPING[self.__tablename__],
-                    ObjectAccessEntry.target_identifier == self.id,
-                    ObjectAccessEntry.access_type == access_type,
-                    ObjectAccessEntry.start_time <= now,
-                    (
-                        (ObjectAccessEntry.end_time == None)
-                        | (ObjectAccessEntry.end_time >= now)
-                    ),
-                )
-                .all()
-            )
-            if group_access_entries:
-                return True
 
         if not self.access_rules:
             return True
@@ -275,7 +238,9 @@ class Folder(BaseObject):  # 文档文件夹
     id: Mapped[str] = mapped_column(
         VARCHAR(255), primary_key=True, default=lambda: secrets.token_hex(32)
     )
-    name: Mapped[str] = mapped_column(VARCHAR(255), nullable=False)  # 文件夹名称
+    name: Mapped[str] = mapped_column(
+        VARCHAR(255), nullable=False, index=True
+    )  # 文件夹名称
     created_time: Mapped[float] = mapped_column(
         Float, nullable=False, default=lambda: time.time()
     )
@@ -349,7 +314,7 @@ class Document(BaseObject):
         VARCHAR(255), primary_key=True, default=lambda: secrets.token_hex(32)
     )
     title: Mapped[Optional[str]] = mapped_column(
-        VARCHAR(255), nullable=False, default="Untitled Document"
+        VARCHAR(255), nullable=False, default="Untitled Document", index=True
     )  # 文档名称
     created_time: Mapped[float] = mapped_column(
         Float, nullable=False, default=lambda: time.time()

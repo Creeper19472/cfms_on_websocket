@@ -354,6 +354,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
             return
 
         try:
+            t1 = time.perf_counter()
             callback: Union[
                 int,
                 tuple[int, Optional[str]],
@@ -362,6 +363,8 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
                 tuple[int, Optional[str], dict, str],
                 None,
             ] = _request_handler.handle(this_handler)
+            t2 = time.perf_counter()
+            logger.debug(f"Handled action '{action}' in {t2 - t1:.3f} seconds")
         except (
             websockets.exceptions.ConnectionClosedOK,
             websockets.exceptions.ConnectionClosedError,

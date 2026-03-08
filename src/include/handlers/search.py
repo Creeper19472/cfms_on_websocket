@@ -5,12 +5,22 @@ Provides functionality to search for documents and directories by name,
 with permission filtering, result limiting, and sorting capabilities.
 """
 
+import time
 from typing import List, Dict, Any
+
 from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
+from include.conf_loader import global_config
 from include.database.handler import Session
 from include.database.models.classic import User
-from include.database.models.entity import Document, Folder, NoActiveRevisionsError
+from include.database.models.entity import NoActiveRevisionsError
+from include.util.recursive.ancestors import (
+    search_documents_with_access,
+    search_folders_with_access,
+)
+from include.util.recursive.check import check_access_for_object
+from include.util.fetch.fetch import prefetch_user_blocks, batch_prefetch_granted_ids
+
 
 __all__ = ["RequestSearchHandler"]
 
@@ -18,7 +28,7 @@ __all__ = ["RequestSearchHandler"]
 class RequestSearchHandler(RequestHandler):
     """
     Handles the "search" action for finding documents and directories by name.
-    
+
     Features:
     1. Accepts a search query (name) as the main parameter
     2. Returns matching objects with their ID and parent directory ID
@@ -26,7 +36,7 @@ class RequestSearchHandler(RequestHandler):
     4. Supports limiting the maximum number of search results
     5. Supports sorting by multiple criteria (time, size, name, etc.)
     """
-    
+
     data_schema = {
         "type": "object",
         "properties": {
@@ -34,28 +44,25 @@ class RequestSearchHandler(RequestHandler):
             "limit": {"type": "integer", "minimum": 1, "maximum": 1000},
             "sort_by": {
                 "type": "string",
-                "enum": ["name", "created_time", "size", "last_modified"]
+                "enum": ["name", "created_time", "size", "last_modified"],
             },
-            "sort_order": {
-                "type": "string",
-                "enum": ["asc", "desc"]
-            },
+            "sort_order": {"type": "string", "enum": ["asc", "desc"]},
             "search_documents": {"type": "boolean"},
             "search_directories": {"type": "boolean"},
         },
         "required": ["query"],
         "additionalProperties": False,
     }
-    
+
     require_auth = True
-    
+
     def handle(self, handler: ConnectionHandler):
         """
         Handle the search request.
-        
+
         Args:
             handler: The connection handler containing request data
-            
+
         Returns:
             Tuple containing status code, query, and username for audit logging
         """
@@ -65,35 +72,54 @@ class RequestSearchHandler(RequestHandler):
         sort_order: str = handler.data.get("sort_order", "asc")
         search_documents: bool = handler.data.get("search_documents", True)
         search_directories: bool = handler.data.get("search_directories", True)
-        
+
         with Session() as session:
             user = session.get(User, handler.username)
             assert user is not None
-            
+
+            now = time.time()
+
             results: Dict[str, List[Dict[str, Any]]] = {
                 "documents": [],
-                "directories": []
+                "directories": [],
             }
-            
+
+            # Preload block entries
+            is_globally_blocked, blocked_ids = prefetch_user_blocks(
+                session, user, "read", now
+            )
+
             # Search documents
-            if search_documents:
-                # Query documents matching the search query (case-insensitive)
-                documents_query = session.query(Document).filter(
-                    Document.title.ilike(f"%{query}%")
+            if search_documents and not is_globally_blocked:
+                documents, doc_ancestors, doc_oaes = search_documents_with_access(
+                    session, query, now
                 )
-                
-                documents = documents_query.all()
-                
-                # Filter by permissions and active status
+
+                doc_ids = [doc.id for doc in documents]
+                explicitly_granted_doc_ids = batch_prefetch_granted_ids(
+                    session, user, doc_ids, "document", "read", now
+                )
+
                 for document in documents:
-                    # Skip inactive documents
                     if not document.active:
                         continue
-                    
-                    # Check if user has read permission
-                    if not document.check_access_requirements(user, access_type="read"):
+                    if document.id in blocked_ids:
                         continue
-                    
+                    if document.id in explicitly_granted_doc_ids:
+                        pass
+                    else:
+                        if not check_access_for_object(
+                            document,
+                            user,
+                            "read",
+                            doc_ancestors,
+                            doc_oaes,
+                            recursive=global_config["access"][
+                                "enable_access_recursive_check"
+                            ],
+                        ):
+                            continue
+
                     try:
                         latest_revision = document.get_latest_revision()
                         size = latest_revision.file.size if latest_revision.file else 0
@@ -101,70 +127,98 @@ class RequestSearchHandler(RequestHandler):
                     except (NoActiveRevisionsError, AttributeError):
                         size = 0
                         last_modified = document.created_time
-                    
-                    results["documents"].append({
-                        "id": document.id,
-                        "name": document.title,
-                        "parent_id": document.folder_id,
-                        "created_time": document.created_time,
-                        "last_modified": last_modified,
-                        "size": size,
-                        "type": "document"
-                    })
-            
+
+                    results["documents"].append(
+                        {
+                            "id": document.id,
+                            "name": document.title,
+                            "parent_id": document.folder_id,
+                            "created_time": document.created_time,
+                            "last_modified": last_modified,
+                            "size": size,
+                            "type": "document",
+                        }
+                    )
+
             # Search directories
-            if search_directories:
-                # Query folders matching the search query (case-insensitive)
-                directories_query = session.query(Folder).filter(
-                    Folder.name.ilike(f"%{query}%")
+            if search_directories and not is_globally_blocked:
+                directories, dir_ancestors, dir_oaes = search_folders_with_access(
+                    session, query, now
                 )
-                
-                directories = directories_query.all()
-                
-                # Filter by permissions
+
+                dir_ids = [d.id for d in directories]
+                explicitly_granted_dir_ids = batch_prefetch_granted_ids(
+                    session, user, dir_ids, "directory", "read", now
+                )
+
                 for directory in directories:
-                    # Check if user has read permission
-                    if not directory.check_access_requirements(user, access_type="read"):
+                    if directory.id in blocked_ids:
                         continue
-                    
-                    results["directories"].append({
-                        "id": directory.id,
-                        "name": directory.name,
-                        "parent_id": directory.parent_id,
-                        "created_time": directory.created_time,
-                        "type": "directory"
-                    })
-            
+
+                    if directory.id in explicitly_granted_dir_ids:
+                        pass
+                    else:
+                        if not check_access_for_object(
+                            directory,
+                            user,
+                            "read",
+                            dir_ancestors,
+                            dir_oaes,
+                            recursive=global_config["access"][
+                                "enable_access_recursive_check"
+                            ],
+                        ):
+                            continue
+
+                    results["directories"].append(
+                        {
+                            "id": directory.id,
+                            "name": directory.name,
+                            "parent_id": directory.parent_id,
+                            "created_time": directory.created_time,
+                            "type": "directory",
+                        }
+                    )
+
             # Sort results
             all_results = results["documents"] + results["directories"]
-            
+
             # Sort by the specified field
             if sort_by == "name":
-                all_results.sort(key=lambda x: x["name"].lower(), reverse=(sort_order == "desc"))
+                all_results.sort(
+                    key=lambda x: x["name"].lower(), reverse=(sort_order == "desc")
+                )
             elif sort_by == "created_time":
-                all_results.sort(key=lambda x: x["created_time"], reverse=(sort_order == "desc"))
+                all_results.sort(
+                    key=lambda x: x["created_time"], reverse=(sort_order == "desc")
+                )
             elif sort_by == "size":
-                all_results.sort(key=lambda x: x.get("size", 0), reverse=(sort_order == "desc"))
+                all_results.sort(
+                    key=lambda x: x.get("size", 0), reverse=(sort_order == "desc")
+                )
             elif sort_by == "last_modified":
-                all_results.sort(key=lambda x: x.get("last_modified", x["created_time"]), reverse=(sort_order == "desc"))
-            
+                all_results.sort(
+                    key=lambda x: x.get("last_modified", x["created_time"]),
+                    reverse=(sort_order == "desc"),
+                )
+
             # Apply limit
             all_results = all_results[:limit]
-            
+
             # Separate back into documents and directories
             final_documents = [r for r in all_results if r["type"] == "document"]
             final_directories = [r for r in all_results if r["type"] == "directory"]
-            
+
             response_data = {
                 "documents": final_documents,
                 "directories": final_directories,
                 "total_count": len(all_results),
-                "query": query
+                "query": query,
             }
-            
+
             handler.conclude_request(
                 200,
                 response_data,
-                f"Search completed successfully. Found {len(all_results)} result(s)."
+                f"Search completed successfully. Found {len(all_results)} result(s).",
             )
             return 0, query, handler.username
