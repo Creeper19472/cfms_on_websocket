@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Literal, cast
 from typing import Optional
 
 import secrets
@@ -18,6 +18,7 @@ from sqlalchemy import JSON
 from include.database.models.file import File
 from include.database.models.classic import User, ObjectAccessEntry
 from include.database.models.blocking import UserBlockEntry, UserBlockSubEntry
+from include.util.fetch.fetch import batch_prefetch_granted_ids, prefetch_user_blocks
 
 
 class BaseObject(Base):
@@ -142,68 +143,23 @@ class BaseObject(Base):
         now = time.time()
 
         # check user blocks first
-        if access_type in AVAILABLE_BLOCK_TYPES:
-            exists_sub = (
-                _session.query(UserBlockSubEntry)
-                .join(
-                    UserBlockEntry,
-                    UserBlockSubEntry.parent_id == UserBlockEntry.block_id,
-                )
-                .filter(
-                    UserBlockEntry.username == user.username,
-                    UserBlockEntry.not_before <= time.time(),
-                    (UserBlockEntry.not_after == -1)
-                    | (UserBlockEntry.not_after >= time.time()),
-                    UserBlockSubEntry.block_type == access_type,
-                )
-                .first()
-                is not None
-            )
-            if exists_sub:
-                return False
+        is_globally_blocked, blocked_ids = prefetch_user_blocks(
+            _session, user, access_type, now
+        )
+        if is_globally_blocked or self.id in blocked_ids:
+            return False
 
         # then check special access entries
-        user_access_entries = (
-            _session.query(ObjectAccessEntry)
-            .filter(
-                ObjectAccessEntry.entity_type == "user",
-                ObjectAccessEntry.entity_identifier == user.username,
-                ObjectAccessEntry.target_type
-                == _TARGET_TYPE_MAPPING[self.__tablename__],
-                ObjectAccessEntry.target_identifier == self.id,
-                ObjectAccessEntry.access_type == access_type,
-                ObjectAccessEntry.start_time <= now,
-                (
-                    (ObjectAccessEntry.end_time == None)
-                    | (ObjectAccessEntry.end_time >= now)
-                ),
-            )
-            .all()
+        self_type = cast(
+            Literal["document", "directory"], _TARGET_TYPE_MAPPING[self.__tablename__]
         )
-        if user_access_entries:
+        explicitly_granted_ids = batch_prefetch_granted_ids(
+            _session, user, [self.id], self_type, access_type, now
+        )
+
+        if self.id in explicitly_granted_ids:
             return True
 
-        for group in user.groups:
-            group_access_entries = (
-                _session.query(ObjectAccessEntry)
-                .filter(
-                    ObjectAccessEntry.entity_type == "group",
-                    ObjectAccessEntry.entity_identifier == group.group_name,
-                    ObjectAccessEntry.target_type
-                    == _TARGET_TYPE_MAPPING[self.__tablename__],
-                    ObjectAccessEntry.target_identifier == self.id,
-                    ObjectAccessEntry.access_type == access_type,
-                    ObjectAccessEntry.start_time <= now,
-                    (
-                        (ObjectAccessEntry.end_time == None)
-                        | (ObjectAccessEntry.end_time >= now)
-                    ),
-                )
-                .all()
-            )
-            if group_access_entries:
-                return True
-            
         if (
             global_config["access"]["enable_access_recursive_check"]
             and self.inherit
