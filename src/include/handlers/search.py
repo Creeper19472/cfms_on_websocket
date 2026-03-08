@@ -102,6 +102,133 @@ def _batch_prefetch_granted_ids(
     return {row[0] for row in rows}
 
 
+def _check_single_folder_own_access(
+    session,
+    user: User,
+    folder: "Folder",
+    access_type: str,
+    now: float,
+) -> bool:
+    """
+    Check a single Folder's own access rules without recursing into its parents.
+    Used during parent-chain traversal to evaluate each folder in isolation.
+
+    Mirrors the logic of check_access_requirements() but skips:
+      - UserBlock check (already handled globally by _prefetch_user_blocks)
+      - Recursive parent traversal (handled by the caller: _check_parent_chain)
+    """
+    entity_identifiers = [user.username] + [g.group_name for g in user.groups]
+    row = (
+        session.query(ObjectAccessEntry.id)
+        .filter(
+            ObjectAccessEntry.target_type == "directory",
+            ObjectAccessEntry.target_identifier == folder.id,
+            ObjectAccessEntry.entity_identifier.in_(entity_identifiers),
+            ObjectAccessEntry.access_type == access_type,
+            ObjectAccessEntry.start_time <= now,
+            or_(
+                ObjectAccessEntry.end_time.is_(None),
+                ObjectAccessEntry.end_time >= now,
+            ),
+        )
+        .first()
+    )
+    if row:
+        return True
+
+    if not folder.access_rules:
+        return True
+
+    # Has access_rules: evaluate them with inheritance temporarily disabled
+    # to avoid re-triggering recursive parent traversal inside check_access_requirements.
+    original_inherit = folder.inherit
+    folder.inherit = False
+    try:
+        return folder.check_access_requirements(user, access_type=access_type)
+    finally:
+        folder.inherit = original_inherit
+
+
+def _check_parent_chain(
+    session,
+    user: User,
+    obj: "Document | Folder",
+    access_type: str,
+    now: float,
+    folder_cache: dict[str, bool],
+) -> bool:
+    """
+    Walk the parent-folder chain of obj, checking access at each level.
+    Results are stored in folder_cache so that folders shared by multiple
+    search results are only evaluated once per request.
+    """
+    parent = obj.folder if isinstance(obj, Document) else obj.parent
+
+    visited: set[str] = set()
+    while parent is not None:
+        if parent.id in visited:
+            raise RuntimeError("Cycle detected in folder hierarchy")
+        visited.add(parent.id)
+
+        if parent.id in folder_cache:
+            if not folder_cache[parent.id]:
+                return False
+        else:
+            result = _check_single_folder_own_access(
+                session, user, parent, access_type, now
+            )
+            folder_cache[parent.id] = result
+            if not result:
+                return False
+
+        if not parent.inherit:
+            break
+        parent = parent.parent
+
+    return True
+
+
+def _check_object_access_with_cache(
+    session,
+    user: User,
+    obj: "Document | Folder",
+    access_type: str,
+    now: float,
+    explicitly_granted_ids: set[str],
+    folder_cache: dict[str, bool],
+) -> bool:
+    """
+    Full access check for a single Document or Folder, with parent-folder
+    results cached in folder_cache to avoid redundant DB queries across
+    multiple objects that share the same ancestors.
+
+    Decision order (mirrors check_access_requirements semantics):
+      1. Recursive parent-chain check (if enabled and obj.inherit is True)
+      2. ObjectAccessEntry explicit grant  → allow
+      3. No access_rules                  → allow
+      4. Evaluate access_rules (pure Python, no extra DB queries)
+    """
+    if global_config["access"]["enable_access_recursive_check"] and obj.inherit:
+        if not _check_parent_chain(session, user, obj, access_type, now, folder_cache):
+            return False
+
+    if obj.id in explicitly_granted_ids:
+        return True
+
+    if not obj.access_rules:
+        return True
+
+    # Pure Python rule evaluation; access_rules already loaded via selectinload
+    # Temporarily disable inherit to prevent check_access_requirements from
+    # re-running the parent chain (we already handled it above).
+    original_inherit = obj.inherit
+    obj.inherit = False
+    try:
+        return obj.check_access_requirements(user, access_type=access_type)
+    finally:
+        obj.inherit = original_inherit
+
+
 class RequestSearchHandler(RequestHandler):
     """
     Handles the "search" action for finding documents and directories by name.
@@ -168,6 +295,9 @@ class RequestSearchHandler(RequestHandler):
                 session, user, "read", now
             )
 
+            # Shared cache for parent-folder access results across both loops
+            folder_access_cache: dict[str, bool] = {}
+
             # Search documents
             if search_documents and not is_globally_blocked:
                 documents = (
@@ -192,18 +322,11 @@ class RequestSearchHandler(RequestHandler):
                         continue
                     if document.id in blocked_ids:
                         continue
-                    if document.id in explicitly_granted_doc_ids:
-                        pass
-                    elif (
-                        not document.access_rules
-                        and not global_config["access"]["enable_access_recursive_check"]
+                    if not _check_object_access_with_cache(
+                        session, user, document, "read", now,
+                        explicitly_granted_doc_ids, folder_access_cache,
                     ):
-                        pass
-                    else:
-                        if not document.check_access_requirements(
-                            user, access_type="read"
-                        ):
-                            continue
+                        continue
 
                     try:
                         latest_revision = document.get_latest_revision()
@@ -239,19 +362,11 @@ class RequestSearchHandler(RequestHandler):
                 for directory in directories:
                     if directory.id in blocked_ids:
                         continue
-
-                    if directory.id in explicitly_granted_dir_ids:
-                        pass
-                    elif (
-                        not directory.access_rules
-                        and not global_config["access"]["enable_access_recursive_check"]
+                    if not _check_object_access_with_cache(
+                        session, user, directory, "read", now,
+                        explicitly_granted_dir_ids, folder_access_cache,
                     ):
-                        pass
-                    else:
-                        if not directory.check_access_requirements(
-                            user, access_type="read"
-                        ):
-                            continue
+                        continue
 
                     results["directories"].append(
                         {
