@@ -1,3 +1,4 @@
+from functools import cached_property
 import hashlib
 import json
 import jwt
@@ -312,7 +313,7 @@ class User(Base):
             self.groups.append(membership)
         # session.commit()
 
-    @property
+    @cached_property
     def all_permissions(self) -> Set[str]:
         now = time.time()
         # 用户自身有效权限

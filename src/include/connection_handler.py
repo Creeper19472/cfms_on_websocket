@@ -2,7 +2,6 @@ import json
 import os
 import threading
 import time
-import copy
 from typing import Optional, Union
 import jsonschema
 import websockets
@@ -95,6 +94,12 @@ from include.handlers.keyring import (
 from include.constants import CORE_VERSION, NONCE_MIN_LENGTH, PROTOCOL_VERSION
 from include.nonce_store import nonce_store
 from include.shared import connected_listeners, lockdown_enabled
+
+import cProfile, pstats, io
+from pstats import SortKey
+
+pr = cProfile.Profile()
+
 
 from include.util.log import getCustomLogger
 
@@ -355,6 +360,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
 
         try:
             t1 = time.perf_counter()
+            # pr.enable()
             callback: Union[
                 int,
                 tuple[int, Optional[str]],
@@ -363,6 +369,11 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
                 tuple[int, Optional[str], dict, str],
                 None,
             ] = _request_handler.handle(this_handler)
+            # pr.disable()
+            # s = io.StringIO()
+            # ps = pstats.Stats(pr, stream=s).sort_stats(SortKey.CUMULATIVE)
+            # ps.print_stats()
+            # print(s.getvalue())
             t2 = time.perf_counter()
             logger.debug(f"Handled action '{action}' in {t2 - t1:.3f} seconds")
         except (

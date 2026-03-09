@@ -1,3 +1,4 @@
+import time
 from typing import Optional
 
 import jsonschema
@@ -10,6 +11,7 @@ from include.database.models.classic import User
 from include.database.models.entity import Folder, Document
 from include.util.audit import log_audit
 from include.util.rule.applying import apply_access_rules
+from include.util.recursive.subtree import fetch_subtree_for_deletion
 import include.system.messages as smsg
 
 
@@ -54,18 +56,19 @@ class RequestListDirectoryHandler(RequestHandler):
                 # participate in the parent/child hierarchy of ordinary folders.
                 children = (
                     session.query(Folder)
-                    .filter(
-                        Folder.parent_id.is_(None), Folder.id != ROOT_DIRECTORY_ID
-                    )
+                    .filter(Folder.parent_id.is_(None), Folder.id != ROOT_DIRECTORY_ID)
                     .all()
                 )
                 documents = (
                     session.query(Document).filter(Document.folder_id.is_(None)).all()
                 )
                 root_folder = session.get(Folder, ROOT_DIRECTORY_ID)
-                has_permission = "super_list_directory" in this_user.all_permissions or (
-                    root_folder is not None
-                    and root_folder.check_access_requirements(this_user, "read")
+                has_permission = (
+                    "super_list_directory" in this_user.all_permissions
+                    or (
+                        root_folder is not None
+                        and root_folder.check_access_requirements(this_user, "read")
+                    )
                 )
             else:
                 folder = session.get(Folder, folder_id)
@@ -296,9 +299,7 @@ class RequestCreateDirectoryHandler(RequestHandler):
         inherit_parent: bool = handler.data.get("inherit_parent", True)
 
         if parent_id == ROOT_DIRECTORY_ID:
-            handler.conclude_request(
-                404, {}, smsg.DIRECTORY_NOT_FOUND
-            )
+            handler.conclude_request(404, {}, smsg.DIRECTORY_NOT_FOUND)
             return 404, parent_id, handler.username
 
         with Session() as session:
@@ -460,9 +461,7 @@ class RequestDeleteDirectoryHandler(RequestHandler):
         folder_id = handler.data["folder_id"]  # Get the folder ID from the request data
 
         if folder_id == ROOT_DIRECTORY_ID:
-            handler.conclude_request(
-                404, {}, smsg.DIRECTORY_NOT_FOUND
-            )
+            handler.conclude_request(404, {}, smsg.DIRECTORY_NOT_FOUND)
             return 404, folder_id, handler.username
 
         with Session() as session:
@@ -487,26 +486,77 @@ class RequestDeleteDirectoryHandler(RequestHandler):
                 )
                 return 403, folder_id, handler.username
 
-            try:
-                folder.delete_all_children()
-            except PermissionError:
-                handler.conclude_request(
-                    500,
-                    {},
-                    "An error occurred when attempting to delete documents in the directory. Perhaps a download task is still in progress?",
-                )
-                return 500, folder_id, handler.username
-            session.delete(folder)
+            now = time.time()
+
+            # analyze subtree, determine deletable items and protected items,
+            # prepare for batch deletion
+            (
+                deletable_folder_ids,
+                deletable_doc_ids,
+                failed_items,
+                protected_folder_ids,
+            ) = fetch_subtree_for_deletion(session, folder_id, this_user, now=now)
+
+            # execute batch deletion in a transaction
+
+            # 2a. delete physical files
+            docs_to_delete = (
+                session.query(Document)
+                .filter(Document.id.in_(deletable_doc_ids))
+                .all()
+            )
+            for doc in docs_to_delete:
+                try:
+                    doc.delete_all_revisions(do_commit=False)
+                    session.delete(doc)
+                except PermissionError:
+                    # if failed to delete physical files, consider it as a 
+                    # failed item and protect its parent folders
+                    failed_items.append(
+                        {
+                            "type": "document",
+                            "id": doc.id,
+                            "reason": "Failed to delete physical files",
+                        }
+                    )
+                    parent_folder = doc.folder
+                    while parent_folder:
+                        protected_folder_ids.add(parent_folder.id)
+                        parent_folder = parent_folder.parent
+
+            # 2b. delete folders in order from bottom to top (or rely on
+            # DB cascade)
+            for fid in deletable_folder_ids:
+                folder_obj = session.get(Folder, fid)
+                if folder_obj:
+                    session.delete(folder_obj)
+
+            # 2c. delete the root folder if it has no protected descendants
+            # and no failed items
+            root_fully_deletable = (
+                len(protected_folder_ids) == 0 and len(failed_items) == 0
+            )
+            if root_fully_deletable:
+                session.delete(folder)
+
             session.commit()
 
-            handler.conclude_request(
-                **{
-                    "code": 200,
-                    "message": "Directory deleted successfully",
-                    "data": {},
-                }
-            )
-            return 0, folder_id, handler.username
+            # construct response based on deletion result
+            if failed_items:
+                handler.conclude_request(
+                    207,  # 207 Multi-Status：部分成功
+                    {
+                        "deleted_folders": list(deletable_folder_ids),
+                        "deleted_documents": list(deletable_doc_ids),
+                        "root_deleted": root_fully_deletable,
+                        "failed": failed_items,
+                    },
+                    "Directory partially deleted: some items could not be removed due to insufficient permissions.",
+                )
+                return 207, folder_id, handler.username
+            else:
+                handler.conclude_request(200, {}, "Directory deleted successfully")
+                return 0, folder_id, handler.username
 
 
 class RequestRenameDirectoryHandler(RequestHandler):
@@ -543,9 +593,7 @@ class RequestRenameDirectoryHandler(RequestHandler):
         new_name = handler.data["new_name"]
 
         if folder_id == ROOT_DIRECTORY_ID:
-            handler.conclude_request(
-                404, {}, smsg.DIRECTORY_NOT_FOUND
-            )
+            handler.conclude_request(404, {}, smsg.DIRECTORY_NOT_FOUND)
             return 404, folder_id, handler.username
 
         with Session() as session:
@@ -554,9 +602,7 @@ class RequestRenameDirectoryHandler(RequestHandler):
 
             folder = session.get(Folder, folder_id)
             if not folder:
-                handler.conclude_request(
-                    404, {}, smsg.DIRECTORY_NOT_FOUND
-                )
+                handler.conclude_request(404, {}, smsg.DIRECTORY_NOT_FOUND)
                 return 404, folder_id, handler.username
             if (
                 "rename_directory" not in this_user.all_permissions

@@ -395,7 +395,7 @@ class Document(BaseObject):
 
         return max(active_revisions, key=lambda rev: rev.created_time)
 
-    def delete_all_revisions(self):
+    def delete_all_revisions(self, do_commit: bool = True):
         session = object_session(self)
         if not session:
             raise Exception("The object is not associated with a session")
@@ -407,7 +407,8 @@ class Document(BaseObject):
             session.delete(revision)
 
         self.revisions.clear()
-        session.commit()
+        if do_commit:
+            session.commit()
 
     def __repr__(self) -> str:
         return f"Document(id={self.id!r}, created_time={self.created_time!r})"
