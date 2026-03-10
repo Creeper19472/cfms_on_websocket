@@ -5,7 +5,7 @@ import time
 from sqlalchemy.orm import joinedload
 from sqlalchemy import text
 
-from include.database.models.entity import Document, Folder
+from include.database.models.entity import Document, Folder, DocumentRevision
 from include.database.models.classic import User, ObjectAccessEntry
 from include.util.fetch.fetch import prefetch_user_blocks, batch_prefetch_granted_ids
 from include.util.recursive.check import check_access_for_object
@@ -21,6 +21,7 @@ def fetch_subtree_for_deletion(
     set[str],        # deletable_doc_ids
     list[dict],      # failed_items: [{"type": "folder"/"document", "id": ..., "reason": ...}]
     set[str],        # protected_folder_ids (因后代不可删而必须保留的目录)
+    dict[str, Folder],  # folder_map: id -> Folder ORM object
 ]:
     """
     一次性分析 root_folder_id 下整棵子树的可删性。
@@ -30,6 +31,7 @@ def fetch_subtree_for_deletion(
         deletable_doc_ids     - 可以被删除的文档 ID 集合
         failed_items          - 鉴权失败的条目列表，用于返回给客户端
         protected_folder_ids  - 因包含不可删后代而必须保留的目录 ID 集合
+        folder_map            - 目录 ID 到 Folder ORM 对象的映射
     """
     if now is None:
         now = time.time()
@@ -68,10 +70,14 @@ def fetch_subtree_for_deletion(
     )
     folder_map: dict[str, Folder] = {f.id: f for f in folders}
 
-    # ── Step 3: 批量加载子树内所有文档（含 access_rules）──────────────────
+    # ── Step 3: 批量加载子树内所有文档（含 access_rules、revisions、files）──────────────────
     documents = (
         session.query(Document)
-        .options(joinedload(Document.access_rules))
+        .options(
+            joinedload(Document.access_rules),
+            joinedload(Document.revisions).joinedload(DocumentRevision.file),
+            joinedload(Document.current_revision),
+        )
         .filter(Document.folder_id.in_(all_folder_ids_to_load))
         .all()
     )
@@ -223,4 +229,4 @@ def fetch_subtree_for_deletion(
         else:
             protected_folder_ids.add(fid)
 
-    return deletable_folder_ids, deletable_doc_ids, failed_items, protected_folder_ids
+    return deletable_folder_ids, deletable_doc_ids, failed_items, protected_folder_ids, folder_map

@@ -2,13 +2,14 @@ from typing import List, Literal, cast
 from typing import Optional
 
 import secrets
-from sqlalchemy import VARCHAR, Boolean, Float, ForeignKey, Integer
+from sqlalchemy import VARCHAR, Boolean, Float, ForeignKey, Integer, func
 from include.classes.exceptions import NoActiveRevisionsError
 from include.conf_loader import global_config
 from include.constants import AVAILABLE_ACCESS_TYPES, AVAILABLE_BLOCK_TYPES
 from include.database.handler import Base
 from include.classes.access_rule import AccessRuleBase
 from sqlalchemy.orm import Mapped
+from sqlalchemy.orm import joinedload
 from sqlalchemy.orm import mapped_column
 from sqlalchemy.orm import relationship
 import time
@@ -295,7 +296,7 @@ class Folder(BaseObject):  # 文档文件夹
 
         if self.documents:
             for document in self.documents:
-                document.delete_all_revisions()
+                document.delete_all_revisions(do_commit=False)
                 session.delete(document)
         self.documents.clear()
 
@@ -304,8 +305,6 @@ class Folder(BaseObject):  # 文档文件夹
                 child.delete_all_children()
                 session.delete(child)
         self.children.clear()
-
-        session.commit()
 
 
 class Document(BaseObject):
@@ -400,13 +399,54 @@ class Document(BaseObject):
         if not session:
             raise Exception("The object is not associated with a session")
 
+        # Eagerly load all revisions with their files in one query to avoid N+1
+        revisions = (
+            session.query(DocumentRevision)
+            .options(joinedload(DocumentRevision.file))
+            .filter(DocumentRevision.document_id == self.id)
+            .all()
+        )
+        if not revisions:
+            if do_commit:
+                session.commit()
+            return
+
+        file_ids = {r.file_id for r in revisions if r.file_id}
+
+        # Batch-count other revisions referencing the same file_ids (excluding this document)
+        other_rev_counts = dict(
+            session.query(DocumentRevision.file_id, func.count(DocumentRevision.id))
+            .filter(
+                DocumentRevision.file_id.in_(file_ids),
+                DocumentRevision.document_id != self.id,
+            )
+            .group_by(DocumentRevision.file_id)
+            .all()
+        )
+
+        # Batch-count avatar usages for the same file_ids
+        avatar_counts = dict(
+            session.query(User.avatar_id, func.count(User.id))
+            .filter(User.avatar_id.in_(file_ids))
+            .group_by(User.avatar_id)
+            .all()
+        )
+
+        self.current_revision_id = None
         self.current_revision = None
 
-        for revision in self.revisions:
-            revision.before_delete()
-            session.delete(revision)
+        with session.no_autoflush:
+            for revision in revisions:
+                other_refs = other_rev_counts.get(revision.file_id, 0) + avatar_counts.get(revision.file_id, 0)
+                if other_refs == 0:
+                    try:
+                        revision.file.delete()
+                    except PermissionError:
+                        raise
+                    session.delete(revision.file)
+                session.delete(revision)
 
-        self.revisions.clear()
+        self.revisions = []
         if do_commit:
             session.commit()
 

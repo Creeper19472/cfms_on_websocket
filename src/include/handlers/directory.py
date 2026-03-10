@@ -495,6 +495,7 @@ class RequestDeleteDirectoryHandler(RequestHandler):
                 deletable_doc_ids,
                 failed_items,
                 protected_folder_ids,
+                folder_map,
             ) = fetch_subtree_for_deletion(session, folder_id, this_user, now=now)
 
             # execute batch deletion in a transaction
@@ -527,7 +528,7 @@ class RequestDeleteDirectoryHandler(RequestHandler):
             # 2b. delete folders in order from bottom to top (or rely on
             # DB cascade)
             for fid in deletable_folder_ids:
-                folder_obj = session.get(Folder, fid)
+                folder_obj = folder_map.get(fid)
                 if folder_obj:
                     session.delete(folder_obj)
 

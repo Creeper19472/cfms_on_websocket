@@ -82,7 +82,6 @@ class File(Base):
             session.query(FileTask).filter(FileTask.file_id == self.id).delete(
                 synchronize_session=False
             )  # be careful
-            session.commit()
 
         try:
             os.remove(self.path)
