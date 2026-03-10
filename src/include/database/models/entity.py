@@ -414,7 +414,7 @@ class Document(BaseObject):
         file_ids = {r.file_id for r in revisions if r.file_id}
 
         # Batch-count other revisions referencing the same file_ids (excluding this document)
-        other_rev_counts = dict(
+        rows_rev = (
             session.query(DocumentRevision.file_id, func.count(DocumentRevision.id))
             .filter(
                 DocumentRevision.file_id.in_(file_ids),
@@ -423,14 +423,15 @@ class Document(BaseObject):
             .group_by(DocumentRevision.file_id)
             .all()
         )
+        other_rev_counts = {row[0]: row[1] for row in rows_rev}
 
-        # Batch-count avatar usages for the same file_ids
-        avatar_counts = dict(
-            session.query(User.avatar_id, func.count(User.id))
+        rows_avatar = (
+            session.query(User.avatar_id, func.count(User.username))
             .filter(User.avatar_id.in_(file_ids))
             .group_by(User.avatar_id)
             .all()
         )
+        avatar_counts = {row[0]: row[1] for row in rows_avatar}
 
         self.current_revision_id = None
         self.current_revision = None
