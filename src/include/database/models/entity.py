@@ -16,10 +16,60 @@ import time
 from sqlalchemy.orm.session import object_session
 from sqlalchemy import JSON
 
-from include.database.models.file import File
+from include.database.models.file import (
+    File,
+    FileTask,
+    _chunked,
+    _queue_deferred_file_deletion,
+    _SQLITE_CHUNK_SIZE,
+)
 from include.database.models.classic import User, ObjectAccessEntry
 from include.database.models.blocking import UserBlockEntry, UserBlockSubEntry
 from include.util.fetch.fetch import batch_prefetch_granted_ids, prefetch_user_blocks
+
+
+def _batch_count_other_revisions(
+    session, file_ids, exclude_doc_id: str
+) -> dict:
+    """Count DocumentRevisions referencing any of the given ``file_ids`` that belong
+    to documents *other* than ``exclude_doc_id``.
+
+    Queries are chunked to stay within SQLite's bind-variable limit.
+    """
+    counts: dict = {}
+    if not file_ids:
+        return counts
+    for chunk in _chunked(file_ids, _SQLITE_CHUNK_SIZE):
+        rows = (
+            session.query(DocumentRevision.file_id, func.count(DocumentRevision.id))
+            .filter(
+                DocumentRevision.file_id.in_(list(chunk)),
+                DocumentRevision.document_id != exclude_doc_id,
+            )
+            .group_by(DocumentRevision.file_id)
+            .all()
+        )
+        counts.update(rows)
+    return counts
+
+
+def _batch_count_avatar_usages(session, file_ids) -> dict:
+    """Count User records using any of the given ``file_ids`` as their avatar.
+
+    Queries are chunked to stay within SQLite's bind-variable limit.
+    """
+    counts: dict = {}
+    if not file_ids:
+        return counts
+    for chunk in _chunked(file_ids, _SQLITE_CHUNK_SIZE):
+        rows = (
+            session.query(User.avatar_id, func.count())
+            .filter(User.avatar_id.in_(list(chunk)))
+            .group_by(User.avatar_id)
+            .all()
+        )
+        counts.update(rows)
+    return counts
 
 
 class BaseObject(Base):
@@ -399,53 +449,73 @@ class Document(BaseObject):
         if not session:
             raise Exception("The object is not associated with a session")
 
-        # Eagerly load all revisions with their files in one query to avoid N+1
-        revisions = (
-            session.query(DocumentRevision)
-            .options(joinedload(DocumentRevision.file))
+        # Task 4: Lightweight tuple query — fetch only the IDs we need for logic.
+        # Avoids loading the full ORM graph (revisions + files) just for reference counting.
+        revision_tuples = (
+            session.query(DocumentRevision.id, DocumentRevision.file_id)
             .filter(DocumentRevision.document_id == self.id)
             .all()
         )
-        if not revisions:
+        if not revision_tuples:
             if do_commit:
                 session.commit()
             return
 
-        file_ids = {r.file_id for r in revisions if r.file_id}
+        revision_ids = [row[0] for row in revision_tuples]
+        all_file_ids = {row[1] for row in revision_tuples if row[1]}
 
-        # Batch-count other revisions referencing the same file_ids (excluding this document)
-        rows_rev = (
-            session.query(DocumentRevision.file_id, func.count(DocumentRevision.id))
-            .filter(
-                DocumentRevision.file_id.in_(file_ids),
-                DocumentRevision.document_id != self.id,
-            )
-            .group_by(DocumentRevision.file_id)
-            .all()
-        )
-        other_rev_counts = {row[0]: row[1] for row in rows_rev}
+        # Task 3: Chunked batch reference count queries to avoid SQLite variable limit.
+        other_rev_counts = _batch_count_other_revisions(session, all_file_ids, self.id)
+        avatar_counts = _batch_count_avatar_usages(session, all_file_ids)
 
-        rows_avatar = (
-            session.query(User.avatar_id, func.count(User.username))
-            .filter(User.avatar_id.in_(file_ids))
-            .group_by(User.avatar_id)
-            .all()
-        )
-        avatar_counts = {row[0]: row[1] for row in rows_avatar}
+        # Determine which files are exclusively referenced by this document's revisions.
+        deletable_file_ids = {
+            fid
+            for fid in all_file_ids
+            if other_rev_counts.get(fid, 0) + avatar_counts.get(fid, 0) == 0
+        }
+
+        # Load File ORM objects needed for deletion (chunked to stay within SQLite limits).
+        # Task 4: Only loads files that are actually going to be deleted.
+        files_to_delete: list = []
+        if deletable_file_ids:
+            for chunk in _chunked(deletable_file_ids, _SQLITE_CHUNK_SIZE):
+                files_to_delete.extend(
+                    session.query(File).filter(File.id.in_(list(chunk))).all()
+                )
 
         self.current_revision_id = None
         self.current_revision = None
 
         with session.no_autoflush:
+            # Task 2: Batch delete all FileTask rows for deletable files in one query per chunk.
+            # Replaces N individual DELETE queries (one per file) with one per chunk.
+            if deletable_file_ids:
+                for chunk in _chunked(deletable_file_ids, _SQLITE_CHUNK_SIZE):
+                    session.query(FileTask).filter(
+                        FileTask.file_id.in_(list(chunk))
+                    ).delete(synchronize_session=False)
+
+            # Load DocumentRevision ORM objects for deletion (chunked).
+            revisions: list = []
+            for chunk in _chunked(revision_ids, _SQLITE_CHUNK_SIZE):
+                revisions.extend(
+                    session.query(DocumentRevision)
+                    .filter(DocumentRevision.id.in_(list(chunk)))
+                    .all()
+                )
+
+            # ORM-level delete so SQLAlchemy handles FK ordering correctly at flush time.
             for revision in revisions:
-                other_refs = other_rev_counts.get(revision.file_id, 0) + avatar_counts.get(revision.file_id, 0)
-                if other_refs == 0:
-                    try:
-                        revision.file.delete()
-                    except PermissionError:
-                        raise
-                    session.delete(revision.file)
                 session.delete(revision)
+            for file_obj in files_to_delete:
+                session.delete(file_obj)
+
+        # Task 1: Queue physical file paths for deferred deletion.
+        # Files are removed from disk ONLY after session.commit() succeeds.
+        # If the transaction rolls back, the queued paths are discarded automatically.
+        for file_obj in files_to_delete:
+            _queue_deferred_file_deletion(session, file_obj.path)
 
         self.revisions = []
         if do_commit:

@@ -9,6 +9,7 @@ from include.constants import ROOT_DIRECTORY_ID
 from include.database.handler import Session
 from include.database.models.classic import User
 from include.database.models.entity import Folder, Document
+from include.database.models.file import _chunked, _SQLITE_CHUNK_SIZE
 from include.util.audit import log_audit
 from include.util.rule.applying import apply_access_rules
 from include.util.recursive.subtree import fetch_subtree_for_deletion
@@ -501,29 +502,17 @@ class RequestDeleteDirectoryHandler(RequestHandler):
             # execute batch deletion in a transaction
 
             # 2a. delete physical files
-            docs_to_delete = (
-                session.query(Document)
-                .filter(Document.id.in_(deletable_doc_ids))
-                .all()
-            )
+            # Chunked to avoid SQLite bind-variable limit for large deletion sets.
+            docs_to_delete: list = []
+            for chunk in _chunked(deletable_doc_ids, _SQLITE_CHUNK_SIZE):
+                docs_to_delete.extend(
+                    session.query(Document)
+                    .filter(Document.id.in_(list(chunk)))
+                    .all()
+                )
             for doc in docs_to_delete:
-                try:
-                    doc.delete_all_revisions(do_commit=False)
-                    session.delete(doc)
-                except PermissionError:
-                    # if failed to delete physical files, consider it as a 
-                    # failed item and protect its parent folders
-                    failed_items.append(
-                        {
-                            "type": "document",
-                            "id": doc.id,
-                            "reason": "Failed to delete physical files",
-                        }
-                    )
-                    parent_folder = doc.folder
-                    while parent_folder:
-                        protected_folder_ids.add(parent_folder.id)
-                        parent_folder = parent_folder.parent
+                doc.delete_all_revisions(do_commit=False)
+                session.delete(doc)
 
             # 2b. delete folders in order from bottom to top (or rely on
             # DB cascade)
