@@ -1,13 +1,14 @@
 from collections import defaultdict
 from typing import Optional
+from itertools import batched
 import time
 
 from sqlalchemy.orm import joinedload
 from sqlalchemy import text
 
+from include.constants import QUERY_CHUNK_SIZE
 from include.database.models.entity import Document, Folder, DocumentRevision
 from include.database.models.classic import User, ObjectAccessEntry
-from include.database.models.file import _chunked, _SQLITE_CHUNK_SIZE
 from include.util.fetch.fetch import prefetch_user_blocks, batch_prefetch_granted_ids
 from include.util.recursive.check import check_access_for_object
 
@@ -65,7 +66,7 @@ def fetch_subtree_for_deletion(
     # ── Step 2: 批量加载所有文件夹（含 access_rules）────────────────────────
     # Chunked to avoid SQLite bind-variable limit for large subtrees.
     folders: list = []
-    for chunk in _chunked(all_folder_ids_to_load, _SQLITE_CHUNK_SIZE):
+    for chunk in batched(all_folder_ids_to_load, QUERY_CHUNK_SIZE):
         folders.extend(
             session.query(Folder)
             .options(joinedload(Folder.access_rules))
@@ -77,7 +78,7 @@ def fetch_subtree_for_deletion(
     # ── Step 3: 批量加载子树内所有文档（含 access_rules、revisions、files）──────────────────
     # Chunked to avoid SQLite bind-variable limit for large subtrees.
     documents: list = []
-    for chunk in _chunked(all_folder_ids_to_load, _SQLITE_CHUNK_SIZE):
+    for chunk in batched(all_folder_ids_to_load, QUERY_CHUNK_SIZE):
         documents.extend(
             session.query(Document)
             .options(
@@ -93,7 +94,7 @@ def fetch_subtree_for_deletion(
     # Chunked to avoid SQLite bind-variable limit for large subtrees.
     all_target_ids = all_folder_ids_to_load + [doc.id for doc in documents]
     oae_entries: list = []
-    for chunk in _chunked(all_target_ids, _SQLITE_CHUNK_SIZE):
+    for chunk in batched(all_target_ids, QUERY_CHUNK_SIZE):
         oae_entries.extend(
             session.query(ObjectAccessEntry)
             .filter(

@@ -38,3 +38,6 @@ NONCE_MIN_LENGTH = 16  # Minimum length of a nonce string
 
 # Root directory virtual folder ID — used to store access rules for the root directory
 ROOT_DIRECTORY_ID = "/"
+
+# Database Constants
+QUERY_CHUNK_SIZE = 576 # used to prevent hitting the limit of bind variables per query

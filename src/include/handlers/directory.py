@@ -2,14 +2,14 @@ import time
 from typing import Optional
 
 import jsonschema
+from itertools import batched
 from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
 from include.conf_loader import global_config
-from include.constants import ROOT_DIRECTORY_ID
+from include.constants import ROOT_DIRECTORY_ID, QUERY_CHUNK_SIZE
 from include.database.handler import Session
 from include.database.models.classic import User
 from include.database.models.entity import Folder, Document
-from include.database.models.file import _chunked, _SQLITE_CHUNK_SIZE
 from include.util.audit import log_audit
 from include.util.rule.applying import apply_access_rules
 from include.util.recursive.subtree import fetch_subtree_for_deletion
@@ -504,7 +504,7 @@ class RequestDeleteDirectoryHandler(RequestHandler):
             # 2a. delete physical files
             # Chunked to avoid SQLite bind-variable limit for large deletion sets.
             docs_to_delete: list = []
-            for chunk in _chunked(deletable_doc_ids, _SQLITE_CHUNK_SIZE):
+            for chunk in batched(deletable_doc_ids, QUERY_CHUNK_SIZE):
                 docs_to_delete.extend(
                     session.query(Document)
                     .filter(Document.id.in_(list(chunk)))

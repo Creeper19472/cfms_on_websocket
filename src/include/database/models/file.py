@@ -6,7 +6,7 @@ from typing import List
 from typing import Optional
 
 from sqlalchemy import VARCHAR, Float, ForeignKey, Integer, Text, Boolean, event
-from sqlalchemy.orm import Mapped
+from sqlalchemy.orm import Mapped, Session
 from sqlalchemy.orm import mapped_column
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm.session import object_session
@@ -14,22 +14,10 @@ from sqlalchemy.orm.session import object_session
 from include.database.handler import Base
 from include.util.log import getCustomLogger
 
-logger = getCustomLogger(__name__)
-
-# SQLite's default limit is 999 bind variables per query; use 500 per chunk to stay well within bounds.
-_SQLITE_CHUNK_SIZE = 500
-
-try:
-    from itertools import batched as _chunked  # Python 3.12+
-except ImportError:
-    def _chunked(iterable, chunk_size):  # type: ignore[misc]
-        """Yield successive chunks of `chunk_size` items from `iterable`."""
-        lst = list(iterable)
-        for i in range(0, len(lst), chunk_size):
-            yield lst[i : i + chunk_size]
+logger = getCustomLogger(__name__, filepath="./content/logs/file.log")
 
 
-def _queue_deferred_file_deletion(session, path: str) -> None:
+def _queue_deferred_file_deletion(session: Session, path: str) -> None:
     """Queue a file path for physical deletion after the session's next successful commit.
 
     This ensures filesystem changes only happen after the DB transaction is committed,
@@ -46,7 +34,7 @@ def _queue_deferred_file_deletion(session, path: str) -> None:
         session.info["_deferred_delete_hooks_registered"] = True
 
         @event.listens_for(session, "after_commit")
-        def _do_deferred_file_deletes(session):
+        def _do_deferred_file_deletes(session: Session):
             paths = session.info.pop("pending_delete_files", [])
             for path in paths:
                 try:
@@ -63,7 +51,7 @@ def _queue_deferred_file_deletion(session, path: str) -> None:
                     )
 
         @event.listens_for(session, "after_rollback")
-        def _clear_deferred_file_deletes(session):
+        def _clear_deferred_file_deletes(session: Session):
             # Discard queued paths so they are never removed on a failed transaction.
             session.info.pop("pending_delete_files", None)
 

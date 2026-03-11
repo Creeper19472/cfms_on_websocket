@@ -5,23 +5,22 @@ import secrets
 from sqlalchemy import VARCHAR, Boolean, Float, ForeignKey, Integer, func
 from include.classes.exceptions import NoActiveRevisionsError
 from include.conf_loader import global_config
-from include.constants import AVAILABLE_ACCESS_TYPES, AVAILABLE_BLOCK_TYPES
+from include.constants import AVAILABLE_ACCESS_TYPES, QUERY_CHUNK_SIZE
 from include.database.handler import Base
 from include.classes.access_rule import AccessRuleBase
-from sqlalchemy.orm import Mapped
+from sqlalchemy.orm import Mapped, Session
 from sqlalchemy.orm import joinedload
 from sqlalchemy.orm import mapped_column
 from sqlalchemy.orm import relationship
 import time
 from sqlalchemy.orm.session import object_session
 from sqlalchemy import JSON
+from itertools import batched
 
 from include.database.models.file import (
     File,
     FileTask,
-    _chunked,
     _queue_deferred_file_deletion,
-    _SQLITE_CHUNK_SIZE,
 )
 from include.database.models.classic import User, ObjectAccessEntry
 from include.database.models.blocking import UserBlockEntry, UserBlockSubEntry
@@ -29,7 +28,7 @@ from include.util.fetch.fetch import batch_prefetch_granted_ids, prefetch_user_b
 
 
 def _batch_count_other_revisions(
-    session, file_ids, exclude_doc_id: str
+    session: Session, file_ids, exclude_doc_id: str
 ) -> dict:
     """Count DocumentRevisions referencing any of the given ``file_ids`` that belong
     to documents *other* than ``exclude_doc_id``.
@@ -39,21 +38,23 @@ def _batch_count_other_revisions(
     counts: dict = {}
     if not file_ids:
         return counts
-    for chunk in _chunked(file_ids, _SQLITE_CHUNK_SIZE):
+    for chunk in batched(file_ids, QUERY_CHUNK_SIZE):
         rows = (
             session.query(DocumentRevision.file_id, func.count(DocumentRevision.id))
             .filter(
-                DocumentRevision.file_id.in_(list(chunk)),
+                DocumentRevision.file_id.in_(
+                    list(chunk)
+                ),  # list() can be removed actually
                 DocumentRevision.document_id != exclude_doc_id,
             )
             .group_by(DocumentRevision.file_id)
             .all()
         )
-        counts.update(rows)
+        counts.update({file_id: count for file_id, count in rows})
     return counts
 
 
-def _batch_count_avatar_usages(session, file_ids) -> dict:
+def _batch_count_avatar_usages(session: Session, file_ids) -> dict:
     """Count User records using any of the given ``file_ids`` as their avatar.
 
     Queries are chunked to stay within SQLite's bind-variable limit.
@@ -61,14 +62,14 @@ def _batch_count_avatar_usages(session, file_ids) -> dict:
     counts: dict = {}
     if not file_ids:
         return counts
-    for chunk in _chunked(file_ids, _SQLITE_CHUNK_SIZE):
+    for chunk in batched(file_ids, QUERY_CHUNK_SIZE):
         rows = (
             session.query(User.avatar_id, func.count())
             .filter(User.avatar_id.in_(list(chunk)))
             .group_by(User.avatar_id)
             .all()
         )
-        counts.update(rows)
+        counts.update({file_id: count for file_id, count in rows})
     return counts
 
 
@@ -479,7 +480,7 @@ class Document(BaseObject):
         # Task 4: Only loads files that are actually going to be deleted.
         files_to_delete: list = []
         if deletable_file_ids:
-            for chunk in _chunked(deletable_file_ids, _SQLITE_CHUNK_SIZE):
+            for chunk in batched(deletable_file_ids, QUERY_CHUNK_SIZE):
                 files_to_delete.extend(
                     session.query(File).filter(File.id.in_(list(chunk))).all()
                 )
@@ -491,14 +492,14 @@ class Document(BaseObject):
             # Task 2: Batch delete all FileTask rows for deletable files in one query per chunk.
             # Replaces N individual DELETE queries (one per file) with one per chunk.
             if deletable_file_ids:
-                for chunk in _chunked(deletable_file_ids, _SQLITE_CHUNK_SIZE):
+                for chunk in batched(deletable_file_ids, QUERY_CHUNK_SIZE):
                     session.query(FileTask).filter(
                         FileTask.file_id.in_(list(chunk))
                     ).delete(synchronize_session=False)
 
             # Load DocumentRevision ORM objects for deletion (chunked).
             revisions: list = []
-            for chunk in _chunked(revision_ids, _SQLITE_CHUNK_SIZE):
+            for chunk in batched(revision_ids, QUERY_CHUNK_SIZE):
                 revisions.extend(
                     session.query(DocumentRevision)
                     .filter(DocumentRevision.id.in_(list(chunk)))
