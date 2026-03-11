@@ -503,7 +503,7 @@ class RequestDeleteDirectoryHandler(RequestHandler):
 
             # 2a. delete physical files
             # Chunked to avoid SQLite bind-variable limit for large deletion sets.
-            docs_to_delete: list = []
+            docs_to_delete: list[Document] = []
             for chunk in batched(deletable_doc_ids, QUERY_CHUNK_SIZE):
                 docs_to_delete.extend(
                     session.query(Document)

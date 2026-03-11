@@ -340,23 +340,6 @@ class Folder(BaseObject):  # 文档文件夹
             current = current.parent
         return False
 
-    def delete_all_children(self):
-        session = object_session(self)
-        if not session:
-            raise Exception("The object is not associated with a session")
-
-        if self.documents:
-            for document in self.documents:
-                document.delete_all_revisions(do_commit=False)
-                session.delete(document)
-        self.documents.clear()
-
-        if self.children:
-            for child in self.children:
-                child.delete_all_children()
-                session.delete(child)
-        self.children.clear()
-
 
 class Document(BaseObject):
     __tablename__ = "documents"
