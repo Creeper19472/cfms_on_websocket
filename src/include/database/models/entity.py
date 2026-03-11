@@ -9,7 +9,6 @@ from include.constants import AVAILABLE_ACCESS_TYPES, QUERY_CHUNK_SIZE
 from include.database.handler import Base
 from include.classes.access_rule import AccessRuleBase
 from sqlalchemy.orm import Mapped, Session
-from sqlalchemy.orm import joinedload
 from sqlalchemy.orm import mapped_column
 from sqlalchemy.orm import relationship
 import time
@@ -22,8 +21,7 @@ from include.database.models.file import (
     FileTask,
     _queue_deferred_file_deletion,
 )
-from include.database.models.classic import User, ObjectAccessEntry
-from include.database.models.blocking import UserBlockEntry, UserBlockSubEntry
+from include.database.models.classic import User
 from include.util.fetch.fetch import batch_prefetch_granted_ids, prefetch_user_blocks
 
 
