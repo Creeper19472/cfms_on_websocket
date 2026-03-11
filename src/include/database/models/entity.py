@@ -441,14 +441,12 @@ class Document(BaseObject):
             .all()
         )
         if not revision_tuples:
-            if do_commit:
-                session.commit()
             return
 
         revision_ids = [row[0] for row in revision_tuples]
         all_file_ids = {row[1] for row in revision_tuples if row[1]}
 
-        # Task 3: Chunked batch reference count queries to avoid SQLite variable limit.
+        # Task 3: Chunked batch reference count queries to avoid variable limit.
         other_rev_counts = _batch_count_other_revisions(session, all_file_ids, self.id)
         avatar_counts = _batch_count_avatar_usages(session, all_file_ids)
 

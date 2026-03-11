@@ -3,13 +3,15 @@ from typing import Optional
 
 import jsonschema
 from itertools import batched
+
+from sqlalchemy.orm import joinedload
 from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
 from include.conf_loader import global_config
 from include.constants import ROOT_DIRECTORY_ID, QUERY_CHUNK_SIZE
 from include.database.handler import Session
 from include.database.models.classic import User
-from include.database.models.entity import Folder, Document
+from include.database.models.entity import DocumentRevision, Folder, Document
 from include.util.audit import log_audit
 from include.util.rule.applying import apply_access_rules
 from include.util.recursive.subtree import fetch_subtree_for_deletion
@@ -502,17 +504,22 @@ class RequestDeleteDirectoryHandler(RequestHandler):
             # execute batch deletion in a transaction
 
             # 2a. delete physical files
-            # Chunked to avoid SQLite bind-variable limit for large deletion sets.
-            docs_to_delete: list[Document] = []
-            for chunk in batched(deletable_doc_ids, QUERY_CHUNK_SIZE):
-                docs_to_delete.extend(
+            # Chunked to avoid bind-variable limit for large deletion sets.
+            for chunk in batched(list(deletable_doc_ids), QUERY_CHUNK_SIZE):
+                docs_to_delete = (
                     session.query(Document)
+                    .options(
+                        joinedload(Document.revisions).joinedload(DocumentRevision.file)
+                    )
                     .filter(Document.id.in_(list(chunk)))
                     .all()
                 )
-            for doc in docs_to_delete:
-                doc.delete_all_revisions(do_commit=False)
-                session.delete(doc)
+
+                for doc in docs_to_delete:
+                    doc.delete_all_revisions(do_commit=False)
+                    session.delete(doc)
+
+                session.flush()  # 及时冲刷，配合 expunge 释放内存
 
             # 2b. delete folders in order from bottom to top (or rely on
             # DB cascade)
@@ -534,7 +541,7 @@ class RequestDeleteDirectoryHandler(RequestHandler):
             # construct response based on deletion result
             if failed_items:
                 handler.conclude_request(
-                    207,  # 207 Multi-Status：部分成功
+                    207,  # 207 Multi-Status：partial success
                     {
                         "deleted_folders": list(deletable_folder_ids),
                         "deleted_documents": list(deletable_doc_ids),
@@ -640,7 +647,7 @@ class RequestRenameDirectoryHandler(RequestHandler):
                         if existing_document.check_access_requirements(
                             this_user, "write"
                         ):  # 如果有权删除
-                            existing_document.delete_all_revisions()
+                            existing_document.delete_all_revisions(do_commit=False)
                             session.delete(existing_document)
                             session.commit()
                         else:
@@ -750,7 +757,7 @@ class RequestMoveDirectoryHandler(RequestHandler):
                         if existing_document.check_access_requirements(
                             user, "write"
                         ):  # 如果有权删除
-                            existing_document.delete_all_revisions()
+                            existing_document.delete_all_revisions(do_commit=False)
                             session.delete(existing_document)
                             session.commit()
                         else:
