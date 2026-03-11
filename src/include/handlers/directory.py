@@ -503,8 +503,8 @@ class RequestDeleteDirectoryHandler(RequestHandler):
 
             # execute batch deletion in a transaction
 
-            # 2a. delete physical files
-            # Chunked to avoid bind-variable limit for large deletion sets.
+            # 2a. mark documents for deletion in DB; physical file removal is
+            # deferred until after session.commit(), and failures are logged.
             for chunk in batched(list(deletable_doc_ids), QUERY_CHUNK_SIZE):
                 docs_to_delete = (
                     session.query(Document)

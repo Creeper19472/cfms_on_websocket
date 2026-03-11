@@ -19,13 +19,11 @@ def fetch_subtree_for_deletion(
     user: User,
     now: Optional[float] = None,
 ) -> tuple[
-    set[str],  # deletable_folder_ids
+    list[str],  # deletable_folder_ids: ordered
     set[str],  # deletable_doc_ids
-    list[
-        dict
-    ],  # failed_items: [{"type": "folder"/"document", "id": ..., "reason": ...}]
-    set[str],  # protected_folder_ids (因后代不可删而必须保留的目录)
-    dict[str, Folder],  # folder_map: id -> Folder ORM object
+    list[dict],  # failed_items
+    set[str],  # protected_folder_ids
+    dict[str, Folder],  # folder_map
 ]:
     """
     一次性分析 root_folder_id 下整棵子树的可删性。
@@ -265,22 +263,29 @@ def fetch_subtree_for_deletion(
             self_undeletable or child_undeletable or doc_undeletable
         )
 
-    # ── Step 9: 最终判定 ─────────────────────────────────────────────────────
-    deletable_folder_ids: set[str] = set()
+    # ── Step 9: 最终判定 (基于 topo_order 生成有序列表) ──────────────────────
+    deletable_folder_ids: list[str] = []
     protected_folder_ids: set[str] = set()
 
-    for fid in all_folder_ids_to_load:
+    # 遍历 topo_order。由于 topo_order 是从叶子到根的，
+    # 填充进 deletable_folder_ids 的顺序也将是“先删子目录，后删父目录”。
+    for fid in topo_order:
+        # 跳过 root_folder_id，它的处理由外部逻辑（Handler）决定
         if fid == root_folder_id:
-            continue  # root 本身单独处理
-        if folder_self_deletable.get(fid, False) and not has_undeletable_content.get(
+            continue
+
+        # 判断逻辑：自身有权删 且 没有任何不可删后代
+        can_delete_folder = folder_self_deletable.get(
             fid, False
-        ):
-            deletable_folder_ids.add(fid)
+        ) and not has_undeletable_content.get(fid, False)
+
+        if can_delete_folder:
+            deletable_folder_ids.append(fid)
         else:
             protected_folder_ids.add(fid)
 
     return (
-        deletable_folder_ids,
+        deletable_folder_ids,  # 这是一个从深到浅的列表
         deletable_doc_ids,
         failed_items,
         protected_folder_ids,
