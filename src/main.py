@@ -271,6 +271,17 @@ def main():
         certfile=global_config["server"]["ssl_certfile"],
         keyfile=global_config["server"]["ssl_keyfile"],
     )
+    ssl_context.minimum_version = ssl.TLSVersion.TLSv1_3
+
+    if ssl.OPENSSL_VERSION_INFO < (3, 5):
+        logger.warning(
+            "The version of OpenSSL bundled with Python is too low "
+            f"({ssl.OPENSSL_VERSION}) and therefore **does not support"
+            " post-quantum encryption**. Communication without post-quantum "
+            'encryption may be vulnerable to "harvest now, decrypt later" '
+            'attacks. Consider using a Python distribution that bundles '
+            "OpenSSL 3.5 or later to resolve this issue."
+        )
 
     # Always create tables that do not exist
     Base.metadata.create_all(engine)
