@@ -16,7 +16,7 @@ __all__ = [
     "ROOT_DIRECTORY_ID",
 ]
 
-CORE_VERSION = Version("0.1.0.260309_alpha")
+CORE_VERSION = Version("0.1.0.260311_alpha")
 PROTOCOL_VERSION = 9
 
 AVAILABLE_ACCESS_TYPES = ["read", "write", "move", "manage"]
@@ -28,7 +28,9 @@ FAILED_LOGIN_DELAY_SECONDS = 3  # Delay after failed login attempt
 DEFAULT_SSL_CERT_VALIDITY_DAYS = 365  # 1 year
 
 # File Transfer Constants
-FILE_TRANSFER_MAX_CHUNK_SIZE = 1024 * 64  # 64KB - size threshold for determining end of transfer
+FILE_TRANSFER_MAX_CHUNK_SIZE = (
+    1024 * 64
+)  # 64KB - size threshold for determining end of transfer
 FILE_TRANSFER_MIN_CHUNK_SIZE = 512
 FILE_TASK_DEFAULT_DURATION_SECONDS = 3600  # 1 hour
 
@@ -38,3 +40,6 @@ NONCE_MIN_LENGTH = 16  # Minimum length of a nonce string
 
 # Root directory virtual folder ID — used to store access rules for the root directory
 ROOT_DIRECTORY_ID = "/"
+
+# Database Constants
+QUERY_CHUNK_SIZE = 576  # used to prevent hitting the limit of bind variables per queryd

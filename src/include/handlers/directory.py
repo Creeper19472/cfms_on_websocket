@@ -2,13 +2,16 @@ import time
 from typing import Optional
 
 import jsonschema
+from itertools import batched
+
+from sqlalchemy.orm import joinedload
 from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
 from include.conf_loader import global_config
-from include.constants import ROOT_DIRECTORY_ID
+from include.constants import ROOT_DIRECTORY_ID, QUERY_CHUNK_SIZE
 from include.database.handler import Session
 from include.database.models.classic import User
-from include.database.models.entity import Folder, Document
+from include.database.models.entity import DocumentRevision, Folder, Document
 from include.util.audit import log_audit
 from include.util.rule.applying import apply_access_rules
 from include.util.recursive.subtree import fetch_subtree_for_deletion
@@ -495,39 +498,33 @@ class RequestDeleteDirectoryHandler(RequestHandler):
                 deletable_doc_ids,
                 failed_items,
                 protected_folder_ids,
+                folder_map,
             ) = fetch_subtree_for_deletion(session, folder_id, this_user, now=now)
 
             # execute batch deletion in a transaction
 
-            # 2a. delete physical files
-            docs_to_delete = (
-                session.query(Document)
-                .filter(Document.id.in_(deletable_doc_ids))
-                .all()
-            )
-            for doc in docs_to_delete:
-                try:
+            # 2a. mark documents for deletion in DB; physical file removal is
+            # deferred until after session.commit(), and failures are logged.
+            for chunk in batched(list(deletable_doc_ids), QUERY_CHUNK_SIZE):
+                docs_to_delete = (
+                    session.query(Document)
+                    .options(
+                        joinedload(Document.revisions).joinedload(DocumentRevision.file)
+                    )
+                    .filter(Document.id.in_(list(chunk)))
+                    .all()
+                )
+
+                for doc in docs_to_delete:
                     doc.delete_all_revisions(do_commit=False)
                     session.delete(doc)
-                except PermissionError:
-                    # if failed to delete physical files, consider it as a 
-                    # failed item and protect its parent folders
-                    failed_items.append(
-                        {
-                            "type": "document",
-                            "id": doc.id,
-                            "reason": "Failed to delete physical files",
-                        }
-                    )
-                    parent_folder = doc.folder
-                    while parent_folder:
-                        protected_folder_ids.add(parent_folder.id)
-                        parent_folder = parent_folder.parent
+
+                session.flush()  # 及时冲刷，配合 expunge 释放内存
 
             # 2b. delete folders in order from bottom to top (or rely on
             # DB cascade)
             for fid in deletable_folder_ids:
-                folder_obj = session.get(Folder, fid)
+                folder_obj = folder_map.get(fid)
                 if folder_obj:
                     session.delete(folder_obj)
 
@@ -544,7 +541,7 @@ class RequestDeleteDirectoryHandler(RequestHandler):
             # construct response based on deletion result
             if failed_items:
                 handler.conclude_request(
-                    207,  # 207 Multi-Status：部分成功
+                    207,  # 207 Multi-Status：partial success
                     {
                         "deleted_folders": list(deletable_folder_ids),
                         "deleted_documents": list(deletable_doc_ids),
@@ -650,7 +647,7 @@ class RequestRenameDirectoryHandler(RequestHandler):
                         if existing_document.check_access_requirements(
                             this_user, "write"
                         ):  # 如果有权删除
-                            existing_document.delete_all_revisions()
+                            existing_document.delete_all_revisions(do_commit=False)
                             session.delete(existing_document)
                             session.commit()
                         else:
@@ -760,7 +757,7 @@ class RequestMoveDirectoryHandler(RequestHandler):
                         if existing_document.check_access_requirements(
                             user, "write"
                         ):  # 如果有权删除
-                            existing_document.delete_all_revisions()
+                            existing_document.delete_all_revisions(do_commit=False)
                             session.delete(existing_document)
                             session.commit()
                         else:
