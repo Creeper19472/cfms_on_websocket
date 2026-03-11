@@ -4,12 +4,12 @@ from itertools import batched
 import time
 
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, text
+from sqlalchemy import text
 
 from include.constants import QUERY_CHUNK_SIZE
 from include.database.models.entity import Document, Folder, DocumentRevision
 from include.database.models.classic import User, ObjectAccessEntry
-from include.util.fetch.fetch import prefetch_user_blocks, batch_prefetch_granted_ids
+from include.util.fetch.fetch import prefetch_user_blocks
 from include.util.recursive.check import check_access_for_object
 
 
@@ -70,7 +70,7 @@ def fetch_subtree_for_deletion(
 
     # ── Step 2: 批量加载所有文件夹（含 access_rules）────────────────────────
     # Chunked to avoid SQLite bind-variable limit for large subtrees.
-    folders: list = []
+    folders: list[Folder] = []
     for chunk in batched(all_folder_ids_to_load, QUERY_CHUNK_SIZE):
         folders.extend(
             session.query(Folder)
@@ -146,15 +146,23 @@ def fetch_subtree_for_deletion(
         if can_delete:
             deletable_doc_ids.add(doc.id)
         else:
-            failed_items.append(
-                {
-                    "type": "document",
-                    "id": doc.id,
-                    "title": doc.title,
-                    "parent_folder_id": doc.folder_id,
-                    "reason": "permission_denied",
-                }
-            )
+            assert doc.folder_id is not None
+            if check_access_for_object(
+                folder_map[doc.folder_id],
+                user,
+                "read",
+                all_folders=folders,
+                oae_by_target=oae_by_target,
+            ):
+                failed_items.append(
+                    {
+                        "type": "document",
+                        "id": doc.id,
+                        "title": doc.title,
+                        "parent_folder_id": doc.folder_id,
+                        "reason": "permission_denied",
+                    }
+                )
 
     # ── Step 7: 对每个子文件夹自身鉴权 ─────────────────────────────────────
     has_delete_directory_perm = "delete_directory" in user.all_permissions
@@ -182,15 +190,25 @@ def fetch_subtree_for_deletion(
         )
         folder_self_deletable[folder.id] = can_delete
         if not can_delete:
-            failed_items.append(
-                {
-                    "type": "folder",
-                    "id": folder.id,
-                    "name": folder.name,
-                    "parent_folder_id": folder.parent_id,
-                    "reason": "permission_denied",
-                }
-            )
+            assert (
+                folder.parent_id is not None
+            ), "Root folder should have been handled separately"
+            if check_access_for_object(
+                folder_map[folder.parent_id],
+                user,
+                "read",
+                all_folders=folders,
+                oae_by_target=oae_by_target,
+            ):
+                failed_items.append(
+                    {
+                        "type": "folder",
+                        "id": folder.id,
+                        "name": folder.name,
+                        "parent_folder_id": folder.parent_id,
+                        "reason": "permission_denied",
+                    }
+                )
 
     # ── Step 8: 自底向上推导"因包含不可删后代而必须保留的目录" ────────────
     # 思路：维护一个 folder_has_undeletable_descendant: set[str]
@@ -224,6 +242,9 @@ def fetch_subtree_for_deletion(
             in_degree[parent_id] -= 1
             if in_degree[parent_id] == 0:
                 queue.append(parent_id)
+
+    if len(topo_order) != len(all_folder_ids_to_load):
+        raise RuntimeError("Cycle detected in folder hierarchy.")
 
     # 按拓扑序（叶 → 根）计算 has_undeletable_content
     # 文档归属到各自 folder 的"不可删内容"

@@ -1,7 +1,14 @@
+from enum import Enum
 from include.database.models.entity import Document, Folder
 from include.database.models.classic import User, ObjectAccessEntry
 from include.classes.access_rule import AccessRuleBase
 from include.constants import AVAILABLE_ACCESS_TYPES
+
+
+class SingleNodeCheckResult(Enum):
+    ALLOWED_OAE = 2
+    ALLOWED = 1
+    DENIED = 0
 
 
 def check_access_for_object(
@@ -18,7 +25,7 @@ def check_access_for_object(
 
     folder_map = {f.id: f for f in all_folders}
 
-    def _check_single_node(node: Document | Folder) -> bool:
+    def _check_single_node(node: Document | Folder) -> SingleNodeCheckResult:
         """
         Check if the current user has the specified access type to a single node (document or folder).
         This function performs a three-step access control check:
@@ -56,7 +63,7 @@ def check_access_for_object(
                 and entry.target_type == target_type
                 and entry.access_type == access_type
             ):
-                return True
+                return SingleNodeCheckResult.ALLOWED_OAE
 
         # check user's group OAE
         user_groups = user.all_groups  # set[str]
@@ -67,11 +74,11 @@ def check_access_for_object(
                 and entry.target_type == target_type
                 and entry.access_type == access_type
             ):
-                return True
+                return SingleNodeCheckResult.ALLOWED_OAE
 
         # If there are no access rules defined on the node, allow access by default
         if not node.access_rules:
-            return True
+            return SingleNodeCheckResult.ALLOWED
 
         # check access rules
         for rule in node.access_rules:
@@ -97,14 +104,21 @@ def check_access_for_object(
                     raise NotImplementedError(f"Unsupported access type: {access_type}")
 
             if not _match_primary_sub_group(rule.rule_data, user):
-                return False
+                return SingleNodeCheckResult.DENIED
 
-        return True
+        return SingleNodeCheckResult.ALLOWED
 
     # check the object itself first
-    if not _check_single_node(obj):
-        return False
-
+    match _check_single_node(obj):
+        case SingleNodeCheckResult.ALLOWED_OAE:
+            return True  # OAE grants access immediately, no need to check further
+        case SingleNodeCheckResult.ALLOWED:
+            pass  # continue to check parent folders if necessary
+        case SingleNodeCheckResult.DENIED:
+            return False  # explicit denial, no need to check further
+        case _:
+            raise RuntimeError("Unexpected SingleNodeCheckResult value")
+        
     # if not recursive or the object does not inherit permissions, stop here
     if not recursive or not obj.inherit:
         return True
