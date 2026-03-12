@@ -1,4 +1,5 @@
 from collections import defaultdict
+from collections import deque
 from typing import Optional
 from itertools import batched
 import time
@@ -41,6 +42,7 @@ def fetch_subtree_for_deletion(
         now = time.time()
 
     # ── Step 1: 用递归 CTE 捞出整棵子树的所有文件夹 ID ─────────────────────
+    exec_opts = {"include_deleted": True} if include_deleted else {}
     status_filter = "" if include_deleted else f"AND f.status = {EntityStatus.OK.value}"
 
     subtree_sql = text(
@@ -78,32 +80,36 @@ def fetch_subtree_for_deletion(
         folders.extend(
             session.query(Folder)
             .options(joinedload(Folder.access_rules))
+            .execution_options(**exec_opts)
             .filter(Folder.id.in_(list(chunk)))
             .all()
         )
     folder_map: dict[str, Folder] = {f.id: f for f in folders}
+    actual_folder_ids = list(folder_map.keys())
 
     # ── Step 3: 批量加载子树内所有文档（含 access_rules、revisions、files）──────────────────
     # Chunked to avoid SQLite bind-variable limit for large subtrees.
     documents: list[Document] = []
-    for chunk in batched(all_folder_ids_to_load, QUERY_CHUNK_SIZE):
+    for chunk in batched(actual_folder_ids, QUERY_CHUNK_SIZE):
         documents.extend(
             session.query(Document)
             .options(
                 joinedload(Document.access_rules),
                 joinedload(Document.current_revision).joinedload(DocumentRevision.file),
             )
+            .execution_options(**exec_opts)
             .filter(Document.folder_id.in_(list(chunk)))
             .all()
         )
 
     # ── Step 4: 批量预取 OAE ────────────────────────────────────────────────
     # Chunked to avoid bind-variable limit for large subtrees.
-    all_target_ids = all_folder_ids_to_load + [doc.id for doc in documents]
+    all_target_ids = actual_folder_ids + [doc.id for doc in documents]
     oae_entries: list[ObjectAccessEntry] = []
     for chunk in batched(all_target_ids, QUERY_CHUNK_SIZE):
         oae_entries.extend(
             session.query(ObjectAccessEntry)
+            .execution_options(**exec_opts)
             .filter(
                 ObjectAccessEntry.target_identifier.in_(list(chunk)),
                 ObjectAccessEntry.start_time <= now,
@@ -221,7 +227,7 @@ def fetch_subtree_for_deletion(
     parent_map: dict[str, Optional[str]] = {}
     for folder in folders:
         parent_map[folder.id] = folder.parent_id
-        if folder.parent_id and folder.parent_id in set(all_folder_ids_to_load):
+        if folder.parent_id and folder.parent_id in set(actual_folder_ids):
             children_map[folder.parent_id].append(folder.id)
 
     # 对每个文件夹：记录它"是否含有不可删内容"
@@ -230,10 +236,9 @@ def fetch_subtree_for_deletion(
 
     # 按拓扑序从叶到根处理（BFS 反向）
     # 先找出所有叶节点（在子树中没有子文件夹的节点）
-    from collections import deque
 
-    in_degree = {fid: len(children_map[fid]) for fid in all_folder_ids_to_load}
-    queue = deque([fid for fid in all_folder_ids_to_load if in_degree[fid] == 0])
+    in_degree = {fid: len(children_map[fid]) for fid in actual_folder_ids}
+    queue = deque([fid for fid in actual_folder_ids if in_degree[fid] == 0])
 
     topo_order = []
     while queue:
@@ -245,7 +250,7 @@ def fetch_subtree_for_deletion(
             if in_degree[parent_id] == 0:
                 queue.append(parent_id)
 
-    if len(topo_order) != len(all_folder_ids_to_load):
+    if len(topo_order) != len(actual_folder_ids):
         raise RuntimeError("Cycle detected in folder hierarchy.")
 
     # 按拓扑序（叶 → 根）计算 has_undeletable_content
