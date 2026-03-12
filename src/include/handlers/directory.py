@@ -1169,6 +1169,7 @@ class RequestListDeletedItemsHandler(RequestHandler):
 
             if Permissions.LIST_DELETED_ITEMS not in user.all_permissions:
                 handler.conclude_request(403, {}, smsg.PERMISSION_DENIED)
+                return 403, parent_id, handler.username
 
             db_parent_id = None if parent_id == ROOT_DIRECTORY_ID else parent_id
 
