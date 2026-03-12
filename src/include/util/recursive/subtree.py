@@ -6,6 +6,7 @@ import time
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import text
 
+from include.classes.enum.status import EntityStatus
 from include.constants import QUERY_CHUNK_SIZE
 from include.database.models.entity import Document, Folder, DocumentRevision
 from include.database.models.classic import User, ObjectAccessEntry
@@ -18,6 +19,7 @@ def fetch_subtree_for_deletion(
     root_folder_id: str,
     user: User,
     now: Optional[float] = None,
+    include_deleted: bool = False,
 ) -> tuple[
     list[str],  # deletable_folder_ids: ordered
     set[str],  # deletable_doc_ids
@@ -39,21 +41,24 @@ def fetch_subtree_for_deletion(
         now = time.time()
 
     # ── Step 1: 用递归 CTE 捞出整棵子树的所有文件夹 ID ─────────────────────
+    status_filter = "" if include_deleted else f"AND f.status = {EntityStatus.OK.value}"
+
     subtree_sql = text(
-        """
-        WITH RECURSIVE subtree(id, parent_id, inherit) AS (
-            SELECT id, parent_id, inherit
+        f"""
+        WITH RECURSIVE subtree(id, parent_id, status) AS (
+            SELECT id, parent_id, status
             FROM folders
             WHERE id = :root_id
 
             UNION ALL
 
-            SELECT f.id, f.parent_id, f.inherit
+            SELECT f.id, f.parent_id, f.status
             FROM folders f
             INNER JOIN subtree s ON f.parent_id = s.id
+            WHERE 1=1 {status_filter}
         )
         SELECT id FROM subtree WHERE id != :root_id
-    """
+        """
     )
     # 注意：root_id 本身的可删性由调用方（handler）已检查，这里只分析"内容"
     # 如果需要连 root 本身也纳入分析，去掉 WHERE id != :root_id 即可
@@ -124,8 +129,7 @@ def fetch_subtree_for_deletion(
     has_delete_document_perm = "delete_document" in user.all_permissions
 
     for doc in documents:
-        if not doc.active:
-            # 未激活文档跳过（不计入失败，也不计入可删）
+        if not include_deleted and doc.status != EntityStatus.OK:
             continue
 
         can_delete = (

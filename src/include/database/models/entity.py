@@ -199,10 +199,6 @@ class BaseObject(Base):
         if not _session:
             raise RuntimeError("No active session found for user")
 
-        # FIXME: The logic here is reserved for possible future expansion.
-        if self.status != EntityStatus.OK:
-            return False
-
         now = time.time()
 
         # check user blocks first

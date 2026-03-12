@@ -147,6 +147,7 @@ def server_init():
             {"permission": "delete_revision"},
             {"permission": "manage_keyrings"},
             {"permission": "list_user_blocks"},
+            {"permission": "purge"},
         ],
     )
     with Session() as session:

@@ -33,6 +33,7 @@ from include.handlers.document import (
     RequestSetDocumentRulesHandler,
     RequestUploadDocumentHandler,
     RequestUploadFileHandler,
+    RequestPurgeDocumentHandler,
 )
 from include.handlers.directory import (
     RequestListDirectoryHandler,
@@ -43,6 +44,7 @@ from include.handlers.directory import (
     RequestMoveDirectoryHandler,
     RequestRenameDirectoryHandler,
     RequestSetDirectoryRulesHandler,
+    RequestPurgeDirectoryHandler,
 )
 from include.handlers.revision import (
     RequestDeleteRevisionHandler,
@@ -215,6 +217,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "create_document": RequestCreateDocumentHandler,
         "upload_document": RequestUploadDocumentHandler,
         "delete_document": RequestDeleteDocumentHandler,
+        "purge_document": RequestPurgeDocumentHandler,
         "rename_document": RequestRenameDocumentHandler,
         "move_document": RequestMoveDocumentHandler,
         "get_document_info": RequestGetDocumentInfoHandler,
@@ -235,6 +238,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "set_directory_rules": RequestSetDirectoryRulesHandler,
         "create_directory": RequestCreateDirectoryHandler,
         "delete_directory": RequestDeleteDirectoryHandler,
+        "purge_directory": RequestPurgeDirectoryHandler,
         "rename_directory": RequestRenameDirectoryHandler,
         "move_directory": RequestMoveDirectoryHandler,
         # Search

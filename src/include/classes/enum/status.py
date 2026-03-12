@@ -1,14 +1,14 @@
-from enum import Enum
+from enum import IntEnum
 
 __all__ = ["EntityStatus", "DocumentRevisionStatus"]
 
 
-class EntityStatus(Enum):
+class EntityStatus(IntEnum):
     OK = 0
     DELETED = 1
     LOCKED = 2
 
 
-class DocumentRevisionStatus(Enum):
+class DocumentRevisionStatus(IntEnum):
     OK = 0
     DELETED = 1
