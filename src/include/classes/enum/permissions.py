@@ -15,8 +15,8 @@ class Permissions(StrEnum):
 
     PURGE = "purge"
     """permission to permanently delete documents/directories."""
-    RESTORE = "recover"
-    """permission to recover documents/directories from deletion."""
+    RESTORE = "restore"
+    """permission to restore documents/directories from deletion."""
 
     # 超级权限操作 (Super)
     SUPER_CREATE_DOCUMENT = "super_create_document"
