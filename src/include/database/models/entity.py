@@ -3,7 +3,7 @@ from typing import Optional
 
 import secrets
 from sqlalchemy import VARCHAR, Boolean, Float, ForeignKey, Integer, func
-from include.classes.enum.status import EntityStatus
+from include.classes.enum.status import DocumentRevisionStatus, EntityStatus
 from include.classes.exceptions import NoActiveRevisionsError
 from include.conf_loader import global_config
 from include.constants import AVAILABLE_ACCESS_TYPES, QUERY_CHUNK_SIZE
@@ -551,6 +551,10 @@ class DocumentRevision(Base):
         "DocumentRevision",
         back_populates="parent_revision",
         foreign_keys="[DocumentRevision.parent_revision_id]",
+    )
+
+    status: Mapped[DocumentRevisionStatus] = mapped_column(
+        Integer, nullable=False, default=DocumentRevisionStatus.OK
     )
 
     @property
