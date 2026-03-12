@@ -38,6 +38,7 @@ from include.handlers.document import (
     RequestPurgeDocumentHandler,
 )
 from include.handlers.directory import (
+    RequestListDeletedItemsHandler,
     RequestListDirectoryHandler,
     RequestCreateDirectoryHandler,
     RequestDeleteDirectoryHandler,
@@ -246,6 +247,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "purge_directory": RequestPurgeDirectoryHandler,
         "rename_directory": RequestRenameDirectoryHandler,
         "move_directory": RequestMoveDirectoryHandler,
+        "list_deleted_items": RequestListDeletedItemsHandler,
         # Search
         "search": RequestSearchHandler,
         # Users
