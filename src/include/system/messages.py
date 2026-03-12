@@ -21,6 +21,7 @@ ACCESS_DENIED = _("Access denied")
 ACCESS_DENIED_MOVE_DOCUMENT = _("Access denied to move document")
 ACCESS_DENIED_MOVE_DIRECTORY = _("Access denied to move directory")
 ACCESS_DENIED_WRITE_DIRECTORY = _("Access denied to write directory")
+PERMISSION_DENIED = _("Permission denied")
 
 CANNOT_MOVE_DIRECTORY_INTO_SUBDIRECTORY = _(
     "Cannot move a directory into its own subdirectory"
