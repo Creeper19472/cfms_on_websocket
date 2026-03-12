@@ -15,6 +15,7 @@ from include.database.handler import Session
 from include.database.models.classic import User
 from include.database.models.entity import Folder, Document
 from include.util.audit import log_audit
+from include.util.bulk.purge import purge_documents_bulk
 from include.util.rule.applying import apply_access_rules
 from include.util.recursive.subtree import fetch_subtree_for_deletion
 from include.util.log import getCustomLogger
@@ -978,23 +979,16 @@ class RequestPurgeDirectoryHandler(RequestHandler):
                     )
                     return 403, folder_id, handler.username
 
-                for chunk in batched(list(all_doc_ids), QUERY_CHUNK_SIZE):
-                    docs_to_purge = (
-                        session.query(Document)
-                        .execution_options(include_deleted=True)
-                        .filter(Document.id.in_(list(chunk)))
-                        .all()
-                    )
-                    for doc in docs_to_purge:
-                        doc.delete_all_revisions(do_commit=False)
-                        session.delete(doc)
+                session.autoflush = False
 
-                    session.flush()
+                if all_doc_ids:
+                    purge_documents_bulk(session, list(all_doc_ids))
 
-                for fid in all_folder_ids:
-                    f_obj = folder_map.get(fid)
-                    if f_obj:
-                        session.delete(f_obj)
+                if all_folder_ids:
+                    for chunk in batched(all_folder_ids, QUERY_CHUNK_SIZE):
+                        session.query(Folder).filter(Folder.id.in_(chunk)).delete(
+                            synchronize_session=False
+                        )
 
                 session.delete(folder)
                 session.commit()
@@ -1013,3 +1007,5 @@ class RequestPurgeDirectoryHandler(RequestHandler):
                     500, {}, "Internal server error during purge process"
                 )
                 return 500, folder_id, handler.username
+            finally:
+                session.autoflush = True

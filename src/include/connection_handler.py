@@ -364,7 +364,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
 
         try:
             t1 = time.perf_counter()
-            # pr.enable()
+            pr.enable()
             callback: Union[
                 int,
                 tuple[int, Optional[str]],
@@ -373,11 +373,11 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
                 tuple[int, Optional[str], dict, str],
                 None,
             ] = _request_handler.handle(this_handler)
-            # pr.disable()
-            # s = io.StringIO()
-            # ps = pstats.Stats(pr, stream=s).sort_stats(SortKey.CUMULATIVE)
-            # ps.print_stats()
-            # print(s.getvalue())
+            pr.disable()
+            s = io.StringIO()
+            ps = pstats.Stats(pr, stream=s).sort_stats(SortKey.CUMULATIVE)
+            ps.print_stats()
+            print(s.getvalue())
             t2 = time.perf_counter()
             logger.debug(f"Handled action '{action}' in {t2 - t1:.3f} seconds")
         except (

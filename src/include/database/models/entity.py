@@ -1,4 +1,4 @@
-from typing import List, Literal, cast
+from typing import Iterable, List, Literal, Union, cast
 from typing import Optional
 
 import secrets
@@ -27,29 +27,40 @@ from include.util.fetch.fetch import batch_prefetch_granted_ids, prefetch_user_b
 
 
 def _batch_count_other_revisions(
-    session: Session, file_ids, exclude_doc_id: str
-) -> dict:
-    """Count DocumentRevisions referencing any of the given ``file_ids`` that belong
-    to documents *other* than ``exclude_doc_id``.
-
-    Queries are chunked to stay within SQLite's bind-variable limit.
+    session: Session,
+    file_ids: Iterable[str],
+    exclude_doc_ids: Union[str, Iterable[str]],
+) -> dict[str, int]:
     """
-    counts: dict = {}
+    计算引用了指定 file_ids 的修订版本数量，但排除属于 exclude_doc_ids 集合的文档。
+
+    参数:
+        file_ids: 待检查的文件 ID 列表。
+        exclude_doc_ids: 单个文档 ID 或文档 ID 集合。这些文档对文件的引用将不被计入。
+    """
+    counts: dict[str, int] = {}
     if not file_ids:
         return counts
+
+    if isinstance(exclude_doc_ids, str):
+        exclude_doc_ids = [exclude_doc_ids]
+    else:
+        exclude_doc_ids = list(exclude_doc_ids)
+
     for chunk in batched(file_ids, QUERY_CHUNK_SIZE):
         rows = (
             session.query(DocumentRevision.file_id, func.count(DocumentRevision.id))
-            .filter(
-                DocumentRevision.file_id.in_(
-                    list(chunk)
-                ),  # list() can be removed actually
-                DocumentRevision.document_id != exclude_doc_id,
-            )
+            .filter(DocumentRevision.file_id.in_(list(chunk)))
+            .filter(DocumentRevision.document_id.not_in(exclude_doc_ids))
             .group_by(DocumentRevision.file_id)
             .all()
         )
         counts.update({file_id: count for file_id, count in rows})
+
+    for fid in file_ids:
+        if fid not in counts:
+            counts[fid] = 0
+
     return counts
 
 

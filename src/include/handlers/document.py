@@ -1042,3 +1042,6 @@ class RequestPurgeDocumentHandler(RequestHandler):
             document.delete_all_revisions(do_commit=False)
             session.delete(document)
             session.commit()
+
+        handler.conclude_request(200, {}, "Document permanently deleted")
+        return 0, doc_id, handler.username
