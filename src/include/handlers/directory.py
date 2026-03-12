@@ -1,3 +1,4 @@
+import secrets
 import time
 from typing import Optional
 
@@ -6,6 +7,7 @@ from itertools import batched
 
 from sqlalchemy.orm import joinedload
 from include.classes.connection import ConnectionHandler
+from include.classes.enum.status import EntityStatus
 from include.classes.request import RequestHandler
 from include.conf_loader import global_config
 from include.constants import ROOT_DIRECTORY_ID, QUERY_CHUNK_SIZE
@@ -489,6 +491,7 @@ class RequestDeleteDirectoryHandler(RequestHandler):
                 )
                 return 403, folder_id, handler.username
 
+            operation_id = f"OP_DEL_{secrets.token_hex(8)}_{int(time.time())}"
             now = time.time()
 
             # analyze subtree, determine deletable items and protected items,
@@ -503,38 +506,32 @@ class RequestDeleteDirectoryHandler(RequestHandler):
 
             # execute batch deletion in a transaction
 
-            # 2a. mark documents for deletion in DB; physical file removal is
-            # deferred until after session.commit(), and failures are logged.
+            # 2a. mark documents for deletion in DB; failures are logged.
             for chunk in batched(list(deletable_doc_ids), QUERY_CHUNK_SIZE):
-                docs_to_delete = (
-                    session.query(Document)
-                    .options(
-                        joinedload(Document.revisions).joinedload(DocumentRevision.file)
-                    )
-                    .filter(Document.id.in_(list(chunk)))
-                    .all()
+                session.query(Document).filter(Document.id.in_(list(chunk))).update(
+                    {
+                        "status": EntityStatus.DELETED,
+                        "status_operation_id": operation_id,
+                    },
+                    synchronize_session=False,
                 )
 
-                for doc in docs_to_delete:
-                    doc.delete_all_revisions(do_commit=False)
-                    session.delete(doc)
+            # 2b. Mark folders as DELETED
+            for chunk in batched(list(deletable_folder_ids), QUERY_CHUNK_SIZE):
+                session.query(Folder).filter(Folder.id.in_(list(chunk))).update(
+                    {
+                        "status": EntityStatus.DELETED,
+                        "status_operation_id": operation_id,
+                    },
+                    synchronize_session=False,
+                )
 
-                session.flush()  # 及时冲刷，配合 expunge 释放内存
-
-            # 2b. delete folders in order from bottom to top (or rely on
-            # DB cascade)
-            for fid in deletable_folder_ids:
-                folder_obj = folder_map.get(fid)
-                if folder_obj:
-                    session.delete(folder_obj)
-
-            # 2c. delete the root folder if it has no protected descendants
-            # and no failed items
+            # 2c. Mark the root folder as DELETED
             root_fully_deletable = (
                 len(protected_folder_ids) == 0 and len(failed_items) == 0
             )
             if root_fully_deletable:
-                session.delete(folder)
+                folder.status = EntityStatus.DELETED
 
             session.commit()
 
@@ -552,7 +549,9 @@ class RequestDeleteDirectoryHandler(RequestHandler):
                 )
                 return 207, folder_id, handler.username
             else:
-                handler.conclude_request(200, {}, "Directory deleted successfully")
+                handler.conclude_request(
+                    200, {}, "Directory mark as deleted successfully"
+                )
                 return 0, folder_id, handler.username
 
 

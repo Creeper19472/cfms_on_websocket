@@ -1,9 +1,15 @@
-from sqlalchemy import URL, create_engine
-from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import URL, create_engine, event
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    ORMExecuteState,
+    sessionmaker,
+    with_loader_criteria,
+)
 
+from include.classes.enum.status import EntityStatus
 from include.conf_loader import global_config
 from include.constants import DEFAULT_TOKEN_EXPIRY_SECONDS
+from include.database.models.entity import BaseObject
 
 __all__ = ["engine", "Session", "Base"]
 
@@ -45,6 +51,23 @@ else:
     )
 
 Session = sessionmaker(bind=engine)
+
+
+@event.listens_for(Session, "do_orm_execute")
+def _add_filtering_criteria(execute_state: ORMExecuteState) -> None:
+    """
+    Automatically add filtering criteria to all SELECT queries to exclude 
+    DELETED entities by default.
+    """
+    if execute_state.is_select and not execute_state.execution_options.get(
+        "include_deleted", False
+    ):
+        execute_state.statement = execute_state.statement.options(
+            with_loader_criteria(
+                BaseObject,
+                lambda cls: cls.status == EntityStatus.OK,
+            )
+        )
 
 
 class Base(DeclarativeBase):

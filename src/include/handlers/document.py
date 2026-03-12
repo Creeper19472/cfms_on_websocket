@@ -5,16 +5,15 @@ import time
 import jsonschema
 
 from include.classes.connection import ConnectionHandler
+from include.classes.enum.status import EntityStatus
 from include.classes.request import RequestHandler
 from include.conf_loader import global_config
-from include.constants import AVAILABLE_ACCESS_TYPES
 from include.constants import FILE_TASK_DEFAULT_DURATION_SECONDS
 from include.constants import ROOT_DIRECTORY_ID
 from include.database.handler import Session
 from include.database.models.classic import User
 from include.database.models.entity import (
     Document,
-    DocumentAccessRule,
     DocumentRevision,
     Folder,
     NoActiveRevisionsError,
@@ -538,16 +537,10 @@ class RequestDeleteDocumentHandler(RequestHandler):
                 handler.conclude_request(403, {}, "Access denied to the document")
                 return 403, document_id, handler.username
 
-            try:
-                document.delete_all_revisions()
-            except PermissionError:
-                handler.conclude_request(
-                    500,
-                    {},
-                    "Failed to delete revisions. Perhaps a download task is still in progress?",
-                )
-                return 500, document_id, handler.username
-            session.delete(document)
+            document.status = EntityStatus.DELETED
+            document.status_operation_id = (
+                f"OP_DEL_{secrets.token_hex(8)}_{int(time.time())}"
+            )
             session.commit()
 
         handler.conclude_request(200, {}, "Document successfully deleted")

@@ -78,11 +78,15 @@ class BaseObject(Base):
     id: Mapped[str]
     access_rules: Mapped[List]
 
-    # Whether to inherit access rules from parent folders. Useful when enabling recursion check.
+    # Whether to inherit access rules from parent folders.
+    # Useful when enabling recursion check.
     inherit: Mapped[bool]
 
     status: Mapped[EntityStatus] = mapped_column(
         Integer, nullable=False, default=EntityStatus.OK
+    )
+    status_operation_id: Mapped[Optional[str]] = mapped_column(
+        VARCHAR(255), nullable=True, index=True
     )
 
     def check_access_requirements(
@@ -194,6 +198,10 @@ class BaseObject(Base):
         _session = object_session(user)
         if not _session:
             raise RuntimeError("No active session found for user")
+
+        # FIXME: The logic here is reserved for possible future expansion.
+        if self.status != EntityStatus.OK:
+            return False
 
         now = time.time()
 
@@ -318,7 +326,13 @@ class Folder(BaseObject):  # 文档文件夹
 
     @property
     def count_of_child(self):
-        return len(self.children) + sum(1 for doc in self.documents if doc.active)
+        active_folders_count = sum(
+            1 for f in self.children if f.status == EntityStatus.OK
+        )
+        active_docs_count = sum(
+            1 for doc in self.documents if doc.status == EntityStatus.OK and doc.active
+        )
+        return active_folders_count + active_docs_count
 
     def is_descendant_of(self, potential_ancestor: "Folder") -> bool:
         """
