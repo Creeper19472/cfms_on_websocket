@@ -1,4 +1,4 @@
-# CFMS On Websocket
+# CFMS on Websocket
 
 CFMS (Confidential File Management System), is a complete solution for 
 managing confidential documents. This is the repository used to 
@@ -34,7 +34,13 @@ uv run pytest tests/test_basic.py
 
 For more information about the test suite, see [tests/README.md](tests/README.md).
 
-## Alpha Test
+## Security
+
+We do our utmost to prevent and resolve security issues within our capabilities. 
+If you discover any existing vulnerabilities, you are welcome to submit a report 
+to us.
+
+## Contributing
 
 This is a project that is under active development and we are looking 
 for people interested in the project to participate in testing. We are 
