@@ -13,6 +13,8 @@ class Permissions(StrEnum):
     DELETE_DIRECTORY = "delete_directory"
     RENAME_DIRECTORY = "rename_directory"
 
+    LIST_DELETED_ITEMS = "list_deleted_items"
+    """permission to view the list of deleted documents/directories in a directory."""
     PURGE = "purge"
     """permission to permanently delete documents/directories."""
     RESTORE = "restore"
