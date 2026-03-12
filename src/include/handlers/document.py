@@ -1045,3 +1045,128 @@ class RequestPurgeDocumentHandler(RequestHandler):
 
         handler.conclude_request(200, {}, "Document permanently deleted")
         return 0, doc_id, handler.username
+
+
+class RequestRestoreDocumentHandler(RequestHandler):
+    """
+    Handles the "restore_document" action.
+    Restores a marked-as-deleted document. Supports renaming and moving to a
+    new folder during restoration. Maps virtual ROOT_DIRECTORY_ID to database None.
+    """
+
+    data_schema = {
+        "type": "object",
+        "properties": {
+            "document_id": {"type": "string", "minLength": 1},
+            "target_folder_id": {"type": "string", "minLength": 1},
+            "new_title": {"type": "string", "minLength": 1},
+        },
+        "required": ["document_id"],
+        "additionalProperties": False,
+    }
+
+    require_auth = True
+
+    def handle(self, handler: ConnectionHandler):
+        doc_id = handler.data["document_id"]
+
+        target_folder_provided = "target_folder_id" in handler.data
+        target_folder_id = handler.data.get("target_folder_id")
+        new_title = handler.data.get("new_title")
+
+        with Session() as session:
+            user = session.get(User, handler.username)
+            assert user is not None
+
+            if Permissions.RESTORE not in user.all_permissions:
+                handler.conclude_request(403, {}, "No permission to restore data")
+                return 403, doc_id, handler.username
+
+            document = session.get(
+                Document, doc_id, execution_options={"include_deleted": True}
+            )
+
+            if not document or document.status != EntityStatus.DELETED:
+                handler.conclude_request(404, {}, "Deleted document not found")
+                return 404, doc_id, handler.username
+
+            if target_folder_provided:
+                db_folder_id = (
+                    None if target_folder_id == ROOT_DIRECTORY_ID else target_folder_id
+                )
+            else:
+                db_folder_id = document.folder_id
+
+            final_title = new_title if new_title else document.title
+
+            if db_folder_id is None:
+                root_obj = session.get(Folder, ROOT_DIRECTORY_ID)
+                if root_obj and not root_obj.check_access_requirements(user, "write"):
+                    handler.conclude_request(
+                        403, {}, "Access denied to the root directory"
+                    )
+                    return 403, ROOT_DIRECTORY_ID, handler.username
+            else:
+                target_folder = session.get(
+                    Folder, db_folder_id, execution_options={"include_deleted": True}
+                )
+                if not target_folder:
+                    handler.conclude_request(404, {}, "Target folder not found")
+                    return 404, db_folder_id, handler.username
+
+                if target_folder.status != EntityStatus.OK:
+                    handler.conclude_request(
+                        409,
+                        {"folder_id": db_folder_id},
+                        "Cannot restore: Target folder is deleted. Restore it first.",
+                    )
+                    return 409, doc_id, handler.username
+
+                if not target_folder.check_access_requirements(user, "write"):
+                    handler.conclude_request(
+                        403, {}, "Access denied to the target folder"
+                    )
+                    return 403, db_folder_id, handler.username
+
+            existing_conflict = (
+                session.query(Document)
+                .filter(
+                    Document.folder_id == db_folder_id,
+                    Document.title == final_title,
+                    Document.status == EntityStatus.OK,
+                )
+                .first()
+                or session.query(Folder)
+                .filter(
+                    Folder.parent_id == db_folder_id,
+                    Folder.name == final_title,
+                    Folder.status == EntityStatus.OK,
+                )
+                .first()
+            )
+
+            if existing_conflict:
+                handler.conclude_request(
+                    409,
+                    {"conflict_id": existing_conflict.id},
+                    f"Conflict: An active item named '{final_title}' already exists in the destination.",
+                )
+                return 409, doc_id, handler.username
+
+            document.status = EntityStatus.OK
+            document.status_operation_id = None
+            document.title = final_title
+            document.folder_id = db_folder_id
+
+            session.commit()
+
+            handler.conclude_request(
+                200,
+                {
+                    "document_id": doc_id,
+                    "new_title": final_title,
+                    "target_folder_id": db_folder_id,
+                },
+                "Document successfully restored",
+            )
+            return 0, doc_id, handler.username

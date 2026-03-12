@@ -150,6 +150,7 @@ def server_init():
             {"permission": Permissions.MANAGE_KEYRINGS},
             {"permission": Permissions.LIST_USER_BLOCKS},
             {"permission": Permissions.PURGE},
+            {"permission": Permissions.RESTORE},
         ],
     )
 

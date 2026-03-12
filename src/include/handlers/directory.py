@@ -1001,12 +1001,132 @@ class RequestPurgeDirectoryHandler(RequestHandler):
                 )
                 return 0, folder_id, handler.username
 
-            except Exception as e:
-                session.rollback()
-                logger.error(f"Error during directory purge: {str(e)}")
-                handler.conclude_request(
-                    500, {}, "Internal server error during purge process"
-                )
-                return 500, folder_id, handler.username
             finally:
                 session.autoflush = True
+
+
+class RequestRestoreDirectoryHandler(RequestHandler):
+    """
+    Handles the "restore_directory" action.
+    Supports virtual ROOT_DIRECTORY_ID translation to database None.
+    """
+
+    data_schema = {
+        "type": "object",
+        "properties": {
+            "folder_id": {"type": "string", "minLength": 1},
+            "target_parent_id": {"type": "string", "minLength": 1},
+            "new_name": {"type": "string", "minLength": 1},
+        },
+        "required": ["folder_id"],
+        "additionalProperties": False,
+    }
+
+    require_auth = True
+
+    def handle(self, handler: ConnectionHandler):
+        folder_id = handler.data["folder_id"]
+        target_parent_provided = "target_parent_id" in handler.data
+        target_parent_id = handler.data.get("target_parent_id")
+        new_name = handler.data.get("new_name")
+
+        with Session() as session:
+            user = session.get(User, handler.username)
+            assert user is not None
+
+            if Permissions.RESTORE not in user.all_permissions:
+                handler.conclude_request(403, {}, "No permission to restore data")
+                return 403, folder_id, handler.username
+
+            folder = session.get(
+                Folder, folder_id, execution_options={"include_deleted": True}
+            )
+
+            if not folder or folder.status != EntityStatus.DELETED:
+                handler.conclude_request(404, {}, "Deleted directory not found")
+                return 404, folder_id, handler.username
+
+            if target_parent_provided:
+                db_parent_id = (
+                    None if target_parent_id == ROOT_DIRECTORY_ID else target_parent_id
+                )
+            else:
+                db_parent_id = folder.parent_id
+
+            final_name = new_name if new_name else folder.name
+
+            if db_parent_id is None:
+                root_obj = session.get(Folder, ROOT_DIRECTORY_ID)
+                if root_obj and not root_obj.check_access_requirements(user, "write"):
+                    handler.conclude_request(403, {}, "Access denied to root directory")
+                    return 403, ROOT_DIRECTORY_ID, handler.username
+            else:
+                target_parent = session.get(
+                    Folder, db_parent_id, execution_options={"include_deleted": True}
+                )
+                if not target_parent or target_parent.status != EntityStatus.OK:
+                    handler.conclude_request(409, {}, "Target directory is not active")
+                    return 409, db_parent_id, handler.username
+
+                if not target_parent.check_access_requirements(user, "write"):
+                    handler.conclude_request(
+                        403, {}, "Access denied to target directory"
+                    )
+                    return 403, db_parent_id, handler.username
+
+            existing_conflict = (
+                session.query(Folder)
+                .filter(
+                    Folder.parent_id == db_parent_id,
+                    Folder.name == final_name,
+                    Folder.status == EntityStatus.OK,
+                )
+                .first()
+                or session.query(Document)
+                .filter(
+                    Document.folder_id == db_parent_id,
+                    Document.title == final_name,
+                    Document.status == EntityStatus.OK,
+                )
+                .first()
+            )
+
+            if existing_conflict:
+                handler.conclude_request(
+                    409, {"conflict_id": existing_conflict.id}, "Name conflict"
+                )
+                return 409, folder_id, handler.username
+
+            op_id = folder.status_operation_id
+
+            if op_id:
+                # 批量恢复文档
+                session.query(Document).execution_options(include_deleted=True).filter(
+                    Document.status_operation_id == op_id,
+                    Document.status == EntityStatus.DELETED,
+                ).update(
+                    {"status": EntityStatus.OK, "status_operation_id": None},
+                    synchronize_session=False,
+                )
+
+                # 批量恢复文件夹
+                session.query(Folder).execution_options(include_deleted=True).filter(
+                    Folder.status_operation_id == op_id,
+                    Folder.status == EntityStatus.DELETED,
+                    Folder.id != folder.id,
+                ).update(
+                    {"status": EntityStatus.OK, "status_operation_id": None},
+                    synchronize_session=False,
+                )
+
+            folder.status = EntityStatus.OK
+            folder.status_operation_id = None
+            folder.name = final_name
+            folder.parent_id = db_parent_id
+
+            session.commit()
+
+            handler.conclude_request(
+                200, {"target_parent_id": db_parent_id}, smsg.SUCCESS
+            )
+            return 0, folder_id, handler.username
