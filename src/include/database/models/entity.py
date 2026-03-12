@@ -6,7 +6,7 @@ from sqlalchemy import VARCHAR, Boolean, Float, ForeignKey, Integer, func
 from include.classes.enum.status import DocumentRevisionStatus, EntityStatus
 from include.classes.exceptions import NoActiveRevisionsError
 from include.conf_loader import global_config
-from include.constants import AVAILABLE_ACCESS_TYPES, QUERY_CHUNK_SIZE
+from include.constants import AVAILABLE_ACCESS_TYPES, MAX_PARAM_SIZE, QUERY_CHUNK_SIZE
 from include.database.handler import Base
 from include.classes.access_rule import AccessRuleBase
 from sqlalchemy.orm import Mapped, Session
@@ -47,14 +47,17 @@ def _batch_count_other_revisions(
     else:
         exclude_doc_ids = list(exclude_doc_ids)
 
-    for chunk in batched(file_ids, QUERY_CHUNK_SIZE):
-        rows = (
-            session.query(DocumentRevision.file_id, func.count(DocumentRevision.id))
-            .filter(DocumentRevision.file_id.in_(list(chunk)))
-            .filter(DocumentRevision.document_id.not_in(exclude_doc_ids))
-            .group_by(DocumentRevision.file_id)
-            .all()
-        )
+    EXCLUDE_CHUNK_SIZE = MAX_PARAM_SIZE - QUERY_CHUNK_SIZE
+
+    for f_chunk in batched(file_ids, QUERY_CHUNK_SIZE):
+        query = session.query(
+            DocumentRevision.file_id, func.count(DocumentRevision.id)
+        ).filter(DocumentRevision.file_id.in_(list(f_chunk)))
+
+        for e_chunk in batched(exclude_doc_ids, EXCLUDE_CHUNK_SIZE):
+            query = query.filter(DocumentRevision.document_id.not_in(list(e_chunk)))
+
+        rows = query.group_by(DocumentRevision.file_id).all()
         counts.update({file_id: count for file_id, count in rows})
 
     for fid in file_ids:

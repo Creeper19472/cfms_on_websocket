@@ -189,7 +189,7 @@ class RequestGetDirectoryInfoHandler(RequestHandler):
             info_code = 0
             ### generate access_rules text
             access_rules = []
-            if "view_access_rules" in user.all_permissions:
+            if Permissions.VIEW_ACCESS_RULES in user.all_permissions:
                 for each_rule in directory.access_rules:
                     access_rules.append(
                         {
@@ -242,7 +242,7 @@ class RequestGetDirectoryAccessRulesHandler(RequestHandler):
 
             if (
                 not directory.check_access_requirements(user, access_type="read")
-                or not "view_access_rules" in user.all_permissions
+                or not Permissions.VIEW_ACCESS_RULES in user.all_permissions
             ):
                 handler.conclude_request(403, {}, "Permission denied")
                 return 403, directory_id, handler.username
@@ -536,6 +536,7 @@ class RequestDeleteDirectoryHandler(RequestHandler):
             )
             if root_fully_deletable:
                 folder.status = EntityStatus.DELETED
+                folder.status_operation_id = operation_id
 
             session.commit()
 
@@ -554,7 +555,7 @@ class RequestDeleteDirectoryHandler(RequestHandler):
                 return 207, folder_id, handler.username
             else:
                 handler.conclude_request(
-                    200, {}, "Directory mark as deleted successfully"
+                    200, {}, "Directory marked as deleted successfully"
                 )
                 return 0, folder_id, handler.username
 
@@ -713,7 +714,7 @@ class RequestMoveDirectoryHandler(RequestHandler):
             user = session.get(User, handler.username)
             assert user is not None  # require_auth ensures this
 
-            if "move" not in user.all_permissions:
+            if Permissions.MOVE not in user.all_permissions:
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MOVE_DIRECTORY)
                 return 403, folder_id, handler.username
 
@@ -818,7 +819,7 @@ class RequestMoveDirectoryHandler(RequestHandler):
                 if (
                     root_folder is not None
                     and not root_folder.check_access_requirements(user, "write")
-                    and "super_create_directory" not in user.all_permissions
+                    and Permissions.SUPER_CREATE_DIRECTORY not in user.all_permissions
                 ):
                     handler.conclude_request(
                         403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY
@@ -878,7 +879,7 @@ class RequestSetDirectoryRulesHandler(RequestHandler):
                 handler.conclude_request(404, {}, "Directory not found")
                 return 404, directory_id, handler.username
 
-            if not "set_access_rules" in user.all_permissions:
+            if not Permissions.SET_ACCESS_RULES in user.all_permissions:
                 handler.conclude_request(403, {}, "Access denied to set access rules")
                 return 403, directory_id, handler.username
 

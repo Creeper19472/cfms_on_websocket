@@ -22,6 +22,8 @@ Constants:
 
 import os
 
+from include.classes.enum.permissions import Permissions
+
 # fix
 os.makedirs("./content/logs/", exist_ok=True)
 os.makedirs("./content/ssl/", exist_ok=True)
@@ -98,58 +100,59 @@ def server_init():
     create_group(
         group_name="user",
         permissions=[
-            {"permission": "set_passwd", "start_time": 0, "end_time": None},
+            {"permission": Permissions.SET_PASSWD},
         ],
     )
     create_group(
         group_name="sysop",
         permissions=[
-            {"permission": "move"},
-            {"permission": "shutdown", "start_time": 0, "end_time": None},
-            {"permission": "super_create_document", "start_time": 0, "end_time": None},
-            {"permission": "super_create_directory", "start_time": 0, "end_time": None},
-            {"permission": "super_list_directory", "start_time": 0, "end_time": None},
-            {"permission": "create_document", "start_time": 0, "end_time": None},
-            {"permission": "create_directory", "start_time": 0, "end_time": None},
-            {"permission": "delete_document", "start_time": 0, "end_time": None},
-            {"permission": "rename_document", "start_time": 0, "end_time": None},
-            {"permission": "delete_directory", "start_time": 0, "end_time": None},
-            {"permission": "rename_directory", "start_time": 0, "end_time": None},
-            {"permission": "manage_system", "start_time": 0, "end_time": None},
-            {"permission": "create_user", "start_time": 0, "end_time": None},
-            {"permission": "delete_user", "start_time": 0, "end_time": None},
-            {"permission": "rename_user", "start_time": 0, "end_time": None},
-            {"permission": "get_user_info", "start_time": 0, "end_time": None},
-            {"permission": "get_group_info"},
-            {"permission": "change_user_groups", "start_time": 0, "end_time": None},
-            {"permission": "super_set_passwd", "start_time": 0, "end_time": None},
-            {"permission": "view_access_rules", "start_time": 0, "end_time": None},
-            {"permission": "set_access_rules", "start_time": 0, "end_time": None},
-            {"permission": "list_users", "start_time": 0, "end_time": None},
-            {"permission": "list_groups", "start_time": 0, "end_time": None},
-            {"permission": "create_group", "start_time": 0, "end_time": None},
-            {"permission": "delete_group", "start_time": 0, "end_time": None},
-            {"permission": "rename_group", "start_time": 0, "end_time": None},
-            {"permission": "set_group_permissions"},
-            {"permission": "bypass_lockdown"},
-            {"permission": "apply_lockdown"},
-            {"permission": "view_audit_logs"},
-            {"permission": "manage_access"},
-            {"permission": "view_access_entries"},
-            {"permission": "block"},
-            {"permission": "unblock"},
-            {"permission": "super_set_user_avatar"},
-            {"permission": "debugging"},
-            {"permission": "manage_2fa"},
-            {"permission": "list_revisions"},
-            {"permission": "view_revision"},
-            {"permission": "set_current_revision"},
-            {"permission": "delete_revision"},
-            {"permission": "manage_keyrings"},
-            {"permission": "list_user_blocks"},
-            {"permission": "purge"},
+            {"permission": Permissions.MOVE},
+            {"permission": Permissions.SHUTDOWN},
+            {"permission": Permissions.SUPER_CREATE_DOCUMENT},
+            {"permission": Permissions.SUPER_CREATE_DIRECTORY},
+            {"permission": Permissions.SUPER_LIST_DIRECTORY},
+            {"permission": Permissions.CREATE_DOCUMENT},
+            {"permission": Permissions.CREATE_DIRECTORY},
+            {"permission": Permissions.DELETE_DOCUMENT},
+            {"permission": Permissions.RENAME_DOCUMENT},
+            {"permission": Permissions.DELETE_DIRECTORY},
+            {"permission": Permissions.RENAME_DIRECTORY},
+            {"permission": Permissions.MANAGE_SYSTEM},
+            {"permission": Permissions.CREATE_USER},
+            {"permission": Permissions.DELETE_USER},
+            {"permission": Permissions.RENAME_USER},
+            {"permission": Permissions.GET_USER_INFO},
+            {"permission": Permissions.GET_GROUP_INFO},
+            {"permission": Permissions.CHANGE_USER_GROUPS},
+            {"permission": Permissions.SUPER_SET_PASSWD},
+            {"permission": Permissions.VIEW_ACCESS_RULES},
+            {"permission": Permissions.SET_ACCESS_RULES},
+            {"permission": Permissions.LIST_USERS},
+            {"permission": Permissions.LIST_GROUPS},
+            {"permission": Permissions.CREATE_GROUP},
+            {"permission": Permissions.DELETE_GROUP},
+            {"permission": Permissions.RENAME_GROUP},
+            {"permission": Permissions.SET_GROUP_PERMISSIONS},
+            {"permission": Permissions.BYPASS_LOCKDOWN},
+            {"permission": Permissions.APPLY_LOCKDOWN},
+            {"permission": Permissions.VIEW_AUDIT_LOGS},
+            {"permission": Permissions.MANAGE_ACCESS},
+            {"permission": Permissions.VIEW_ACCESS_ENTRIES},
+            {"permission": Permissions.BLOCK},
+            {"permission": Permissions.UNBLOCK},
+            {"permission": Permissions.SUPER_SET_USER_AVATAR},
+            {"permission": Permissions.DEBUGGING},
+            {"permission": Permissions.MANAGE_2FA},
+            {"permission": Permissions.LIST_REVISIONS},
+            {"permission": Permissions.VIEW_REVISION},
+            {"permission": Permissions.SET_CURRENT_REVISION},
+            {"permission": Permissions.DELETE_REVISION},
+            {"permission": Permissions.MANAGE_KEYRINGS},
+            {"permission": Permissions.LIST_USER_BLOCKS},
+            {"permission": Permissions.PURGE},
         ],
     )
+
     with Session() as session:
         init_file = File(id="init", path="./content/hello", active=True)
         session.add(init_file)
@@ -280,7 +283,7 @@ def main():
             f"({ssl.OPENSSL_VERSION}) and therefore **does not support"
             " post-quantum encryption**. Communication without post-quantum "
             'encryption may be vulnerable to "harvest now, decrypt later" '
-            'attacks. Consider using a Python distribution that bundles '
+            "attacks. Consider using a Python distribution that bundles "
             "OpenSSL 3.5 or later to resolve this issue."
         )
 

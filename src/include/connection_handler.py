@@ -7,6 +7,7 @@ import jsonschema
 import websockets
 import websockets.sync.server
 from websockets.typing import Data
+from include.classes.enum.permissions import Permissions
 from include.classes.request import RequestHandler
 from include.conf_loader import global_config
 from include.classes.connection import ConnectionHandler
@@ -294,7 +295,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         "download_file",
     ]
 
-    user_permissions: set[str] = set()
+    user_permissions: set[Permissions] = set()
     authenticated = False
     if this_handler.username and this_handler.token:
         with Session() as session:
@@ -309,7 +310,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
     if lockdown_enabled.is_set():
         if action not in whitelisted_functions:
             can_bypass_lockdown = False
-            if authenticated and "bypass_lockdown" in user_permissions:
+            if authenticated and Permissions.BYPASS_LOCKDOWN in user_permissions:
                 can_bypass_lockdown = True
 
             if not can_bypass_lockdown:
