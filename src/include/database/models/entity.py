@@ -3,6 +3,7 @@ from typing import Optional
 
 import secrets
 from sqlalchemy import VARCHAR, Boolean, Float, ForeignKey, Integer, func
+from include.classes.enum.status import EntityStatus
 from include.classes.exceptions import NoActiveRevisionsError
 from include.conf_loader import global_config
 from include.constants import AVAILABLE_ACCESS_TYPES, QUERY_CHUNK_SIZE
@@ -79,6 +80,10 @@ class BaseObject(Base):
 
     # Whether to inherit access rules from parent folders. Useful when enabling recursion check.
     inherit: Mapped[bool]
+
+    status: Mapped[EntityStatus] = mapped_column(
+        Integer, nullable=False, default=EntityStatus.OK
+    )
 
     def check_access_requirements(
         self, user: User, access_type: str = "read", _no_recursive_check=False
