@@ -1058,7 +1058,7 @@ class RequestRestoreDocumentHandler(RequestHandler):
         "type": "object",
         "properties": {
             "document_id": {"type": "string", "minLength": 1},
-            "target_folder_id": {"type": "string", "minLength": 1},
+            "target_folder_id": {"type": ["string", "null"], "minLength": 1},
             "new_title": {"type": "string", "minLength": 1},
         },
         "required": ["document_id"],
@@ -1079,7 +1079,7 @@ class RequestRestoreDocumentHandler(RequestHandler):
             assert user is not None
 
             if Permissions.RESTORE not in user.all_permissions:
-                handler.conclude_request(403, {}, "No permission to restore data")
+                handler.conclude_request(403, {}, smsg.PERMISSION_DENIED)
                 return 403, doc_id, handler.username
 
             document = session.get(
@@ -1089,6 +1089,10 @@ class RequestRestoreDocumentHandler(RequestHandler):
             if not document or document.status != EntityStatus.DELETED:
                 handler.conclude_request(404, {}, "Deleted document not found")
                 return 404, doc_id, handler.username
+
+            if not document.check_access_requirements(user, "write"):
+                handler.conclude_request(403, {}, "Access denied to the document")
+                return 403, doc_id, handler.username
 
             if target_folder_provided:
                 db_folder_id = (
@@ -1114,6 +1118,12 @@ class RequestRestoreDocumentHandler(RequestHandler):
                     handler.conclude_request(404, {}, "Target folder not found")
                     return 404, db_folder_id, handler.username
 
+                if not target_folder.check_access_requirements(user, "write"):
+                    handler.conclude_request(
+                        403, {}, "Access denied to the target folder"
+                    )
+                    return 403, db_folder_id, handler.username
+
                 if target_folder.status != EntityStatus.OK:
                     handler.conclude_request(
                         409,
@@ -1121,12 +1131,6 @@ class RequestRestoreDocumentHandler(RequestHandler):
                         "Cannot restore: Target folder is deleted. Restore it first.",
                     )
                     return 409, doc_id, handler.username
-
-                if not target_folder.check_access_requirements(user, "write"):
-                    handler.conclude_request(
-                        403, {}, "Access denied to the target folder"
-                    )
-                    return 403, db_folder_id, handler.username
 
             existing_conflict = (
                 session.query(Document)
@@ -1163,9 +1167,8 @@ class RequestRestoreDocumentHandler(RequestHandler):
             handler.conclude_request(
                 200,
                 {
-                    "document_id": doc_id,
-                    "new_title": final_title,
-                    "target_folder_id": db_folder_id,
+                    "title": final_title,
+                    "folder_id": db_folder_id,
                 },
                 "Document successfully restored",
             )

@@ -1015,7 +1015,7 @@ class RequestRestoreDirectoryHandler(RequestHandler):
         "type": "object",
         "properties": {
             "folder_id": {"type": "string", "minLength": 1},
-            "target_parent_id": {"type": "string", "minLength": 1},
+            "target_parent_id": {"type": ["string", "null"], "minLength": 1},
             "new_name": {"type": "string", "minLength": 1},
         },
         "required": ["folder_id"],
@@ -1029,6 +1029,10 @@ class RequestRestoreDirectoryHandler(RequestHandler):
         target_parent_provided = "target_parent_id" in handler.data
         target_parent_id = handler.data.get("target_parent_id")
         new_name = handler.data.get("new_name")
+
+        if folder_id == ROOT_DIRECTORY_ID:
+            handler.conclude_request(400, {}, "Cannot restore root directory")
+            return 400, folder_id, handler.username
 
         with Session() as session:
             user = session.get(User, handler.username)
@@ -1045,6 +1049,12 @@ class RequestRestoreDirectoryHandler(RequestHandler):
             if not folder or folder.status != EntityStatus.DELETED:
                 handler.conclude_request(404, {}, "Deleted directory not found")
                 return 404, folder_id, handler.username
+
+            if not folder.check_access_requirements(user, "write"):
+                handler.conclude_request(
+                    403, {}, "Access denied to directory being restored"
+                )
+                return 403, folder_id, handler.username
 
             if target_parent_provided:
                 db_parent_id = (
@@ -1127,6 +1137,6 @@ class RequestRestoreDirectoryHandler(RequestHandler):
             session.commit()
 
             handler.conclude_request(
-                200, {"target_parent_id": db_parent_id}, smsg.SUCCESS
+                200, {"parent_id": db_parent_id, "name": final_name}, smsg.SUCCESS
             )
             return 0, folder_id, handler.username
