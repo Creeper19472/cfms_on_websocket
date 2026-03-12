@@ -257,7 +257,10 @@ def fetch_subtree_for_deletion(
     # 文档归属到各自 folder 的"不可删内容"
     folder_has_undeletable_doc: dict[str, bool] = defaultdict(bool)
     for doc in documents:
-        if doc.active and doc.id not in deletable_doc_ids:
+        is_active = (
+            doc.current_revision is not None and doc.current_revision.file.active
+        )
+        if is_active and doc.id not in deletable_doc_ids:
             if doc.folder_id:
                 folder_has_undeletable_doc[doc.folder_id] = True
 
