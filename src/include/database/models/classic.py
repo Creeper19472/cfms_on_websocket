@@ -21,6 +21,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.orm.session import object_session
 
 from include.classes.auth import Token
+from include.classes.enum.permissions import Permissions
 from include.conf_loader import global_config
 from include.constants import DEFAULT_TOKEN_EXPIRY_SECONDS
 from include.database.handler import Base, Session
@@ -314,7 +315,7 @@ class User(Base):
         # session.commit()
 
     @cached_property
-    def all_permissions(self) -> Set[str]:
+    def all_permissions(self) -> Set[Permissions]:
         now = time.time()
         # 用户自身有效权限
         user_perms = {
@@ -368,7 +369,7 @@ class UserPermission(Base):
     username: Mapped[str] = mapped_column(
         ForeignKey("users.username", ondelete="CASCADE")
     )
-    permission: Mapped[str] = mapped_column(VARCHAR(255))
+    permission: Mapped[Permissions] = mapped_column(VARCHAR(255))
     granted: Mapped[bool] = mapped_column(
         Boolean, default=True
     )  # True: 给予, False: 剥夺

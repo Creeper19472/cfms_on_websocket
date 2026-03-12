@@ -5,16 +5,16 @@ import time
 import jsonschema
 
 from include.classes.connection import ConnectionHandler
+from include.classes.enum.permissions import Permissions
+from include.classes.enum.status import EntityStatus
 from include.classes.request import RequestHandler
 from include.conf_loader import global_config
-from include.constants import AVAILABLE_ACCESS_TYPES
 from include.constants import FILE_TASK_DEFAULT_DURATION_SECONDS
 from include.constants import ROOT_DIRECTORY_ID
 from include.database.handler import Session
 from include.database.models.classic import User
 from include.database.models.entity import (
     Document,
-    DocumentAccessRule,
     DocumentRevision,
     Folder,
     NoActiveRevisionsError,
@@ -538,16 +538,10 @@ class RequestDeleteDocumentHandler(RequestHandler):
                 handler.conclude_request(403, {}, "Access denied to the document")
                 return 403, document_id, handler.username
 
-            try:
-                document.delete_all_revisions()
-            except PermissionError:
-                handler.conclude_request(
-                    500,
-                    {},
-                    "Failed to delete revisions. Perhaps a download task is still in progress?",
-                )
-                return 500, document_id, handler.username
-            session.delete(document)
+            document.status = EntityStatus.DELETED
+            document.status_operation_id = (
+                f"OP_DEL_{secrets.token_hex(8)}_{int(time.time())}"
+            )
             session.commit()
 
         handler.conclude_request(200, {}, "Document successfully deleted")
@@ -998,3 +992,56 @@ class RequestMoveDocumentHandler(RequestHandler):
 
         handler.conclude_request(200, {}, smsg.SUCCESS)
         return 0, document_id, {"target_folder_id": target_folder_id}, handler.username
+
+
+class RequestPurgeDocumentHandler(RequestHandler):
+    """
+    Handles the "purge_document" action, which permanently deletes a document and all its revisions.
+
+    This action is irreversible and should only be allowed for users with special permissions.
+    """
+
+    data_schema = {
+        "type": "object",
+        "properties": {
+            "document_id": {"type": "string", "minLength": 1},
+        },
+        "required": ["document_id"],
+        "additionalProperties": False,
+    }
+
+    require_auth = True
+
+    def handle(self, handler: ConnectionHandler):
+        doc_id = handler.data["document_id"]
+        with Session() as session:
+            user = session.get(User, handler.username)
+            assert user is not None
+
+            if Permissions.PURGE not in user.all_permissions:
+                handler.conclude_request(403, {}, "No permission to permanently delete")
+                return
+
+            document = session.get(
+                Document, doc_id, execution_options={"include_deleted": True}
+            )
+            if document is None:
+                handler.conclude_request(404, {}, "Document not found")
+                return
+
+            if document.status != EntityStatus.DELETED:
+                handler.conclude_request(
+                    400, {}, "Document must be marked as deleted before purging"
+                )
+                return
+
+            if not document.check_access_requirements(user, "write"):
+                handler.conclude_request(403, {}, "Access denied to the document")
+                return
+
+            document.delete_all_revisions(do_commit=False)
+            session.delete(document)
+            session.commit()
+
+        handler.conclude_request(200, {}, "Document permanently deleted")
+        return 0, doc_id, handler.username

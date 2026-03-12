@@ -1,11 +1,12 @@
-from typing import List, Literal, cast
+from typing import Iterable, List, Literal, Union, cast
 from typing import Optional
 
 import secrets
 from sqlalchemy import VARCHAR, Boolean, Float, ForeignKey, Integer, func
+from include.classes.enum.status import DocumentRevisionStatus, EntityStatus
 from include.classes.exceptions import NoActiveRevisionsError
 from include.conf_loader import global_config
-from include.constants import AVAILABLE_ACCESS_TYPES, QUERY_CHUNK_SIZE
+from include.constants import AVAILABLE_ACCESS_TYPES, MAX_PARAM_SIZE, QUERY_CHUNK_SIZE
 from include.database.handler import Base
 from include.classes.access_rule import AccessRuleBase
 from sqlalchemy.orm import Mapped, Session
@@ -26,29 +27,43 @@ from include.util.fetch.fetch import batch_prefetch_granted_ids, prefetch_user_b
 
 
 def _batch_count_other_revisions(
-    session: Session, file_ids, exclude_doc_id: str
-) -> dict:
-    """Count DocumentRevisions referencing any of the given ``file_ids`` that belong
-    to documents *other* than ``exclude_doc_id``.
-
-    Queries are chunked to stay within SQLite's bind-variable limit.
+    session: Session,
+    file_ids: Iterable[str],
+    exclude_doc_ids: Union[str, Iterable[str]],
+) -> dict[str, int]:
     """
-    counts: dict = {}
+    计算引用了指定 file_ids 的修订版本数量，但排除属于 exclude_doc_ids 集合的文档。
+
+    参数:
+        file_ids: 待检查的文件 ID 列表。
+        exclude_doc_ids: 单个文档 ID 或文档 ID 集合。这些文档对文件的引用将不被计入。
+    """
+    counts: dict[str, int] = {}
     if not file_ids:
         return counts
-    for chunk in batched(file_ids, QUERY_CHUNK_SIZE):
-        rows = (
-            session.query(DocumentRevision.file_id, func.count(DocumentRevision.id))
-            .filter(
-                DocumentRevision.file_id.in_(
-                    list(chunk)
-                ),  # list() can be removed actually
-                DocumentRevision.document_id != exclude_doc_id,
-            )
-            .group_by(DocumentRevision.file_id)
-            .all()
-        )
+
+    if isinstance(exclude_doc_ids, str):
+        exclude_doc_ids = [exclude_doc_ids]
+    else:
+        exclude_doc_ids = list(exclude_doc_ids)
+
+    EXCLUDE_CHUNK_SIZE = MAX_PARAM_SIZE - QUERY_CHUNK_SIZE
+
+    for f_chunk in batched(file_ids, QUERY_CHUNK_SIZE):
+        query = session.query(
+            DocumentRevision.file_id, func.count(DocumentRevision.id)
+        ).filter(DocumentRevision.file_id.in_(list(f_chunk)))
+
+        for e_chunk in batched(exclude_doc_ids, EXCLUDE_CHUNK_SIZE):
+            query = query.filter(DocumentRevision.document_id.not_in(list(e_chunk)))
+
+        rows = query.group_by(DocumentRevision.file_id).all()
         counts.update({file_id: count for file_id, count in rows})
+
+    for fid in file_ids:
+        if fid not in counts:
+            counts[fid] = 0
+
     return counts
 
 
@@ -77,8 +92,16 @@ class BaseObject(Base):
     id: Mapped[str]
     access_rules: Mapped[List]
 
-    # Whether to inherit access rules from parent folders. Useful when enabling recursion check.
+    # Whether to inherit access rules from parent folders.
+    # Useful when enabling recursion check.
     inherit: Mapped[bool]
+
+    status: Mapped[EntityStatus] = mapped_column(
+        Integer, nullable=False, default=EntityStatus.OK
+    )
+    status_operation_id: Mapped[Optional[str]] = mapped_column(
+        VARCHAR(255), nullable=True, index=True
+    )
 
     def check_access_requirements(
         self, user: User, access_type: str = "read", _no_recursive_check=False
@@ -313,7 +336,13 @@ class Folder(BaseObject):  # 文档文件夹
 
     @property
     def count_of_child(self):
-        return len(self.children) + sum(1 for doc in self.documents if doc.active)
+        active_folders_count = sum(
+            1 for f in self.children if f.status == EntityStatus.OK
+        )
+        active_docs_count = sum(
+            1 for doc in self.documents if doc.status == EntityStatus.OK and doc.active
+        )
+        return active_folders_count + active_docs_count
 
     def is_descendant_of(self, potential_ancestor: "Folder") -> bool:
         """
@@ -546,6 +575,10 @@ class DocumentRevision(Base):
         "DocumentRevision",
         back_populates="parent_revision",
         foreign_keys="[DocumentRevision.parent_revision_id]",
+    )
+
+    status: Mapped[DocumentRevisionStatus] = mapped_column(
+        Integer, nullable=False, default=DocumentRevisionStatus.OK
     )
 
     @property

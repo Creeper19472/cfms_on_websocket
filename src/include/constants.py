@@ -42,4 +42,5 @@ NONCE_MIN_LENGTH = 16  # Minimum length of a nonce string
 ROOT_DIRECTORY_ID = "/"
 
 # Database Constants
-QUERY_CHUNK_SIZE = 576  # used to prevent hitting the limit of bind variables per queryd
+MAX_PARAM_SIZE = 950  # Maximum number of parameters in a single SQL query
+QUERY_CHUNK_SIZE = 576  # used to prevent hitting the limit of bind variables per query
