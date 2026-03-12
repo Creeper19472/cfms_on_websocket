@@ -1140,3 +1140,93 @@ class RequestRestoreDirectoryHandler(RequestHandler):
                 200, {"parent_id": db_parent_id, "name": final_name}, smsg.SUCCESS
             )
             return 0, folder_id, handler.username
+
+
+class RequestListDeletedItemsHandler(RequestHandler):
+    """
+    Handles the "list_deleted_items" action.
+    Lists folders and documents that have been marked as deleted within
+     a specific parent directory.
+    """
+
+    data_schema = {
+        "type": "object",
+        "properties": {
+            "folder_id": {"type": "string", "minLength": 1},
+        },
+        "required": ["folder_id"],
+        "additionalProperties": False,
+    }
+
+    require_auth = True
+
+    def handle(self, handler: ConnectionHandler):
+        parent_id = handler.data["folder_id"]
+
+        with Session() as session:
+            user = session.get(User, handler.username)
+            assert user is not None
+
+            if Permissions.LIST_DELETED_ITEMS not in user.all_permissions:
+                handler.conclude_request(403, {}, smsg.PERMISSION_DENIED)
+
+            db_parent_id = None if parent_id == ROOT_DIRECTORY_ID else parent_id
+
+            parent_folder = session.get(
+                Folder,
+                db_parent_id or ROOT_DIRECTORY_ID,
+                execution_options={"include_deleted": True},
+            )
+
+            # FIXME: Unify the access requirement check response
+            if not parent_folder or (
+                Permissions.SUPER_LIST_DIRECTORY not in user.all_permissions
+                and not parent_folder.check_access_requirements(user, "read")
+            ):
+                handler.conclude_request(404, {}, "Directory not found")
+                return 404, parent_id, handler.username
+
+            deleted_folders = (
+                session.query(Folder)
+                .execution_options(include_deleted=True)
+                .filter(
+                    Folder.parent_id == db_parent_id,
+                    Folder.status == EntityStatus.DELETED,
+                )
+                .all()
+            )
+
+            deleted_documents = (
+                session.query(Document)
+                .execution_options(include_deleted=True)
+                .filter(
+                    Document.folder_id == db_parent_id,
+                    Document.status == EntityStatus.DELETED,
+                )
+                .all()
+            )
+
+            result_data = {
+                "folders": [
+                    {
+                        "id": f.id,
+                        "name": f.name,
+                        "created_time": f.created_time,
+                        "status_operation_id": f.status_operation_id,
+                    }
+                    for f in deleted_folders
+                ],
+                "documents": [
+                    {
+                        "id": d.id,
+                        "title": d.title,
+                        "created_time": d.created_time,
+                        "status_operation_id": d.status_operation_id,
+                    }
+                    for d in deleted_documents
+                ],
+                "parent_id": parent_id,
+            }
+
+            handler.conclude_request(200, result_data, "Deleted items retrieved")
+            return 0, parent_id, handler.username

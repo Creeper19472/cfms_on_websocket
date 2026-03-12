@@ -151,6 +151,7 @@ def server_init():
             {"permission": Permissions.LIST_USER_BLOCKS},
             {"permission": Permissions.PURGE},
             {"permission": Permissions.RESTORE},
+            {"permission": Permissions.LIST_DELETED_ITEMS},
         ],
     )
 
