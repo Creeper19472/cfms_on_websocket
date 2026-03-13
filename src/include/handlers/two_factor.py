@@ -113,7 +113,7 @@ class RequestValidate2FAHandler(RequestHandler):
         with Session() as session:
             user = session.get(User, username)
             assert user is not None
-            
+
             # Check if TOTP secret exists but not enabled yet
             if not user.totp_secret:
                 handler.conclude_request(
@@ -134,14 +134,17 @@ class RequestValidate2FAHandler(RequestHandler):
             # Verify the provided TOTP token
             if user.verify_totp(token):
                 user.enable_totp()
-                session.commit()
                 success = True
             else:
                 failed = True
 
         if success:
             LoginGuard.report_success(user_id)
-            handler.conclude_request(200, {}, "2FA enabled")
+            handler.conclude_request(
+                code=200,
+                message="Two-factor authentication enabled successfully",
+                data={"method": "totp"},
+            )
         elif failed:
             LoginGuard.report_failure(user_id)
             LoginGuard.report_failure(ip_id)
