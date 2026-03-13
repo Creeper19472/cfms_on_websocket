@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 class User(Base):
     __tablename__ = "users"
     # id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    username: Mapped[str] = mapped_column(VARCHAR(255), primary_key=True)
+    username: Mapped[str] = mapped_column(VARCHAR(64), primary_key=True)
     pass_hash: Mapped[str] = mapped_column(Text)
     passwd_last_modified: Mapped[float] = mapped_column(
         Float, default=0, nullable=False

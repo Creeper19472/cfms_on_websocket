@@ -80,7 +80,7 @@ class RequestCreateUserHandler(RequestHandler):
     data_schema = {
         "type": "object",
         "properties": {
-            "username": {"type": "string", "minLength": 1},
+            "username": {"type": "string", "minLength": 1, "maxLength": 64},
             "password": {"type": "string"},
             "nickname": {"type": "string"},
             "permissions": {

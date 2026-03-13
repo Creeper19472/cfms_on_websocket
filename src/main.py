@@ -23,6 +23,7 @@ Constants:
 import os
 
 from include.classes.enum.permissions import Permissions
+from include.util.entrance import global_process_request
 
 # fix
 os.makedirs("./content/logs/", exist_ok=True)
@@ -305,6 +306,7 @@ def main():
         ssl=ssl_context,
         family=socket_family,
         dualstack_ipv6=global_config["server"]["dualstack_ipv6"],
+        process_request=global_process_request,
     ) as server:
         logger.info(
             f"CFMS WebSocket server started at wss://{global_config['server']['host']}:{global_config['server']['port']}"

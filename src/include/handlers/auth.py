@@ -1,12 +1,13 @@
 import time
 
 from include.classes.connection import ConnectionHandler
+from include.classes.misc.guard import LoginGuard
 from include.classes.request import RequestHandler
 from include.conf_loader import global_config
-from include.constants import FAILED_LOGIN_DELAY_SECONDS
 from include.database.handler import Session
 from include.database.models.keyring import UserKey
 from include.database.models.classic import User
+from include.util.address import get_client_ip
 from include.util.audit import log_audit
 from include.util.pwd import check_passwd_requirements
 
@@ -41,22 +42,31 @@ class RequestLoginHandler(RequestHandler):
         username: str = handler.data["username"]
         password: str = handler.data["password"]
         two_factor_auth_token: str = handler.data.get("2fa_token", "")
+        
+        ip = get_client_ip(handler.websocket)
+        ip_id = f"ip_limit|{ip}"
+        user_id = f"user_limit|{ip}|{username}"
+
+        if not LoginGuard.check_access(user_id):
+            handler.conclude_request(429, {}, "Too many login attempts. Please try again later.")
+            return 429, username
 
         cfg = global_config["security"]
         response_invalid = {"code": 401, "message": "Invalid credentials", "data": {}}
-        should_delay = False
+        failed = False
+        login_actually_success = False
 
         with Session() as session:
             user = session.get(User, username)
 
             if not user:
                 response = response_invalid
-                should_delay = True
+                failed = True
             else:
                 token = user.authenticate_and_create_token(password)
                 if not token:
                     response = response_invalid
-                    should_delay = True
+                    failed = True
                 else:
                     # enforce password policy (force change)
                     try:
@@ -119,22 +129,28 @@ class RequestLoginHandler(RequestHandler):
                                 "message": "Invalid two-factor authentication token",
                                 "data": {},
                             }
-                            should_delay = True
+                            failed = True
                         else:
                             response = {
                                 "code": 200,
                                 "message": "Login successful",
                                 "data": success_data,
                             }
+                            login_actually_success = True
                     else:
                         response = {
                             "code": 200,
                             "message": "Login successful",
                             "data": success_data,
                         }
+                        login_actually_success = True
 
-        if should_delay:
-            time.sleep(FAILED_LOGIN_DELAY_SECONDS)
+        if login_actually_success:
+            LoginGuard.report_success(user_id)
+            LoginGuard.report_success(ip_id)
+        elif failed:
+            LoginGuard.report_failure(user_id, max_attempts=5)
+            LoginGuard.report_failure(ip_id, max_attempts=20)
 
         handler.conclude_request(**response)
         return response["code"], username
