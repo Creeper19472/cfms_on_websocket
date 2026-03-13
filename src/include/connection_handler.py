@@ -193,13 +193,13 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
     if not LoginGuard.check_access(f"ip_limit:{ip}"):
         response = {
             "code": 403,
-            "message": "Your IP has been banned due to suspicious activity.",
+            "message": "Your IP has been temporarily blocked due to suspicious activity. Please try again later.",
             "timestamp": time.time(),
         }
         websocket.send(json.dumps(response))
         # 强制断开 WebSocket 连接
         # 1008 是 WebSocket 协议定义的 Policy Violation 错误码
-        websocket.close(code=1008, reason="IP Banned")
+        websocket.close(code=1008, reason="IP temporarily blocked")
         return
 
     try:

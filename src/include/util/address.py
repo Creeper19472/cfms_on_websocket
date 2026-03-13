@@ -1,15 +1,26 @@
 from websockets.sync.server import ServerConnection
 
 
+# IP addresses of trusted reverse proxies that may set X-Forwarded-For / X-Real-IP.
+# Adjust this set as needed for your deployment environment.
+TRUSTED_PROXY_IPS = frozenset({"127.0.0.1", "::1"})
+
+
 def get_client_ip(websocket: ServerConnection) -> str:
     assert websocket.request is not None
 
-    forwarded_for = websocket.request.headers.get("X-Forwarded-For")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
+    # The actual TCP peer address of the websocket connection.
+    peer_ip = websocket.remote_address[0]
 
-    real_ip = websocket.request.headers.get("X-Real-IP")
-    if real_ip:
-        return real_ip.strip()
+    # Only trust forwarding headers if the TCP peer is a known reverse proxy.
+    if peer_ip in TRUSTED_PROXY_IPS:
+        forwarded_for = websocket.request.headers.get("X-Forwarded-For")
+        if forwarded_for:
+            return forwarded_for.split(",")[0].strip()
 
-    return websocket.remote_address[0]
+        real_ip = websocket.request.headers.get("X-Real-IP")
+        if real_ip:
+            return real_ip.strip()
+
+    # Fallback to the peer IP when no trusted proxy is involved or no headers are present.
+    return peer_ip
