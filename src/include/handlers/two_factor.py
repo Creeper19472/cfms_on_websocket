@@ -10,8 +10,8 @@ import time
 
 from include.classes.connection import ConnectionHandler
 from include.classes.enum.permissions import Permissions
+from include.classes.misc.guard import LoginGuard
 from include.classes.request import RequestHandler
-from include.constants import FAILED_LOGIN_DELAY_SECONDS
 from include.database.handler import Session
 from include.database.models.classic import User
 
@@ -97,51 +97,43 @@ class RequestValidate2FAHandler(RequestHandler):
 
     def handle(self, handler: ConnectionHandler):
         token = handler.data["token"]
+        username = handler.username
+        ip = handler.remote_address
+
+        user_id = f"user_limit:{ip}:{username}"
+        ip_id = f"ip_limit:{ip}"
+
+        if not LoginGuard.check_access(user_id):
+            handler.conclude_request(429, {}, "Too many 2FA attempts.")
+            return
+
+        failed = False
+        success = False
 
         with Session() as session:
-            user = session.get(User, handler.username)
-
-            if not user:
-                handler.conclude_request(
-                    code=404,
-                    message="User not found",
-                    data={},
-                )
-                return 404, handler.username
-
-            # Check if TOTP secret exists but not enabled yet
-            if not user.totp_secret:
-                handler.conclude_request(
-                    code=400,
-                    message="Two-factor authentication has not been set up. Please set it up first.",
-                    data={},
-                )
+            user = session.get(User, username)
+            assert user is not None
+            if not user.totp_secret or user.totp_enabled:
+                handler.conclude_request(400, {}, "Invalid state for 2FA validation")
                 return
 
-            if user.totp_enabled:
-                handler.conclude_request(
-                    code=400,
-                    message="Two-factor authentication is already enabled.",
-                    data={"method": "totp"},
-                )
-                return
-
-            # Verify the token
+            # Verify the provided TOTP token
             if user.verify_totp(token):
                 user.enable_totp()
-                handler.conclude_request(
-                    code=200,
-                    message="Two-factor authentication enabled successfully",
-                    data={"method": "totp"},
-                )
-                return 200, handler.username
+                session.commit()
+                success = True
             else:
-                handler.conclude_request(
-                    code=401,
-                    message="Invalid verification code",
-                    data={},
-                )
-                return 401, handler.username
+                failed = True
+
+        if success:
+            LoginGuard.report_success(user_id)
+            handler.conclude_request(200, {}, "2FA enabled")
+        elif failed:
+            LoginGuard.report_failure(user_id)
+            LoginGuard.report_failure(ip_id)
+            handler.conclude_request(401, {}, "Invalid verification code")
+
+        return (200 if success else 401), username
 
 
 class RequestDisable2FAHandler(RequestHandler):
@@ -151,6 +143,8 @@ class RequestDisable2FAHandler(RequestHandler):
     This handler disables and removes TOTP configuration for the user.
     The user must provide their password for verification.
     """
+
+    # TODO: Allow sysops to disable 2FA for users who lost access
 
     data_schema = {
         "type": "object",
@@ -165,45 +159,41 @@ class RequestDisable2FAHandler(RequestHandler):
 
     def handle(self, handler: ConnectionHandler):
         password = handler.data["password"]
+        username = handler.username
+        ip = handler.remote_address
+
+        user_id = f"user_limit:{ip}:{username}"
+        ip_id = f"ip_limit:{ip}"
+
+        if not LoginGuard.check_access(user_id):
+            handler.conclude_request(429, {}, "Too many attempts.")
+            return
+
+        failed = False
+        success = False
 
         with Session() as session:
-            user = session.get(User, handler.username)
-
-            if not user:
-                handler.conclude_request(
-                    code=404,
-                    message="User not found",
-                    data={},
-                )
-                return 404, handler.username
-
-            # Check if 2FA is enabled
-            if not user.totp_enabled:
-                handler.conclude_request(
-                    code=400,
-                    message="Two-factor authentication is not enabled",
-                )
+            user = session.get(User, username)
+            if not user or not user.totp_enabled:
+                handler.conclude_request(400, {}, "2FA not enabled or user not found")
                 return
 
-            # Verify password
             if not user.authenticate_and_create_token(password):
-                time.sleep(FAILED_LOGIN_DELAY_SECONDS)  # Mitigate brute-force attacks
+                failed = True
+            else:
+                user.disable_totp()
+                success = True
 
-                handler.conclude_request(
-                    code=401,
-                    message="Invalid password",
-                    data={},
-                )
-                return 401, handler.username
+        if success:
+            LoginGuard.report_success(user_id)
+            LoginGuard.report_success(ip_id)
+            handler.conclude_request(200, {}, "2FA disabled successfully")
+        elif failed:
+            LoginGuard.report_failure(user_id)
+            LoginGuard.report_failure(ip_id)
+            handler.conclude_request(401, {}, "Invalid password")
 
-            # Disable TOTP
-            user.disable_totp()
-
-            handler.conclude_request(
-                code=200,
-                message="Two-factor authentication disabled successfully",
-            )
-            return 200, handler.username
+        return (200 if success else 401), username
 
 
 class RequestCancel2FASetupHandler(RequestHandler):

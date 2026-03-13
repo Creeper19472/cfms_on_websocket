@@ -8,11 +8,13 @@ import websockets
 import websockets.sync.server
 from websockets.typing import Data
 from include.classes.enum.permissions import Permissions
+from include.classes.misc.guard import LoginGuard
 from include.classes.request import RequestHandler
 from include.conf_loader import global_config
 from include.classes.connection import ConnectionHandler
 from include.database.handler import Session
 from include.database.models.classic import User
+from include.util.address import get_client_ip
 from include.util.audit import log_audit
 from include.handlers.auth import RequestLoginHandler, RequestRefreshTokenHandler
 from include.handlers.two_factor import (
@@ -185,6 +187,21 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
         websocket: The WebSocket connection object.
         message: The data/message received from the client.
     """
+
+    ip = get_client_ip(websocket)
+
+    if not LoginGuard.check_access(f"ip_limit:{ip}"):
+        response = {
+            "code": 403,
+            "message": "Your IP has been banned due to suspicious activity.",
+            "timestamp": time.time(),
+        }
+        websocket.send(json.dumps(response))
+        # 强制断开 WebSocket 连接
+        # 1008 是 WebSocket 协议定义的 Policy Violation 错误码
+        websocket.close(code=1008, reason="IP Banned")
+        return
+
     try:
         this_handler = ConnectionHandler(websocket, message)
     except jsonschema.ValidationError as error:

@@ -6,7 +6,6 @@ __all__ = [
     "AVAILABLE_ACCESS_TYPES",
     "AVAILABLE_BLOCK_TYPES",
     "DEFAULT_TOKEN_EXPIRY_SECONDS",
-    "FAILED_LOGIN_DELAY_SECONDS",
     "DEFAULT_SSL_CERT_VALIDITY_DAYS",
     "FILE_TRANSFER_MAX_CHUNK_SIZE",
     "FILE_TRANSFER_MIN_CHUNK_SIZE",
@@ -24,7 +23,6 @@ AVAILABLE_BLOCK_TYPES: set = {"read", "write", "move"}
 
 # Authentication and Security Constants
 DEFAULT_TOKEN_EXPIRY_SECONDS = 3600  # 1 hour
-FAILED_LOGIN_DELAY_SECONDS = 3  # Delay after failed login attempt
 DEFAULT_SSL_CERT_VALIDITY_DAYS = 365  # 1 year
 
 # File Transfer Constants
