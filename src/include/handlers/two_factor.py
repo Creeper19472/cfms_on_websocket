@@ -100,8 +100,8 @@ class RequestValidate2FAHandler(RequestHandler):
         username = handler.username
         ip = handler.remote_address
 
-        user_id = f"user_limit:{ip}:{username}"
-        ip_id = f"ip_limit:{ip}"
+        user_id = f"user_limit|{ip}|{username}"
+        ip_id = f"ip_limit|{ip}"
 
         if not LoginGuard.check_access(user_id):
             handler.conclude_request(429, {}, "Too many 2FA attempts.")
@@ -112,7 +112,14 @@ class RequestValidate2FAHandler(RequestHandler):
 
         with Session() as session:
             user = session.get(User, username)
-            assert user is not None
+
+            if user is None:
+                handler.conclude_request(
+                    code=404,
+                    message="User not found",
+                    data={},
+                )
+                return
 
             # Check if TOTP secret exists but not enabled yet
             if not user.totp_secret:
@@ -179,8 +186,8 @@ class RequestDisable2FAHandler(RequestHandler):
         username = handler.username
         ip = handler.remote_address
 
-        user_id = f"user_limit:{ip}:{username}"
-        ip_id = f"ip_limit:{ip}"
+        user_id = f"user_limit|{ip}|{username}"
+        ip_id = f"ip_limit|{ip}"
 
         if not LoginGuard.check_access(user_id):
             handler.conclude_request(429, {}, "Too many attempts.")

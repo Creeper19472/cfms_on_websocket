@@ -190,7 +190,7 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
 
     ip = get_client_ip(websocket)
 
-    if not LoginGuard.check_access(f"ip_limit:{ip}"):
+    if not LoginGuard.check_access(f"ip_limit|{ip}"):
         response = {
             "code": 403,
             "message": "Your IP has been temporarily blocked due to suspicious activity. Please try again later.",

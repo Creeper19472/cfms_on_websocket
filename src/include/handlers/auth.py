@@ -44,8 +44,8 @@ class RequestLoginHandler(RequestHandler):
         two_factor_auth_token: str = handler.data.get("2fa_token", "")
         
         ip = get_client_ip(handler.websocket)
-        ip_id = f"ip_limit:{ip}"
-        user_id = f"user_limit:{ip}:{username}"
+        ip_id = f"ip_limit|{ip}"
+        user_id = f"user_limit|{ip}|{username}"
 
         if not LoginGuard.check_access(user_id):
             handler.conclude_request(429, {}, "Too many login attempts. Please try again later.")
