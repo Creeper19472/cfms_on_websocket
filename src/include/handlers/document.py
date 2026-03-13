@@ -119,7 +119,7 @@ class RequestGetDocumentInfoHandler(RequestHandler):
             info_code = 0
             ### generate access_rules text
             access_rules = []
-            if "view_access_rules" in user.all_permissions:
+            if Permissions.VIEW_ACCESS_RULES in user.all_permissions:
                 for each_rule in document.access_rules:
                     access_rules.append(
                         {
@@ -173,7 +173,7 @@ class RequestGetDocumentAccessRulesHandler(RequestHandler):
 
             if (
                 not document.check_access_requirements(user, access_type="read")
-                or not "view_access_rules" in user.all_permissions
+                or not Permissions.VIEW_ACCESS_RULES in user.all_permissions
             ):
                 handler.conclude_request(403, {}, "Permission denied")
                 return 403, document_id, handler.username
@@ -275,7 +275,7 @@ class RequestCreateDocumentHandler(RequestHandler):
             user = session.get(User, handler.username)
             assert user is not None
 
-            if "create_document" not in user.all_permissions:
+            if Permissions.CREATE_DOCUMENT not in user.all_permissions:
                 handler.conclude_request(403, {}, "Permission denied")
                 return 403, folder_id, {"title": title}, handler.username
 
@@ -288,7 +288,7 @@ class RequestCreateDocumentHandler(RequestHandler):
 
                 if (
                     not folder.check_access_requirements(user, access_type="write")
-                    and "super_create_document" not in user.all_permissions
+                    and Permissions.SUPER_CREATE_DOCUMENT not in user.all_permissions
                 ):
                     handler.conclude_request(403, {}, "Access denied to the folder")
                     return 403, folder_id, {"title": title}, handler.username
@@ -299,7 +299,7 @@ class RequestCreateDocumentHandler(RequestHandler):
                     and not root_folder.check_access_requirements(
                         user, access_type="write"
                     )
-                    and "super_create_document" not in user.all_permissions
+                    and Permissions.SUPER_CREATE_DOCUMENT not in user.all_permissions
                 ):
                     handler.conclude_request(403, {}, "Access denied to the folder")
                     return 403, folder_id, {"title": title}, handler.username
@@ -532,7 +532,7 @@ class RequestDeleteDocumentHandler(RequestHandler):
                 return 404, document_id, handler.username
 
             if (
-                "delete_document" not in user.all_permissions
+                Permissions.DELETE_DOCUMENT not in user.all_permissions
                 or not document.check_access_requirements(user, access_type="write")
             ):
                 handler.conclude_request(403, {}, "Access denied to the document")
@@ -582,7 +582,7 @@ class RequestRenameDocumentHandler(RequestHandler):
                 )
                 return 404, document_id, handler.username
             if (
-                "rename_document" not in this_user.all_permissions
+                Permissions.RENAME_DOCUMENT not in this_user.all_permissions
                 or not document.check_access_requirements(this_user, "write")
             ):
                 handler.conclude_request(
@@ -792,7 +792,7 @@ class RequestSetDocumentRulesHandler(RequestHandler):
                 handler.conclude_request(404, {}, "Document not found")
                 return 404, document_id, handler.username
 
-            if "set_access_rules" not in user.all_permissions:
+            if Permissions.SET_ACCESS_RULES not in user.all_permissions:
                 handler.conclude_request(403, {}, "Access denied to set access rules")
                 return 403, document_id, handler.username
 
@@ -847,7 +847,7 @@ class RequestMoveDocumentHandler(RequestHandler):
             user = session.get(User, handler.username)
             assert user is not None
 
-            if "move" not in user.all_permissions:
+            if Permissions.MOVE not in user.all_permissions:
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MOVE_DOCUMENT)
                 return (
                     403,
@@ -975,7 +975,7 @@ class RequestMoveDocumentHandler(RequestHandler):
                 if (
                     root_folder is not None
                     and not root_folder.check_access_requirements(user, "write")
-                    and "super_create_document" not in user.all_permissions
+                    and Permissions.SUPER_CREATE_DOCUMENT not in user.all_permissions
                 ):
                     handler.conclude_request(
                         403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY

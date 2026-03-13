@@ -1,5 +1,6 @@
 from typing import Optional
 from include.classes.connection import ConnectionHandler
+from include.classes.enum.permissions import Permissions
 from include.classes.request import RequestHandler
 from include.database.handler import Session
 from include.database.models.classic import (
@@ -28,7 +29,7 @@ class RequestListGroupsHandler(RequestHandler):
             user = session.get(User, handler.username)  # 执行操作的用户
             assert user is not None
 
-            if "list_groups" not in user.all_permissions:
+            if Permissions.LIST_GROUPS not in user.all_permissions:
                 handler.conclude_request(
                     **{
                         "code": 403,
@@ -85,6 +86,10 @@ class RequestCreateGroupHandler(RequestHandler):
     require_auth = True
 
     def handle(self, handler: ConnectionHandler):
+        data = handler.data
+        new_group_name = data["group_name"]
+        new_display_name = data.get("display_name")
+        new_group_permissions = data.get("permissions", [])
 
         with Session() as session:
             user = session.get(User, handler.username)
@@ -93,50 +98,18 @@ class RequestCreateGroupHandler(RequestHandler):
             # currently handle_create_group() will not judge whether the requesting
             # user is eligible to apply the given permissions for the new group.
             #
-            # "create_group" is a dangerous privilege that should only be held by administrators.
+            # `Permissions.CREATE_GROUP` is a dangerous privilege that should only
+            # be held by administrators.
 
-            if "create_group" not in user.all_permissions:
+            if Permissions.CREATE_GROUP not in user.all_permissions:
                 handler.conclude_request(
-                    **{
-                        "code": 403,
-                        "message": "You do not have permission to create groups",
-                        "data": {},
-                    }
+                    403, {}, "You do not have permission to create groups"
                 )
                 return
 
-            new_group_name: str = handler.data["group_name"]
-
-            existing_group = session.get(UserGroup, new_group_name)
-            if existing_group:
-                handler.conclude_request(
-                    **{"code": 400, "message": "Group already exists", "data": {}}
-                )
+            if session.get(UserGroup, new_group_name):
+                handler.conclude_request(400, {}, "Group already exists")
                 return
-            del existing_group
-
-            new_display_name: Optional[str] = handler.data.get("display_name", None)
-            new_group_permissions: list[dict] = handler.data.get("permissions", [])
-
-            for right in new_group_permissions:
-                if (
-                    not isinstance(right, dict)
-                    or not right.get("permission")
-                    or "start_time" not in right
-                    or not isinstance(right["start_time"], float)
-                    or (
-                        right.get("end_time")
-                        and not isinstance(right["end_time"], float)
-                    )
-                ):
-                    handler.conclude_request(
-                        **{
-                            "code": 400,
-                            "message": "Invalid permissions format",
-                            "data": {},
-                        }
-                    )
-                    return
 
             create_group(
                 group_name=new_group_name,
@@ -144,13 +117,8 @@ class RequestCreateGroupHandler(RequestHandler):
                 permissions=new_group_permissions,
             )
 
-        response = {
-            "code": 200,
-            "message": "Group created successfully",
-            "data": {},
-        }
-
-        handler.conclude_request(**response)
+        handler.conclude_request(200, {}, "Group created successfully")
+        return 0, new_group_name, handler.username
 
 
 class RequestDeleteGroupHandler(RequestHandler):
@@ -163,18 +131,15 @@ class RequestDeleteGroupHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
 
         with Session() as session:
             this_user = session.get(User, handler.username)
+            assert this_user is not None
 
-            if not this_user or not this_user.is_token_valid(handler.token):
-                handler.conclude_request(
-                    **{"code": 403, "message": "Invalid user or token", "data": {}}
-                )
-                return
-
-            if "delete_group" not in this_user.all_permissions:
+            if Permissions.DELETE_GROUP not in this_user.all_permissions:
                 handler.conclude_request(
                     **{
                         "code": 403,
@@ -182,7 +147,7 @@ class RequestDeleteGroupHandler(RequestHandler):
                         "data": {},
                     }
                 )
-                return
+                return 403, handler.data["group_name"], handler.username
 
             group_to_delete_name: str = handler.data["group_name"]
             group_to_delete = session.get(UserGroup, group_to_delete_name)
@@ -191,7 +156,7 @@ class RequestDeleteGroupHandler(RequestHandler):
                 handler.conclude_request(
                     **{"code": 404, "message": "Group does not exist", "data": {}}
                 )
-                return
+                return 404, group_to_delete_name, handler.username
 
             # Retrieve all memberships associated with the group
             memberships_to_delete = (
@@ -221,6 +186,7 @@ class RequestDeleteGroupHandler(RequestHandler):
         }
 
         handler.conclude_request(**response)
+        return 0, handler.data["group_name"], handler.username
 
 
 class RequestRenameGroupHandler(RequestHandler):
@@ -234,20 +200,17 @@ class RequestRenameGroupHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
 
         target_group_name: str = handler.data["group_name"]
 
         with Session() as session:
             this_user = session.get(User, handler.username)
+            assert this_user is not None
 
-            if not this_user or not this_user.is_token_valid(handler.token):
-                handler.conclude_request(
-                    **{"code": 403, "message": "Invalid user or token", "data": {}}
-                )
-                return
-
-            if "rename_group" not in this_user.all_permissions:
+            if Permissions.RENAME_GROUP not in this_user.all_permissions:
                 handler.conclude_request(
                     **{
                         "code": 403,
@@ -255,7 +218,7 @@ class RequestRenameGroupHandler(RequestHandler):
                         "data": {},
                     }
                 )
-                return
+                return 403, target_group_name, handler.username
 
             new_display_name: str | None = handler.data.get("display_name", None)
             if type(new_display_name) not in (str, None):
@@ -285,6 +248,7 @@ class RequestRenameGroupHandler(RequestHandler):
         }
 
         handler.conclude_request(**response)
+        return 0, target_group_name, handler.username
 
 
 class RequestGetGroupInfoHandler(RequestHandler):
@@ -311,7 +275,7 @@ class RequestGetGroupInfoHandler(RequestHandler):
                 )
                 return
 
-            if "get_group_info" not in user.all_permissions:
+            if Permissions.GET_GROUP_INFO not in user.all_permissions:
                 handler.conclude_request(
                     **{
                         "code": 403,
@@ -319,14 +283,14 @@ class RequestGetGroupInfoHandler(RequestHandler):
                         "data": {},
                     }
                 )
-                return
+                return 403, handler.data["group_name"], handler.username
 
             group = session.get(UserGroup, handler.data["group_name"])
             if not group:
                 handler.conclude_request(
                     **{"code": 404, "message": "Group does not exist", "data": {}}
                 )
-                return
+                return 404, handler.data["group_name"], handler.username
 
             response = {
                 "code": 200,
@@ -340,6 +304,7 @@ class RequestGetGroupInfoHandler(RequestHandler):
             }
 
             handler.conclude_request(**response)
+            return 0, handler.data["group_name"], handler.username
 
 
 class RequestChangeGroupPermissionsHandler(RequestHandler):
@@ -359,16 +324,13 @@ class RequestChangeGroupPermissionsHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
 
         with Session() as session:
             user = session.get(User, handler.username)
-
-            if not user or not user.is_token_valid(handler.token):
-                handler.conclude_request(
-                    **{"code": 403, "message": "Invalid user or token", "data": {}}
-                )
-                return
+            assert user is not None
 
             if not handler.data["group_name"]:
                 handler.conclude_request(
@@ -376,7 +338,7 @@ class RequestChangeGroupPermissionsHandler(RequestHandler):
                 )
                 return
 
-            if "set_group_permissions" not in user.all_permissions:
+            if Permissions.SET_GROUP_PERMISSIONS not in user.all_permissions:
                 handler.conclude_request(
                     **{
                         "code": 403,
@@ -384,14 +346,14 @@ class RequestChangeGroupPermissionsHandler(RequestHandler):
                         "data": {},
                     }
                 )
-                return
+                return 403, handler.data["group_name"], handler.username
 
             group = session.get(UserGroup, handler.data["group_name"])
             if not group:
                 handler.conclude_request(
                     **{"code": 404, "message": "Group does not exist", "data": {}}
                 )
-                return
+                return 404, handler.data["group_name"], handler.username
 
             new_permissions = handler.data.get("permissions", [])
 
@@ -417,3 +379,4 @@ class RequestChangeGroupPermissionsHandler(RequestHandler):
         }
 
         handler.conclude_request(**response)
+        return 0, handler.data["group_name"], handler.username

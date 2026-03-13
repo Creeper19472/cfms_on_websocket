@@ -1,4 +1,5 @@
 from include.classes.connection import ConnectionHandler
+from include.classes.enum.permissions import Permissions
 from include.classes.request import RequestHandler
 from include.database.handler import Session
 from include.database.models.classic import (
@@ -53,6 +54,8 @@ class RequestGrantAccessHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
 
         entity_type: str = handler.data["entity_type"]
@@ -74,12 +77,9 @@ class RequestGrantAccessHandler(RequestHandler):
                 return 400, None, handler.data, handler.username
 
             operator = session.get(User, handler.username)
+            assert operator is not None
 
-            if not operator or not operator.is_token_valid(handler.token):
-                handler.conclude_request(403, {}, "Invalid user or token")
-                return
-
-            if "manage_access" not in operator.all_permissions:
+            if Permissions.MANAGE_ACCESS not in operator.all_permissions:
                 handler.conclude_request(
                     code=403,
                     message="You do not have permission to manage object access",
@@ -158,6 +158,8 @@ class RequestViewAccessEntriesHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
         object_type: str = handler.data["object_type"]
         object_identifier: str = handler.data["object_identifier"]
@@ -165,12 +167,9 @@ class RequestViewAccessEntriesHandler(RequestHandler):
         with Session() as session:
 
             operator = session.get(User, handler.username)
+            assert operator is not None
 
-            if not operator or not operator.is_token_valid(handler.token):
-                handler.conclude_request(403, {}, "Invalid user or token")
-                return
-
-            if "view_access_entries" not in operator.all_permissions:
+            if Permissions.VIEW_ACCESS_ENTRIES not in operator.all_permissions:
                 handler.conclude_request(
                     code=403,
                     message="You do not have permission to view access entries",
@@ -234,24 +233,23 @@ class RequestRevokeAccessHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
         entry_id: int = handler.data["entry_id"]
 
         with Session() as session:
 
             operator = session.get(User, handler.username)
+            assert operator is not None
 
-            if not operator or not operator.is_token_valid(handler.token):
-                handler.conclude_request(403, {}, "Invalid user or token")
-                return
-
-            if "manage_access" not in operator.all_permissions:
+            if Permissions.MANAGE_ACCESS not in operator.all_permissions:
                 handler.conclude_request(
                     code=403,
                     message="You do not have permission to manage object access",
                     data={},
                 )
-                return 403, handler.username
+                return 403, None, handler.username
 
             # Get the access entry
             entry = session.get(ObjectAccessEntry, entry_id)

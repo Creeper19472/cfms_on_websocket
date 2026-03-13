@@ -73,7 +73,7 @@ class RequestListDirectoryHandler(RequestHandler):
                 )
                 root_folder = session.get(Folder, ROOT_DIRECTORY_ID)
                 has_permission = (
-                    "super_list_directory" in this_user.all_permissions
+                    Permissions.SUPER_LIST_DIRECTORY in this_user.all_permissions
                     or (
                         root_folder is not None
                         and root_folder.check_access_requirements(this_user, "read")
@@ -86,7 +86,7 @@ class RequestListDirectoryHandler(RequestHandler):
                     return 404, folder_id, handler.username
 
                 has_permission = (
-                    "super_list_directory" in this_user.all_permissions
+                    Permissions.SUPER_LIST_DIRECTORY in this_user.all_permissions
                     or folder.check_access_requirements(this_user, "read")
                 )
                 parent = folder.parent
@@ -297,89 +297,74 @@ class RequestCreateDirectoryHandler(RequestHandler):
     require_auth = True
 
     def handle(self, handler: ConnectionHandler):
-
-        # Parse the directory creation request
-        parent_id: Optional[str] = handler.data.get("parent_id")
-        name: str = handler.data["name"]
-        access_rules_to_apply: dict[str, list[dict]] = handler.data.get(
-            "access_rules", {}
-        )
-        exists_ok = handler.data.get("exists_ok", False)
-        inherit_parent: bool = handler.data.get("inherit_parent", True)
+        data = handler.data
+        parent_id = data.get("parent_id")
+        name = data["name"]
+        access_rules = data.get("access_rules", {})
+        exists_ok = data.get("exists_ok", False)
+        inherit_parent = data.get("inherit_parent", True)
 
         if parent_id == ROOT_DIRECTORY_ID:
             handler.conclude_request(404, {}, smsg.DIRECTORY_NOT_FOUND)
-            return 404, parent_id, handler.username
+            return
 
         with Session() as session:
             this_user = session.get(User, handler.username)
             assert this_user is not None  # require_auth ensures this
 
-            if parent_id:
-                parent = session.get(Folder, parent_id)
-                if not parent:
-                    handler.conclude_request(
-                        **{
-                            "code": 404,
-                            "message": "Parent directory not found",
-                            "data": {},
-                        }
-                    )
-                    return 404, parent_id, handler.username
-                if not parent.check_access_requirements(this_user, "write"):
-                    handler.conclude_request(
-                        **{"code": 403, "message": "Access denied", "data": {}}
-                    )
-                    return 403, parent_id, handler.username
-
-            else:
-                parent = None
-                root_folder = session.get(Folder, ROOT_DIRECTORY_ID)
-                if (
-                    root_folder is not None
-                    and not root_folder.check_access_requirements(this_user, "write")
-                    and "super_create_directory" not in this_user.all_permissions
-                ):
-                    handler.conclude_request(
-                        **{"code": 403, "message": "Access denied", "data": {}}
-                    )
-                    return 403, parent_id, handler.username
-
-            if "create_directory" not in this_user.all_permissions:
+            if Permissions.CREATE_DIRECTORY not in this_user.all_permissions:
                 handler.conclude_request(
-                    **{
-                        "code": 403,
-                        "message": "You do have no permissions to create new folders",
-                        "data": {},
-                    }
+                    403, {}, "You have no permissions to create directories"
                 )
                 return 403, parent_id, handler.username
 
-            # Check for duplicate folder or document name under the same parent
+            parent = None
+            if parent_id:
+                parent = session.get(Folder, parent_id)
+                if not parent:
+                    handler.conclude_request(404, {}, smsg.DIRECTORY_NOT_FOUND)
+                    return 404, parent_id, handler.username
+                if not parent.check_access_requirements(this_user, "write"):
+                    handler.conclude_request(
+                        403, {}, "Access denied for parent directory"
+                    )
+                    return 403, parent_id, handler.username
+            else:
+                root_folder = session.get(Folder, ROOT_DIRECTORY_ID)
+                has_root_write = (
+                    root_folder.check_access_requirements(this_user, "write")
+                    if root_folder
+                    else True
+                )
+                if (
+                    not has_root_write
+                    and Permissions.SUPER_CREATE_DIRECTORY
+                    not in this_user.all_permissions
+                ):
+                    handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
+                    return 403, parent_id, handler.username
+
             if not global_config["document"]["allow_name_duplicate"]:
+                existing_doc = (
+                    session.query(Document)
+                    .filter_by(folder_id=parent_id if parent_id else None, title=name)
+                    .first()
+                )
+                if existing_doc:
+                    handler.conclude_request(
+                        400,
+                        {"type": "document", "id": existing_doc.id},
+                        smsg.DOCUMENT_NAME_DUPLICATE,
+                    )
+                    return
+
                 existing_folder = (
                     session.query(Folder)
                     .filter_by(parent_id=parent_id if parent_id else None, name=name)
                     .first()
                 )
-                existing_document = (
-                    session.query(Document)
-                    .filter_by(folder_id=parent_id if parent_id else None, title=name)
-                    .first()
-                )
 
-                if existing_document:
-                    # 如果存在同名文档，无论是否有 exists_ok 都不能忽略重名
-                    # 提醒删除该重名的文档
-                    handler.conclude_request(
-                        400,
-                        {"type": "document", "id": existing_document.id},
-                        smsg.DOCUMENT_NAME_DUPLICATE,
-                    )
-                    return
-
-                elif existing_folder:  # 第二步判断有无同名文件夹，如有检查 exists_ok
-
+                if existing_folder:
                     if exists_ok:
                         handler.conclude_request(
                             200,
@@ -390,54 +375,32 @@ class RequestCreateDirectoryHandler(RequestHandler):
                             },
                             "Directory already exists",
                         )
-                        return 0, parent_id, handler.username
+                        return
                     else:
-                        handler.conclude_request(
-                            400,
-                            {},
-                            smsg.DIRECTORY_NAME_DUPLICATE,  # 第一步判断已经知道没有同名文档，则一定是同名文件夹
-                        )
+                        handler.conclude_request(400, {}, smsg.DIRECTORY_NAME_DUPLICATE)
                         return
 
             folder = Folder(name=name, parent=parent)
-
-            if apply_access_rules(
-                folder, access_rules_to_apply, this_user, inherit_parent
-            ):
-                session.add(folder)
-                session.commit()
-                handler.conclude_request(
-                    200,
-                    {
-                        "id": folder.id,
-                        "name": folder.name,
-                        "last_modified": folder.created_time,
-                    },
-                    "Directory created successfully",
-                )
-                log_audit(
-                    "create_directory",
-                    username=handler.username,
-                    target=parent_id,
-                    result=0,
-                    remote_address=handler.remote_address,
-                )
-
-            else:
+            if not apply_access_rules(folder, access_rules, this_user, inherit_parent):
                 session.rollback()
                 handler.conclude_request(
                     403, {}, "Set access rules failed: permission denied"
                 )
-                log_audit(
-                    "create_directory",
-                    username=handler.username,
-                    target=parent_id,
-                    result=403,
-                    remote_address=handler.remote_address,
-                )
+                return 403, parent_id, handler.username
 
             session.add(folder)
             session.commit()
+
+            handler.conclude_request(
+                200,
+                {
+                    "id": folder.id,
+                    "name": folder.name,
+                    "last_modified": folder.created_time,
+                },
+                "Directory created successfully",
+            )
+            return 0, parent_id, handler.username
 
 
 class RequestDeleteDirectoryHandler(RequestHandler):
@@ -487,7 +450,7 @@ class RequestDeleteDirectoryHandler(RequestHandler):
                 )
                 return 404, folder_id, handler.username
             if (
-                "delete_directory" not in this_user.all_permissions
+                Permissions.DELETE_DIRECTORY not in this_user.all_permissions
                 or not folder.check_access_requirements(this_user, "write")
             ):
                 handler.conclude_request(
@@ -606,7 +569,7 @@ class RequestRenameDirectoryHandler(RequestHandler):
                 handler.conclude_request(404, {}, smsg.DIRECTORY_NOT_FOUND)
                 return 404, folder_id, handler.username
             if (
-                "rename_directory" not in this_user.all_permissions
+                Permissions.RENAME_DIRECTORY not in this_user.all_permissions
                 or not folder.check_access_requirements(this_user, "write")
             ):
                 handler.conclude_request(

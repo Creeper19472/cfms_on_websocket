@@ -9,6 +9,7 @@ from typing import Optional
 # repeated construction overhead.
 _password_hasher = PasswordHasher()
 
+from include.classes.enum.permissions import Permissions
 from include.constants import AVAILABLE_BLOCK_TYPES
 from include.classes.connection import ConnectionHandler
 from include.classes.request import RequestHandler
@@ -46,7 +47,7 @@ class RequestListUsersHandler(RequestHandler):
             this_user = session.get(User, handler.username)
             assert this_user is not None
 
-            if "list_users" not in this_user.all_permissions:
+            if Permissions.LIST_USERS not in this_user.all_permissions:
                 handler.conclude_request(
                     code=403,
                     message="You do not have permission to list users",
@@ -116,6 +117,12 @@ class RequestCreateUserHandler(RequestHandler):
     require_auth = True
 
     def handle(self, handler: ConnectionHandler):
+        data = handler.data
+        new_username = data["username"]
+        new_password = data["password"]
+        new_nickname = data.get("nickname")
+        new_user_rights = data.get("permissions", [])
+        new_user_groups = data.get("groups", [])
 
         with Session() as session:
             this_user = session.get(User, handler.username)
@@ -126,83 +133,33 @@ class RequestCreateUserHandler(RequestHandler):
             #
             # "create_user" is a dangerous privilege that should only be held by administrators.
 
-            if "create_user" not in this_user.all_permissions:
+            if Permissions.CREATE_USER not in this_user.all_permissions:
                 handler.conclude_request(
-                    **{
-                        "code": 403,
-                        "message": "You do not have permission to create users",
-                        "data": {},
-                    }
+                    403, {}, "You do not have permission to create users"
                 )
                 return
 
-            new_username = handler.data["username"]
-            new_password = handler.data["password"]
-
-            existing_user = session.get(User, new_username)
-            if existing_user:
-                handler.conclude_request(
-                    **{
-                        "code": 400,
-                        "message": "Username already exists",
-                        "data": {},
-                    }
-                )
+            user_exists = (
+                session.query(User.username).filter_by(username=new_username).first()
+                is not None
+            )
+            if user_exists:
+                handler.conclude_request(400, {}, "Username already exists")
                 return
-            del existing_user
 
-            new_nickname = handler.data.get("nickname", None)
-            new_user_rights: list[dict] = handler.data.get("permissions", [])
-            new_user_groups: list[dict] = handler.data.get("groups", [])
+            if new_user_groups:
+                requested_group_names = {g["group_name"] for g in new_user_groups}
+                existing_groups = (
+                    session.query(UserGroup.group_name)
+                    .filter(UserGroup.group_name.in_(requested_group_names))
+                    .all()
+                )
+                existing_group_names = {row[0] for row in existing_groups}
 
-            for right in new_user_rights:
-                if (
-                    not isinstance(right, dict)
-                    or not right.get("permission")
-                    or "start_time" not in right
-                    or not isinstance(right["start_time"], float)
-                    or (
-                        right.get("end_time")
-                        and not isinstance(right["end_time"], float)
-                    )
-                ):
+                missing_groups = requested_group_names - existing_group_names
+                if missing_groups:
                     handler.conclude_request(
-                        **{
-                            "code": 400,
-                            "message": "Invalid permissions format",
-                            "data": {},
-                        }
-                    )
-                    return
-
-            for group in new_user_groups:
-                if (
-                    not isinstance(group, dict)
-                    or not group.get("group_name")
-                    or "start_time" not in group
-                    or not isinstance(group["start_time"], float)
-                    or (
-                        group.get("end_time")
-                        and not isinstance(group["end_time"], float)
-                    )
-                ):
-                    handler.conclude_request(
-                        **{
-                            "code": 400,
-                            "message": "Invalid groups format",
-                            "data": {},
-                        }
-                    )
-                    return
-
-                existing_group = session.get(UserGroup, group["group_name"])
-                if not existing_group:
-                    handler.conclude_request(
-                        **{
-                            "code": 400,
-                            "message": f"Group '{group['group_name']}' does not exist",
-                            "data": {},
-                        }
+                        400, {}, f"Groups do not exist: {', '.join(missing_groups)}"
                     )
                     return
 
@@ -214,13 +171,8 @@ class RequestCreateUserHandler(RequestHandler):
                 groups=new_user_groups,
             )
 
-        response = {
-            "code": 200,
-            "message": "User created successfully",
-            "data": {},
-        }
-
-        handler.conclude_request(**response)
+        handler.conclude_request(200, {}, "User created successfully")
+        return 0, new_username, handler.username
 
 
 class RequestDeleteUserHandler(RequestHandler):
@@ -244,7 +196,7 @@ class RequestDeleteUserHandler(RequestHandler):
                 )
                 return
 
-            if "delete_user" not in this_user.all_permissions:
+            if Permissions.DELETE_USER not in this_user.all_permissions:
                 handler.conclude_request(
                     **{
                         "code": 403,
@@ -338,7 +290,7 @@ class RequestRenameUserHandler(RequestHandler):
                 return
 
             if (
-                "rename_user" not in this_user.all_permissions
+                Permissions.RENAME_USER not in this_user.all_permissions
                 and target_username != this_user.username
             ):
                 handler.conclude_request(
@@ -420,7 +372,7 @@ class RequestBlockUserHandler(RequestHandler):
 
         not_before: int | float = handler.data.get("not_before", 0)
         not_after: int | float = handler.data.get("not_after", -1)
-        
+
         target_type: str = handler.data["target"]["type"]
         target_id: Optional[str] = handler.data["target"].get("id")
 
@@ -429,7 +381,9 @@ class RequestBlockUserHandler(RequestHandler):
             return 400, target_username
 
         if not_after >= 0 and not_after <= not_before:
-            handler.conclude_request(400, {}, "`not_after` must be later than `not_before`")
+            handler.conclude_request(
+                400, {}, "`not_after` must be later than `not_before`"
+            )
             return 400, target_username
 
         with Session() as session:
@@ -439,7 +393,7 @@ class RequestBlockUserHandler(RequestHandler):
                 handler.conclude_request(401, {}, "Invaild user or token")
                 return 401, target_username
 
-            if "block" not in this_user.all_permissions:
+            if Permissions.BLOCK not in this_user.all_permissions:
                 handler.conclude_request(
                     403, {}, "You do not have permission to block users"
                 )
@@ -501,7 +455,7 @@ class RequestUnblockUserHandler(RequestHandler):
                 handler.conclude_request(401, {}, "Invaild user or token")
                 return 401, block_id
 
-            if "unblock" not in this_user.all_permissions:
+            if Permissions.UNBLOCK not in this_user.all_permissions:
                 handler.conclude_request(
                     403, {}, "You do not have permission to unblock users"
                 )
@@ -553,7 +507,7 @@ class RequestListUserBlocksHandler(RequestHandler):
                 return 401, target_username
 
             if (
-                "list_user_blocks" not in this_user.all_permissions
+                Permissions.LIST_USER_BLOCKS not in this_user.all_permissions
                 and target_username != this_user.username
             ):
                 handler.conclude_request(
@@ -625,7 +579,7 @@ class RequestGetUserInfoHandler(RequestHandler):
 
             if (
                 user_to_get_username != this_user.username
-                and "get_user_info" not in this_user.all_permissions
+                and Permissions.GET_USER_INFO not in this_user.all_permissions
             ):
                 handler.conclude_request(
                     **{
@@ -693,7 +647,7 @@ class RequestGetUserAvatarHandler(RequestHandler):
 
             if (
                 user_to_get_username != this_user.username
-                and "get_user_info" not in this_user.all_permissions
+                and Permissions.GET_USER_INFO not in this_user.all_permissions
             ):
                 handler.conclude_request(
                     **{
@@ -748,7 +702,7 @@ class RequestSetUserAvatarHandler(RequestHandler):
 
             if (
                 target_username != this_user.username
-                and "super_set_user_avatar" not in this_user.all_permissions
+                and Permissions.SUPER_SET_USER_AVATAR not in this_user.all_permissions
             ):
                 handler.conclude_request(
                     403, {}, "You do not have permission to set other user's avatar"
@@ -807,7 +761,7 @@ class RequestChangeUserGroupsHandler(RequestHandler):
             this_user = session.get(User, handler.username)
             assert this_user is not None
 
-            if "change_user_groups" not in this_user.all_permissions:
+            if Permissions.CHANGE_USER_GROUPS not in this_user.all_permissions:
                 handler.conclude_request(
                     **{
                         "code": 403,
@@ -936,7 +890,10 @@ class RequestSetPasswdHandler(RequestHandler):
                     )
                     return
 
-                if not ({"set_passwd", "super_set_passwd"} & user.all_permissions):
+                if not (
+                    {Permissions.SET_PASSWD, Permissions.SUPER_SET_PASSWD}
+                    & user.all_permissions
+                ):
                     handler.conclude_request(
                         **{
                             "code": 403,
@@ -956,7 +913,7 @@ class RequestSetPasswdHandler(RequestHandler):
                         }
                     )
                     return
-                if not "super_set_passwd" in operator_user.all_permissions:
+                if not Permissions.SUPER_SET_PASSWD in operator_user.all_permissions:
                     handler.conclude_request(
                         **{
                             "code": 403,

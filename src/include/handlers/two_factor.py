@@ -9,6 +9,7 @@ import json
 import time
 
 from include.classes.connection import ConnectionHandler
+from include.classes.enum.permissions import Permissions
 from include.classes.request import RequestHandler
 from include.constants import FAILED_LOGIN_DELAY_SECONDS
 from include.database.handler import Session
@@ -183,7 +184,7 @@ class RequestDisable2FAHandler(RequestHandler):
                     message="Two-factor authentication is not enabled",
                 )
                 return
-            
+
             # Verify password
             if not user.authenticate_and_create_token(password):
                 time.sleep(FAILED_LOGIN_DELAY_SECONDS)  # Mitigate brute-force attacks
@@ -288,12 +289,12 @@ class RequestGet2FAStatusHandler(RequestHandler):
                     data={},
                 )
                 return
-            
+
             assert user is not None
 
             if (
                 target_username != handler.username
-                and "manage_2fa" not in user.all_permissions
+                and Permissions.MANAGE_2FA not in user.all_permissions
             ):
                 handler.conclude_request(
                     code=403,

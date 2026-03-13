@@ -1,5 +1,5 @@
-
 from include.classes.connection import ConnectionHandler
+from include.classes.enum.permissions import Permissions
 from include.classes.request import RequestHandler
 from include.database.handler import Session
 from include.database.models.classic import User
@@ -34,7 +34,7 @@ class RequestListRevisionsHandler(RequestHandler):
 
             assert user is not None  # due to require_auth being True
             if (
-                "list_revisions" not in user.all_permissions
+                Permissions.LIST_REVISIONS not in user.all_permissions
                 or not document.check_access_requirements(user, "read")
             ):
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
@@ -81,7 +81,7 @@ class RequestGetRevisionHandler(RequestHandler):
 
             assert user is not None  # due to require_auth being True
             if (
-                "view_revision" not in user.all_permissions
+                Permissions.VIEW_REVISION not in user.all_permissions
                 or not revision.document.check_access_requirements(user, "read")
             ):
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
@@ -125,7 +125,7 @@ class RequestSetDocumentRevisionHandler(RequestHandler):
 
             assert user is not None  # due to require_auth being True
             if (
-                "set_current_revision" not in user.all_permissions
+                Permissions.SET_CURRENT_REVISION not in user.all_permissions
                 or not document.check_access_requirements(user, "write")
             ):
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
@@ -173,12 +173,12 @@ class RequestDeleteRevisionHandler(RequestHandler):
 
             assert user is not None
             if (
-                "delete_revision" not in user.all_permissions
+                Permissions.DELETE_REVISION not in user.all_permissions
                 or document.check_access_requirements(user, "write") is False
             ):
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                 return 403, revision_id, handler.username
-            
+
             # Try to connect parent and child revisions directly
             for child_rev in revision.child_revisions:
                 child_rev.parent_revision = revision.parent_revision

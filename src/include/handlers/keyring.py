@@ -16,6 +16,7 @@ Security constraints enforced by these handlers:
 import time
 
 from include.classes.connection import ConnectionHandler
+from include.classes.enum.permissions import Permissions
 from include.classes.request import RequestHandler
 from include.database.handler import Session
 from include.database.models.classic import User
@@ -74,7 +75,7 @@ class RequestUploadUserKeyHandler(RequestHandler):
 
             # Determine which user's keyring to write to
             if target_username and target_username != handler.username:
-                if "manage_keyrings" not in this_user.all_permissions:
+                if Permissions.MANAGE_KEYRINGS not in this_user.all_permissions:
                     handler.conclude_request(403, {}, "Permission denied")
                     return 403, target_username, handler.username
                 owner = session.get(User, target_username)
@@ -144,7 +145,7 @@ class RequestGetUserKeyHandler(RequestHandler):
             # Authorisation: the key must belong to the requesting user, or the
             # user must have admin-level manage_keyrings permission.
             if key.username != handler.username:
-                if "manage_keyrings" not in this_user.all_permissions:
+                if Permissions.MANAGE_KEYRINGS not in this_user.all_permissions:
                     handler.conclude_request(403, {}, "Permission denied")
                     return 403, key_id, handler.username
 
@@ -202,7 +203,7 @@ class RequestDeleteUserKeyHandler(RequestHandler):
                 return 404, key_id, handler.username
 
             if key.username != handler.username:
-                if "manage_keyrings" not in this_user.all_permissions:
+                if Permissions.MANAGE_KEYRINGS not in this_user.all_permissions:
                     handler.conclude_request(403, {}, "Permission denied")
                     return 403, key_id, handler.username
 
@@ -261,7 +262,7 @@ class RequestSetPreferenceDEKHandler(RequestHandler):
                 return 404, key_id, handler.username
 
             if key.username != handler.username:
-                if "manage_keyrings" not in this_user.all_permissions:
+                if Permissions.MANAGE_KEYRINGS not in this_user.all_permissions:
                     handler.conclude_request(403, {}, "Permission denied")
                     return 403, key_id, handler.username
 
@@ -310,18 +311,16 @@ class RequestListUserKeysHandler(RequestHandler):
             assert operator is not None
 
             if target_username != handler.username:
-                if "manage_keyrings" not in operator.all_permissions:
+                if Permissions.MANAGE_KEYRINGS not in operator.all_permissions:
                     handler.conclude_request(403, {}, "Permission denied")
                     return 403, target_username, handler.username
-                
+
             if not target_user:
                 handler.conclude_request(404, {}, smsg.TARGET_OBJECT_NOT_FOUND)
                 return 404, target_username, handler.username
 
             keys = (
-                session.query(UserKey)
-                .filter(UserKey.username == target_username)
-                .all()
+                session.query(UserKey).filter(UserKey.username == target_username).all()
             )
 
             handler.conclude_request(

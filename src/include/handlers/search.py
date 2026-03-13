@@ -9,6 +9,7 @@ import time
 from typing import List, Dict, Any
 
 from include.classes.connection import ConnectionHandler
+from include.classes.enum.permissions import Permissions
 from include.classes.request import RequestHandler
 from include.conf_loader import global_config
 from include.database.handler import Session
@@ -92,7 +93,7 @@ class RequestSearchHandler(RequestHandler):
             # Search documents
             if search_documents and (
                 not is_globally_blocked
-                or "super_list_directory" in user.all_permissions
+                or Permissions.SUPER_LIST_DIRECTORY in user.all_permissions
             ):
                 documents, doc_ancestors, doc_oaes = search_documents_with_access(
                     session, query, now
@@ -108,7 +109,7 @@ class RequestSearchHandler(RequestHandler):
                         continue
                     if (
                         document.id in blocked_ids
-                        and "super_list_directory" not in user.all_permissions
+                        and Permissions.SUPER_LIST_DIRECTORY not in user.all_permissions
                     ):  # This is because people who have `super_list_directory` can still see blocked documents via `list_directory`.
                         continue
                     if document.id in explicitly_granted_doc_ids:
@@ -149,7 +150,7 @@ class RequestSearchHandler(RequestHandler):
             # Search directories
             if search_directories and (
                 not is_globally_blocked
-                or "super_list_directory" in user.all_permissions
+                or Permissions.SUPER_LIST_DIRECTORY in user.all_permissions
             ):
                 directories, dir_ancestors, dir_oaes = search_folders_with_access(
                     session, query, now
@@ -163,7 +164,7 @@ class RequestSearchHandler(RequestHandler):
                 for directory in directories:
                     if (
                         directory.id in blocked_ids
-                        and "super_list_directory" not in user.all_permissions
+                        and Permissions.SUPER_LIST_DIRECTORY not in user.all_permissions
                     ):
                         continue
 
