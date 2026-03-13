@@ -44,6 +44,8 @@ from include.database.handler import Session
 from include.database.handler import engine
 from include.database.models.entity import Document, DocumentRevision, Folder
 from include.database.models.file import File
+from include.database.models.security.banned_subnet import BannedSubnet  # noqa: F401 – registers table with Base
+from include.database.models.security.login import LoginSecurity  # noqa: F401 – registers table with Base
 from include.util.log import getCustomLogger
 from include.util.rule.applying import set_access_rules
 
