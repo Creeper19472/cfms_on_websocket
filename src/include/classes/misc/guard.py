@@ -71,7 +71,7 @@ class LoginGuard:
         """
         parts = identifier.split("|", 2)
         if len(parts) >= 2:
-            return parts[1] if parts[1] else None
+            return parts[1] or None
         return None
 
     @classmethod
