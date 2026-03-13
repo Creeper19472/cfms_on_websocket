@@ -29,21 +29,20 @@ class LoginGuard:
     def reload_networks(cls) -> None:
         """
         Reload the banned subnet list from the database into memory.
-        The lock is held for the duration of the query to prevent redundant
-        concurrent database hits.
+        The database query is performed without holding the cache lock; the lock
+        is only taken to swap in the new networks list and update state.
         """
+        networks: list[Union[ipaddress.IPv4Network, ipaddress.IPv6Network]] = []
+        with Session() as session:
+            rows = session.query(BannedSubnet).all()
+            for row in rows:
+                try:
+                    networks.append(ipaddress.ip_network(row.subnet, strict=True))
+                except ValueError:
+                    logger.warning(
+                        f"LoginGuard: ignoring invalid subnet in database: {row.subnet!r}"
+                    )
         with cls._cache_lock:
-            networks: list[Union[ipaddress.IPv4Network, ipaddress.IPv6Network]] = []
-            with Session() as session:
-                rows = session.query(BannedSubnet).all()
-                for row in rows:
-                    try:
-                        networks.append(ipaddress.ip_network(row.subnet, strict=True))
-                    except ValueError:
-                        logger.warning(
-                            f"LoginGuard: ignoring invalid subnet in database: {row.subnet!r}"
-                        )
-
             cls._banned_networks = networks
             cls._networks_loaded = True
             logger.info(
@@ -92,23 +91,11 @@ class LoginGuard:
         Check if the given identifier is currently blocked.
         """
 
-        # 1. Unlocked check for performance
+        # Ensure networks are loaded before checking access.
+        # reload_networks() is responsible for its own locking, so we avoid
+        # taking _cache_lock here to prevent unnecessary complexity or deadlocks.
         if not cls._networks_loaded:
-            with cls._cache_lock:
-                # 2. Check again under lock to prevent redundant concurrent reloads
-                if not cls._networks_loaded:
-                    # We call the logic directly or via reload_networks
-                    # If we call reload_networks, note it re-acquires the lock,
-                    # which is fine for Python's threading.Lock in this context
-                    # but we must be careful with recursion.
-                    # Instead, we'll call a helper or ensure reload_networks
-                    # is called outside this specific block or is re-entrant.
-                    pass
-
-            # Since reload_networks() handles its own locking, we call it here
-            # if the flag is still False.
-            if not cls._networks_loaded:
-                cls.reload_networks()
+            cls.reload_networks()
 
         # Layer 1: CIDR / administratively banned subnet
         ip_str = cls._extract_ip(identifier)
