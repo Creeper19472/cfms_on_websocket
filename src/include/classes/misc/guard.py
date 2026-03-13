@@ -130,7 +130,10 @@ class LoginGuard:
         """
         # Ensure subnet list is loaded at least once.
         if not cls._networks_loaded:
-            cls.reload_networks()
+            # Guard initial load with a lock to avoid concurrent reloads.
+            with cls._cache_lock:
+                if not cls._networks_loaded:
+                    cls.reload_networks()
 
         # Layer 1: CIDR / administratively banned subnet
         ip_str = cls._extract_ip(identifier)
