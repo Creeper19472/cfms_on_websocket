@@ -42,3 +42,7 @@ ROOT_DIRECTORY_ID = "/"
 # Database Constants
 MAX_PARAM_SIZE = 950  # Maximum number of parameters in a single SQL query
 QUERY_CHUNK_SIZE = 576  # used to prevent hitting the limit of bind variables per query
+
+# IP addresses of trusted reverse proxies that may set X-Forwarded-For / X-Real-IP.
+# Adjust this set as needed for your deployment environment.
+TRUSTED_PROXY_IPS = frozenset({"127.0.0.1", "::1"})

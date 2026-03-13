@@ -7,6 +7,7 @@ from include.conf_loader import global_config
 from include.database.handler import Session
 from include.database.models.keyring import UserKey
 from include.database.models.classic import User
+from include.util.address import get_client_ip
 from include.util.audit import log_audit
 from include.util.pwd import check_passwd_requirements
 
@@ -42,7 +43,7 @@ class RequestLoginHandler(RequestHandler):
         password: str = handler.data["password"]
         two_factor_auth_token: str = handler.data.get("2fa_token", "")
         
-        ip = handler.remote_address
+        ip = get_client_ip(handler.websocket)
         ip_id = f"ip_limit:{ip}"
         user_id = f"user_limit:{ip}:{username}"
 

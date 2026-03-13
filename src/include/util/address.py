@@ -1,9 +1,5 @@
 from websockets.sync.server import ServerConnection
-
-
-# IP addresses of trusted reverse proxies that may set X-Forwarded-For / X-Real-IP.
-# Adjust this set as needed for your deployment environment.
-TRUSTED_PROXY_IPS = frozenset({"127.0.0.1", "::1"})
+from include.constants import TRUSTED_PROXY_IPS
 
 
 def get_client_ip(websocket: ServerConnection) -> str:
