@@ -15,7 +15,7 @@ __all__ = [
     "ROOT_DIRECTORY_ID",
 ]
 
-CORE_VERSION = Version("0.1.0.260312_alpha")
+CORE_VERSION = Version("0.1.0.260313_alpha")
 PROTOCOL_VERSION = 9
 
 AVAILABLE_ACCESS_TYPES = ["read", "write", "move", "manage"]
