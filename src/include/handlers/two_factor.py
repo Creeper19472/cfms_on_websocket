@@ -98,16 +98,7 @@ class RequestValidate2FAHandler(RequestHandler):
     def handle(self, handler: ConnectionHandler):
         token = handler.data["token"]
         username = handler.username
-        ip = handler.remote_address
 
-        user_id = f"user_limit|{ip}|{username}"
-        ip_id = f"ip_limit|{ip}"
-
-        if not LoginGuard.check_access(user_id):
-            handler.conclude_request(429, {}, "Too many 2FA attempts.")
-            return
-
-        failed = False
         success = False
 
         with Session() as session:
@@ -142,22 +133,17 @@ class RequestValidate2FAHandler(RequestHandler):
             if user.verify_totp(token):
                 user.enable_totp()
                 success = True
-            else:
-                failed = True
 
         if success:
-            LoginGuard.report_success(user_id)
             handler.conclude_request(
                 code=200,
                 message="Two-factor authentication enabled successfully",
                 data={"method": "totp"},
             )
-        elif failed:
-            LoginGuard.report_failure(user_id)
-            LoginGuard.report_failure(ip_id)
+        else:
             handler.conclude_request(401, {}, "Invalid verification code")
 
-        return (200 if success else 401), username
+        return (0 if success else 401), username
 
 
 class RequestDisable2FAHandler(RequestHandler):
@@ -184,16 +170,7 @@ class RequestDisable2FAHandler(RequestHandler):
     def handle(self, handler: ConnectionHandler):
         password = handler.data["password"]
         username = handler.username
-        ip = handler.remote_address
 
-        user_id = f"user_limit|{ip}|{username}"
-        ip_id = f"ip_limit|{ip}"
-
-        if not LoginGuard.check_access(user_id):
-            handler.conclude_request(429, {}, "Too many attempts.")
-            return
-
-        failed = False
         success = False
 
         with Session() as session:
@@ -202,22 +179,16 @@ class RequestDisable2FAHandler(RequestHandler):
                 handler.conclude_request(400, {}, "2FA not enabled or user not found")
                 return
 
-            if not user.authenticate_and_create_token(password):
-                failed = True
-            else:
+            if user.authenticate_and_create_token(password):
                 user.disable_totp()
                 success = True
 
         if success:
-            LoginGuard.report_success(user_id)
-            LoginGuard.report_success(ip_id)
             handler.conclude_request(200, {}, "2FA disabled successfully")
-        elif failed:
-            LoginGuard.report_failure(user_id)
-            LoginGuard.report_failure(ip_id)
+        else:
             handler.conclude_request(401, {}, "Invalid password")
 
-        return (200 if success else 401), username
+        return (0 if success else 401), username
 
 
 class RequestCancel2FASetupHandler(RequestHandler):
