@@ -113,8 +113,22 @@ class RequestValidate2FAHandler(RequestHandler):
         with Session() as session:
             user = session.get(User, username)
             assert user is not None
-            if not user.totp_secret or user.totp_enabled:
-                handler.conclude_request(400, {}, "Invalid state for 2FA validation")
+            
+            # Check if TOTP secret exists but not enabled yet
+            if not user.totp_secret:
+                handler.conclude_request(
+                    code=400,
+                    message="Two-factor authentication has not been set up. Please set it up first.",
+                    data={},
+                )
+                return
+
+            if user.totp_enabled:
+                handler.conclude_request(
+                    code=400,
+                    message="Two-factor authentication is already enabled.",
+                    data={"method": "totp"},
+                )
                 return
 
             # Verify the provided TOTP token
