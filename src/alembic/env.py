@@ -37,6 +37,7 @@ from include.database.models.entity import (
     FolderAccessRule,
 )
 from include.database.models.keyring import UserKey
+from include.database.models.security import BannedSubnet, LoginSecurity
 
 target_metadata = Base.metadata
 
