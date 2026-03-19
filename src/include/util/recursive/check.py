@@ -139,6 +139,7 @@ def check_access_for_object(
     while current_folder_id is not None:
         if current_folder_id in visited_ids:
             raise RuntimeError("Cycle detected in folder hierarchy")
+        print("Checking access for parent folder:", current_folder_id, "of object:", obj.id)
         visited_ids.add(current_folder_id)
 
         current_folder = folder_map.get(current_folder_id)
