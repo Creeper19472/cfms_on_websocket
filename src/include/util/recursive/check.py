@@ -57,8 +57,6 @@ def check_access_for_object(
         # check OAE first (highest priority)
         entries: list[ObjectAccessEntry] = oae_by_target.get(node.id, [])
 
-        print(f"Checking OAEs for node: {node.id}, Target Type: {target_type}, Access Type: {access_type}")
-
         # check user's direct OAE
         for entry in entries:
             if (
@@ -67,7 +65,6 @@ def check_access_for_object(
                 and entry.target_type == target_type
                 and entry.access_type == access_type
             ):
-                print("Access granted by OAE for user:", user.username, "on node:", node.id)
                 return SingleNodeCheckResult.ALLOWED_OAE
 
         # check user's group OAE
@@ -79,12 +76,10 @@ def check_access_for_object(
                 and entry.target_type == target_type
                 and entry.access_type == access_type
             ):
-                print("Access granted by OAE for user group:", entry.entity_identifier, "on node:", node.id)
                 return SingleNodeCheckResult.ALLOWED_OAE
 
         # If there are no access rules defined on the node, allow access by default
         if not node.access_rules:
-            print("No access rules defined for node:", node.id, "Access granted by default")
             return SingleNodeCheckResult.ALLOWED
 
         # check access rules
@@ -111,10 +106,8 @@ def check_access_for_object(
                     raise NotImplementedError(f"Unsupported access type: {access_type}")
 
             if not _match_primary_sub_group(rule.rule_data, user):
-                print("Access denied by rule:", rule.id, "for user:", user.username, "on node:", node.id)
                 return SingleNodeCheckResult.DENIED
 
-        print("Access granted for node:", node.id, "after evaluating access rules")
         return SingleNodeCheckResult.ALLOWED
 
     # check the object itself first
