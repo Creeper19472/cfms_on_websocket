@@ -19,8 +19,6 @@ def check_access_for_object(
     oae_by_target: dict,
     recursive: bool = True,
 ) -> bool:
-    
-    print("Checking access for object:", obj.id, "User:", user.username, "Access Type:", access_type)
 
     if access_type not in AVAILABLE_ACCESS_TYPES:
         raise ValueError(f"Invalid access type: {access_type}")
@@ -113,20 +111,16 @@ def check_access_for_object(
     # check the object itself first
     match _check_single_node(obj):
         case SingleNodeCheckResult.ALLOWED_OAE:
-            print("Access granted by OAE for object:", obj.id)
             return True  # OAE grants access immediately, no need to check further
         case SingleNodeCheckResult.ALLOWED:
-            print("Access granted for object:", obj.id)
             pass  # continue to check parent folders if necessary
         case SingleNodeCheckResult.DENIED:
-            print("Access denied for object:", obj.id)
             return False  # explicit denial, no need to check further
         case _:
             raise RuntimeError("Unexpected SingleNodeCheckResult value")
         
     # if not recursive or the object does not inherit permissions, stop here
     if not recursive or not obj.inherit:
-        print("No need to check parent folders for object:", obj.id)
         return True
 
     if isinstance(obj, Document):
@@ -157,8 +151,6 @@ def check_access_for_object(
             break
 
         current_folder_id = current_folder.parent_id
-
-    print("Access granted after checking parent folders for object:", obj.id)
 
     return True
 
