@@ -1,11 +1,11 @@
-from enum import Enum
+from enum import IntEnum
 from include.database.models.entity import Document, Folder
 from include.database.models.classic import User, ObjectAccessEntry
 from include.classes.access_rule import AccessRuleBase
 from include.constants import AVAILABLE_ACCESS_TYPES
 
 
-class SingleNodeCheckResult(Enum):
+class SingleNodeCheckResult(IntEnum):
     ALLOWED_OAE = 2
     ALLOWED = 1
     DENIED = 0
