@@ -40,13 +40,13 @@ class LoginGuard:
                     networks.append(ipaddress.ip_network(row.subnet, strict=True))
                 except ValueError:
                     logger.warning(
-                        f"LoginGuard: ignoring invalid subnet in database: {row.subnet!r}"
+                        f"Ignoring invalid subnet in database: {row.subnet!r}"
                     )
         with cls._cache_lock:
             cls._banned_networks = networks
             cls._networks_loaded = True
             logger.info(
-                f"LoginGuard: loaded {len(networks)} banned subnet(s) from database."
+                f"Loaded {len(networks)} banned subnet(s) from database."
             )
 
     @classmethod

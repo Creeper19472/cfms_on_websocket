@@ -29,6 +29,13 @@ require_passwd_enforcement_changes = true
 passwd_expire_after_days = 365
 passwd_must_contain = []
 
+require_client_cert = false
+# 是否要求客户端提供证书进行身份验证
+# 若启用，则服务器将验证客户端证书是否可信。
+client_cert_ca_path = "./content/ssl/client/"
+# 可信的客户端证书库路径。必须指向一个目录，且目录下的证书文件应符合 OpenSSL 的命名规范。
+# 仅在 require_client_cert 为 true 时生效
+
 [access]
 enable_access_recursive_check = true
 # 启用访问递归检查。启用时，对于每个被请求的对象，不仅检查它本身具有的访问规则，也检查到达其所在位置需要经过的所有目录所具有的访问规则。

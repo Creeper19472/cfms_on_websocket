@@ -48,7 +48,8 @@ app*.db-journal
 admin_password.txt
 config.toml
 
-src/content/ssl/
+src/content/ssl/*
+!src/content/ssl/client/
 src/content/files/
 src/content/logs/*
 
