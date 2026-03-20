@@ -17,9 +17,32 @@ comments as the primary reference.
 
 [doc-url]: https://cfms-server-doc.readthedocs.io/zh_CN/latest
 
+## Quick Setup
+
+```bash
+# Clone repo
+git clone https://github.com/creeper19472/cfms_on_websocket.git
+
+# Enter working dir
+cd cfms_on_websocket/src
+
+# Setup submodules
+git submodule init
+git submodule update --depth=1
+
+# Setup dependencies
+uv sync --upgrade
+
+# Activate virtual environment
+source .venv/bin/activate
+```
+
 ## Testing
 
-This repository includes an automated test suite built with pytest. To run the tests:
+This repository includes an automated test suite built with pytest. Note that
+you should finish the installation before running tests.
+
+To run the tests:
 
 ```bash
 # Install dependencies
