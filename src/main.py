@@ -296,8 +296,8 @@ def main():
         ssl_context.verify_mode = ssl.CERT_REQUIRED
 
         ssl_context.verify_flags |= ssl.VERIFY_X509_STRICT
-        ssl_context.verify_flags |= ssl.VERIFY_CRL_CHECK_LEAF
-        ssl_context.verify_flags |= ssl.VERIFY_CRL_CHECK_CHAIN
+        # ssl_context.verify_flags |= ssl.VERIFY_CRL_CHECK_LEAF
+        # ssl_context.verify_flags |= ssl.VERIFY_CRL_CHECK_CHAIN
         
         ssl_context.load_verify_locations(capath=client_ca_path)
         logger.info(
