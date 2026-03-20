@@ -493,13 +493,11 @@ class RequestServerInfoHandler(RequestHandler):
 
     def handle(self, handler: ConnectionHandler):
 
-        security_cfg = global_config.get("security", {})
         server_info = {
             "server_name": global_config["server"]["name"],
             "version": CORE_VERSION.original,
             "protocol_version": PROTOCOL_VERSION,
             "lockdown": lockdown_enabled.is_set(),
-            "require_client_cert": security_cfg.get("require_client_cert", False),
         }
         handler.conclude_request(
             200, server_info, "Server information retrieved successfully"
