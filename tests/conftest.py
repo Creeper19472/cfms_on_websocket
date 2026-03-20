@@ -68,16 +68,16 @@ def log_server_output(process: subprocess.Popen, log_dir: str = "test_logs"):
                 pass
             print(f"[SERVER LOG] Error in {stream_name}: {e}", file=sys.stderr)
     
-    # Start threads for both stdout and stderr (not daemon to ensure proper cleanup)
+    # Start threads as daemon so they cannot block Python exit
     stdout_thread = threading.Thread(
         target=read_stream, 
         args=(process.stdout, stdout_file, "STDOUT"),
-        daemon=False
+        daemon=True
     )
     stderr_thread = threading.Thread(
         target=read_stream,
         args=(process.stderr, stderr_file, "STDERR"),
-        daemon=False
+        daemon=True
     )
     
     stdout_thread.start()
@@ -228,20 +228,24 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
         except:
             pass
     
-    # Signal logging threads to stop and wait for them
+    # Close process pipes first so readline() in log threads returns EOF
     try:
         stdout_thread, stderr_thread, stop_event = process._log_threads
         stdout_file, stderr_file = process._log_files
         
-        stop_event.set()  # Signal threads to stop
-        print("[TEST CLEANUP] Waiting for log threads to finish...", file=sys.stderr)
+        stop_event.set()
+        for pipe in (process.stdout, process.stderr):
+            try:
+                if pipe: pipe.close()
+            except Exception:
+                pass
+        
         stdout_thread.join(timeout=2)
         stderr_thread.join(timeout=2)
         
-        # Close log files
         stdout_file.close()
         stderr_file.close()
-        print("[TEST CLEANUP] Log files closed.", file=sys.stderr)
+        print("[TEST CLEANUP] Log threads and files closed.", file=sys.stderr)
     except Exception as e:
         print(f"[TEST CLEANUP] Error during log cleanup: {e}", file=sys.stderr)
     

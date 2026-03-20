@@ -46,6 +46,7 @@ from include.database.models.entity import Document, DocumentRevision, Folder
 from include.database.models.file import File
 from include.util.log import getCustomLogger
 from include.util.rule.applying import set_access_rules
+from include.classes.misc.guard import LoginGuard
 
 
 def ensure_root_folder():
@@ -280,6 +281,30 @@ def main():
     )
     ssl_context.minimum_version = ssl.TLSVersion.TLSv1_3
 
+    # Mutual TLS: require and verify client certificates if configured
+    security_cfg = global_config.get("security", {})
+    if security_cfg.get("require_client_cert", False):
+        client_ca_path: str = security_cfg["client_cert_ca_path"]
+        if not os.path.exists(client_ca_path):
+            logger.error(
+                f"Client certificate CA path not found: {client_ca_path}. "
+                "Cannot enable client certificate verification. "
+                "Please provide a valid CA certificate path or disable "
+                "'require_client_cert' in the configuration."
+            )
+            raise SystemExit(1)
+        ssl_context.verify_mode = ssl.CERT_REQUIRED
+
+        ssl_context.verify_flags |= ssl.VERIFY_X509_STRICT
+        ssl_context.verify_flags |= ssl.VERIFY_CRL_CHECK_LEAF
+        ssl_context.verify_flags |= ssl.VERIFY_CRL_CHECK_CHAIN
+        
+        ssl_context.load_verify_locations(capath=client_ca_path)
+        logger.info(
+            f"Mutual TLS enabled: client certificates will be verified "
+            f"against CA path '{client_ca_path}'."
+        )
+
     if ssl.OPENSSL_VERSION_INFO < (3, 5):
         logger.warning(
             "The version of OpenSSL bundled with Python is too low "
@@ -295,6 +320,9 @@ def main():
 
     # Ensure the root folder record exists (handles upgrades from older versions)
     ensure_root_folder()
+
+    # Preload banned subnet list into memory for LoginGuard
+    LoginGuard.reload_networks()
 
     # DO NOT MODIFY socket family setting unless you know what you are doing
     socket_family = socket.AF_INET6

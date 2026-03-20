@@ -109,6 +109,7 @@ from pstats import SortKey
 pr = cProfile.Profile()
 
 
+from include.util.cert import get_client_cert_subject
 from include.util.log import getCustomLogger
 
 logger = getCustomLogger(
@@ -158,7 +159,14 @@ def handle_connection(websocket: websockets.sync.server.ServerConnection):
         websocket: The WebSocket connection object.
     """
 
-    logger.info(f"Incoming connection: {websocket.remote_address[0]}")
+    client_cn = get_client_cert_subject(websocket)
+    if client_cn:
+        logger.info(
+            f"Incoming connection: {websocket.remote_address[0]} "
+            f"(client cert CN: {client_cn})"
+        )
+    else:
+        logger.info(f"Incoming connection: {websocket.remote_address[0]}")
 
     try:
         while True:
@@ -485,11 +493,13 @@ class RequestServerInfoHandler(RequestHandler):
 
     def handle(self, handler: ConnectionHandler):
 
+        security_cfg = global_config.get("security", {})
         server_info = {
             "server_name": global_config["server"]["name"],
             "version": CORE_VERSION.original,
             "protocol_version": PROTOCOL_VERSION,
             "lockdown": lockdown_enabled.is_set(),
+            "require_client_cert": security_cfg.get("require_client_cert", False),
         }
         handler.conclude_request(
             200, server_info, "Server information retrieved successfully"
