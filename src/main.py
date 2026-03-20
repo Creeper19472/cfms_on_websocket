@@ -285,12 +285,12 @@ def main():
     security_cfg = global_config.get("security", {})
     if security_cfg.get("require_client_cert", False):
         client_ca_path: str = security_cfg["client_cert_ca_path"]
-        if not os.path.exists(client_ca_path):
+        if not os.path.exists(client_ca_path) or not os.path.isdir(client_ca_path):
             logger.error(
-                f"Client certificate CA path not found: {client_ca_path}. "
-                "Cannot enable client certificate verification. "
-                "Please provide a valid CA certificate path or disable "
-                "'require_client_cert' in the configuration."
+                "Client certificate CA path not found or is not a dir: "
+                f"{client_ca_path}. Cannot enable client certificate "
+                "verification. Please provide a valid CA certificate "
+                "path or disable 'require_client_cert' in the configuration."
             )
             raise SystemExit(1)
         ssl_context.verify_mode = ssl.CERT_REQUIRED
@@ -298,7 +298,7 @@ def main():
         ssl_context.verify_flags |= ssl.VERIFY_X509_STRICT
         # ssl_context.verify_flags |= ssl.VERIFY_CRL_CHECK_LEAF
         # ssl_context.verify_flags |= ssl.VERIFY_CRL_CHECK_CHAIN
-        
+
         ssl_context.load_verify_locations(capath=client_ca_path)
         logger.info(
             f"Mutual TLS enabled: client certificates will be verified "
