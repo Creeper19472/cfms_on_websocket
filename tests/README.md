@@ -176,7 +176,7 @@ These tests are designed to run in CI/CD pipelines. The test suite:
 
 If tests fail because the server won't start:
 
-1. Check that `config.toml` exists (it will be created from `config.sample.toml`)
+1. Check that `config.toml` exists (it will be created from `config.toml.sample`)
 2. Ensure the SSL certificate directory exists: `mkdir -p content/ssl`
 3. Check for port conflicts (default: 5104)
 

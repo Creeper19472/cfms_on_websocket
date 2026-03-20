@@ -98,9 +98,9 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
     src_config_file = "src/config.toml"
     if not os.path.exists(src_config_file):
         import shutil
-        if not os.path.exists("src/config.sample.toml"):
-            pytest.fail("Config sample file not found: src/config.sample.toml")
-        shutil.copy("src/config.sample.toml", src_config_file)
+        if not os.path.exists("src/config.toml.sample"):
+            pytest.fail("Config sample file not found: src/config.toml.sample")
+        shutil.copy("src/config.toml.sample", src_config_file)
     
     # Read and modify config for testing
     try:
