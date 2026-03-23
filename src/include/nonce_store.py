@@ -6,6 +6,8 @@ Each nonce is stored with the server receive time and automatically expired
 after the configured time window.
 """
 
+__all__ = ["NonceStore", "nonce_store"]
+
 import math
 import threading
 import time
@@ -13,8 +15,6 @@ from collections import deque
 from typing import Optional
 
 from include.constants import REPLAY_PROTECTION_TIME_WINDOW_SECONDS
-
-__all__ = ["NonceStore", "nonce_store"]
 
 
 class NonceStore:
@@ -39,9 +39,7 @@ class NonceStore:
             expires_at, nonce = self._expiry_queue.popleft()
             self._nonces.pop(nonce, None)
 
-    def validate_and_store(
-        self, nonce: str, timestamp: float
-    ) -> Optional[str]:
+    def validate_and_store(self, nonce: str, timestamp: float) -> Optional[str]:
         """
         Validate a nonce and timestamp, storing it if valid.
 

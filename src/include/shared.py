@@ -1,8 +1,9 @@
-import websockets.sync.server
+__all__ = ["clients", "clients_lock", "lockdown_enabled"]
+
 import threading
+from include.classes.frame import MultiplexConnection
 
 
-__all__ = ["connected_listeners", "lockdown_enabled"]
-
-connected_listeners: set[websockets.sync.server.ServerConnection] = set()
+clients: set[MultiplexConnection] = set()
+clients_lock = threading.Lock()
 lockdown_enabled = threading.Event()

@@ -3,7 +3,7 @@ __all__ = ["RequestHandler"]
 from typing import Optional, Union
 from abc import ABC, abstractmethod
 
-from include.classes.connection import ConnectionHandler
+from include.classes.handler import ConnectionHandler
 
 
 class RequestHandler(ABC):

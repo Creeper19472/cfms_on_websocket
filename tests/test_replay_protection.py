@@ -8,7 +8,6 @@ These tests verify that the server correctly:
 4. Accepts valid requests with unique nonces
 """
 
-import json
 import secrets
 import time
 
@@ -34,12 +33,10 @@ class TestReplayProtection:
         self, authenticated_client: CFMSTestClient
     ):
         """Test that replaying an identical request (same nonce) is rejected."""
-        assert authenticated_client.websocket is not None
 
         nonce = secrets.token_hex(16)
         ts = time.time()
 
-        # First request should succeed
         request1 = {
             "action": "list_users",
             "data": {},
@@ -48,15 +45,13 @@ class TestReplayProtection:
             "nonce": nonce,
             "timestamp": ts,
         }
-        await authenticated_client.websocket.send(json.dumps(request1))
-        response1 = json.loads(await authenticated_client.websocket.recv())
+
+        response1 = await authenticated_client.send_raw_request(request1)
         assert response1["code"] == 200, (
             f"First request should succeed, got: {response1}"
         )
 
-        # Second request with same nonce should be rejected
-        await authenticated_client.websocket.send(json.dumps(request1))
-        response2 = json.loads(await authenticated_client.websocket.recv())
+        response2 = await authenticated_client.send_raw_request(request1)
         assert response2["code"] == 1001, (
             f"Replayed request should be rejected with 1001, got: {response2}"
         )
@@ -69,7 +64,6 @@ class TestReplayProtection:
         self, authenticated_client: CFMSTestClient
     ):
         """Test that a request with an expired timestamp is rejected."""
-        assert authenticated_client.websocket is not None
 
         request = {
             "action": "list_users",
@@ -79,8 +73,7 @@ class TestReplayProtection:
             "nonce": secrets.token_hex(16),
             "timestamp": time.time() - 60,  # 60 seconds ago
         }
-        await authenticated_client.websocket.send(json.dumps(request))
-        response = json.loads(await authenticated_client.websocket.recv())
+        response = await authenticated_client.send_raw_request(request)
         assert response["code"] == 1001, (
             f"Expired timestamp should be rejected with 1001, got: {response}"
         )
@@ -93,7 +86,6 @@ class TestReplayProtection:
         self, authenticated_client: CFMSTestClient
     ):
         """Test that a request with a far-future timestamp is rejected."""
-        assert authenticated_client.websocket is not None
 
         request = {
             "action": "list_users",
@@ -103,8 +95,7 @@ class TestReplayProtection:
             "nonce": secrets.token_hex(16),
             "timestamp": time.time() + 60,  # 60 seconds in the future
         }
-        await authenticated_client.websocket.send(json.dumps(request))
-        response = json.loads(await authenticated_client.websocket.recv())
+        response = await authenticated_client.send_raw_request(request)
         assert response["code"] == 1001, (
             f"Future timestamp should be rejected with 1001, got: {response}"
         )
@@ -114,7 +105,6 @@ class TestReplayProtection:
         self, authenticated_client: CFMSTestClient
     ):
         """Test that an authenticated request without a nonce is rejected."""
-        assert authenticated_client.websocket is not None
 
         request = {
             "action": "list_users",
@@ -124,8 +114,7 @@ class TestReplayProtection:
             "timestamp": time.time(),
             # No nonce
         }
-        await authenticated_client.websocket.send(json.dumps(request))
-        response = json.loads(await authenticated_client.websocket.recv())
+        response = await authenticated_client.send_raw_request(request)
         assert response["code"] == 400, (
             f"Missing nonce should be rejected with 400, got: {response}"
         )
@@ -135,7 +124,6 @@ class TestReplayProtection:
         self, authenticated_client: CFMSTestClient
     ):
         """Test that a nonce that is too short is rejected."""
-        assert authenticated_client.websocket is not None
 
         request = {
             "action": "list_users",
@@ -145,8 +133,7 @@ class TestReplayProtection:
             "nonce": "short",  # Less than NONCE_MIN_LENGTH (16)
             "timestamp": time.time(),
         }
-        await authenticated_client.websocket.send(json.dumps(request))
-        response = json.loads(await authenticated_client.websocket.recv())
+        response = await authenticated_client.send_raw_request(request)
         assert response["code"] == 400, (
             f"Short nonce should be rejected with 400, got: {response}"
         )
@@ -156,7 +143,6 @@ class TestReplayProtection:
         self, authenticated_client: CFMSTestClient
     ):
         """Test that an authenticated request without a timestamp is rejected."""
-        assert authenticated_client.websocket is not None
 
         request = {
             "action": "list_users",
@@ -166,8 +152,7 @@ class TestReplayProtection:
             "nonce": secrets.token_hex(16),
             # No timestamp
         }
-        await authenticated_client.websocket.send(json.dumps(request))
-        response = json.loads(await authenticated_client.websocket.recv())
+        response = await authenticated_client.send_raw_request(request)
         assert response["code"] == 400, (
             f"Missing timestamp should be rejected with 400, got: {response}"
         )

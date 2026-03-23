@@ -1,9 +1,8 @@
-import json
+import orjson
 import time
-from typing import Optional
 
 from sqlalchemy import desc, update, func, true
-from include.classes.connection import ConnectionHandler
+from include.classes.handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
 from include.classes.request import RequestHandler
 from include.database.handler import Session
@@ -52,7 +51,7 @@ class RequestLockdownHandler(RequestHandler):
 
         handler.conclude_request(200, {}, smsg.SUCCESS)
         handler.broadcast(
-            json.dumps({"action": "lockdown", "status": lockdown_enabled.is_set()})
+            orjson.dumps({"action": "lockdown", "status": lockdown_enabled.is_set()})
         )
         return 0, None, handler.username
 

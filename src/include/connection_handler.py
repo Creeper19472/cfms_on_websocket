@@ -1,4 +1,4 @@
-import json
+import orjson
 import os
 import threading
 import time
@@ -6,12 +6,12 @@ from typing import Optional, Union
 import jsonschema
 import websockets
 import websockets.sync.server
-from websockets.typing import Data
 from include.classes.enum.permissions import Permissions
+from include.classes.frame import FrameType, MultiplexConnection, Stream
 from include.classes.misc.guard import LoginGuard
 from include.classes.request import RequestHandler
 from include.conf_loader import global_config
-from include.classes.connection import ConnectionHandler
+from include.classes.handler import ConnectionHandler
 from include.database.handler import Session
 from include.database.models.classic import User
 from include.util.address import get_client_ip
@@ -101,7 +101,7 @@ from include.handlers.keyring import (
 
 from include.constants import CORE_VERSION, NONCE_MIN_LENGTH, PROTOCOL_VERSION
 from include.nonce_store import nonce_store
-from include.shared import connected_listeners, lockdown_enabled
+from include.shared import lockdown_enabled, clients, clients_lock
 
 import cProfile, pstats, io
 from pstats import SortKey
@@ -115,8 +115,6 @@ from include.util.log import getCustomLogger
 logger = getCustomLogger(
     "connection_handler", filepath="./content/logs/connection_handler.log"
 )
-
-connected_listeners: set[websockets.sync.server.ServerConnection]
 
 
 def _validate_replay_protection(
@@ -162,41 +160,43 @@ def handle_connection(websocket: websockets.sync.server.ServerConnection):
     client_cn = get_client_cert_subject(websocket)
     if client_cn:
         logger.info(
-            f"Incoming connection: {websocket.remote_address[0]} "
-            f"(client cert CN: {client_cn})"
+            f"Incoming connection: {websocket.remote_address[0]} (client cert CN: {client_cn})"
         )
     else:
         logger.info(f"Incoming connection: {websocket.remote_address[0]}")
 
+    multiplexer = MultiplexConnection(websocket)
+
+    with clients_lock:
+        clients.add(multiplexer)
+
     try:
         while True:
-            message = websocket.recv()
-            logger.debug(f"Received message: {message}")
-            if message is None:
+            stream = multiplexer.accept_stream()
+            if stream is None:
                 break  # Connection closed
-            handle_request(websocket, message)
-    except (websockets.ConnectionClosed, websockets.exceptions.ConnectionClosedOK):
-        logger.info("WebSocket connection closed")
+
+            threading.Thread(target=handle_request, args=(stream,), daemon=True).start()
+
     except Exception as e:
         logger.error(f"Error handling WebSocket connection: {e}", exc_info=True)
     finally:
+        multiplexer.close()
         websocket.close()
-        try:
-            connected_listeners.remove(websocket)
-        except KeyError:
-            ...
+
+        with clients_lock:
+            clients.discard(multiplexer)
 
 
-def handle_request(websocket: websockets.sync.server.ServerConnection, message: Data):
+def handle_request(stream: Stream):
     """
     Handle a specific request/message received over the WebSocket connection.
 
     Args:
-        websocket: The WebSocket connection object.
-        message: The data/message received from the client.
+        stream: The Stream object representing the logical request stream.
     """
 
-    ip = get_client_ip(websocket)
+    ip = get_client_ip(stream.connection._ws)
 
     if not LoginGuard.check_access(f"ip_limit|{ip}"):
         response = {
@@ -204,14 +204,15 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
             "message": "Your IP has been temporarily blocked due to suspicious activity. Please try again later.",
             "timestamp": time.time(),
         }
-        websocket.send(json.dumps(response))
+        stream.send(orjson.dumps(response), frame_type=FrameType.CONCLUSION)
         # 强制断开 WebSocket 连接
         # 1008 是 WebSocket 协议定义的 Policy Violation 错误码
-        websocket.close(code=1008, reason="IP temporarily blocked")
+        stream.connection.close()
+        stream.connection._ws.close(code=1008, reason="IP temporarily blocked")
         return
 
     try:
-        this_handler = ConnectionHandler(websocket, message)
+        this_handler = ConnectionHandler(stream)
     except jsonschema.ValidationError as error:
         # Request envelope failed schema validation — send error and bail out
         response = {
@@ -220,7 +221,12 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
             "message": f"Invalid request format: {error.message}",
             "timestamp": time.time(),
         }
-        websocket.send(json.dumps(response, ensure_ascii=False))
+        stream.send(
+            orjson.dumps(
+                response,
+            ),
+            frame_type=FrameType.CONCLUSION,
+        )
         return
 
     action = this_handler.action
@@ -231,7 +237,6 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
 
     available_functions: dict[str, type[RequestHandler]] = {
         "server_info": RequestServerInfoHandler,
-        "register_listener": RequestRegisterListenerHandler,
         # 认证类
         "login": RequestLoginHandler,
         "refresh_token": RequestRefreshTokenHandler,
@@ -318,7 +323,6 @@ def handle_request(websocket: websockets.sync.server.ServerConnection, message: 
     whitelisted_functions = [
         # "echo",
         "server_info",
-        "register_listener",
         "login",
         "refresh_token",
         "validate_2fa",
@@ -502,20 +506,4 @@ class RequestServerInfoHandler(RequestHandler):
         handler.conclude_request(
             200, server_info, "Server information retrieved successfully"
         )
-        return
-
-
-class RequestRegisterListenerHandler(RequestHandler):
-    """
-    Register a connection as a listener.
-
-    Usually, a listener connection should not send messages to the server, in order
-    to prevent potential issues.
-    """
-
-    data_schema = {"type": "object", "additionalProperties": False}
-
-    def handle(self, handler: ConnectionHandler) -> None:
-        connected_listeners.add(handler.websocket)
-        handler.conclude_request(200, {}, "registered as a listener")
         return

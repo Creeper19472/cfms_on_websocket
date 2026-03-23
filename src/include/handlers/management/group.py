@@ -1,5 +1,9 @@
-from typing import Optional
-from include.classes.connection import ConnectionHandler
+__all__ = [
+    "RequestListGroupsHandler",
+    # ...
+]
+
+from include.classes.handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
 from include.classes.request import RequestHandler
 from include.database.handler import Session
@@ -10,12 +14,6 @@ from include.database.models.classic import (
     UserMembership,
 )
 from include.util.group import create_group
-
-
-__all__ = [
-    "RequestListGroupsHandler",
-    # ...
-]
 
 
 class RequestListGroupsHandler(RequestHandler):

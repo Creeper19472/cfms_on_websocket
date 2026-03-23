@@ -1,4 +1,6 @@
-from include.classes.connection import ConnectionHandler
+__all__ = ["RequestGrantAccessHandler", "RequestRevokeAccessHandler"]
+
+from include.classes.handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
 from include.classes.request import RequestHandler
 from include.database.handler import Session
@@ -12,8 +14,6 @@ from include.database.models.entity import (
     Folder,
 )
 import include.system.messages as smsg
-
-__all__ = ["RequestGrantAccessHandler", "RequestRevokeAccessHandler"]
 
 ENTITY_TYPE_MAPPING = {"user": User, "group": UserGroup}
 TARGET_TYPE_MAPPING = {"document": Document, "directory": Folder}

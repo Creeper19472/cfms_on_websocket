@@ -1,7 +1,7 @@
+__all__ = ["validate_access_rules"]
+
 from typing import Any
 import jsonschema
-
-__all__ = ["validate_access_rules"]
 
 
 schema = {

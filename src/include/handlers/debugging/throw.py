@@ -1,5 +1,5 @@
 from include.classes.request import RequestHandler
-from include.classes.connection import ConnectionHandler
+from include.classes.handler import ConnectionHandler
 from include.database.handler import Session
 from include.database.models.classic import User
 

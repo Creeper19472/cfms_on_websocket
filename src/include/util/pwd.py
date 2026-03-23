@@ -1,11 +1,11 @@
-from typing import List
-from typing import Optional
-
 __all__ = [
     "MissingComponentsError",
     "InvaildPasswordLengthError",
     "check_passwd_requirements",
 ]
+
+from typing import List
+from typing import Optional
 
 
 class MissingComponentsError(ValueError):
@@ -51,7 +51,7 @@ def check_passwd_requirements(
         raise InvaildPasswordLengthError(length, min_length, max_length)
 
     pwd_set = set(passwd)
-    
+
     if must_contain is None:
         must_contain = []
 

@@ -1,6 +1,6 @@
 import time
 
-from include.classes.connection import ConnectionHandler
+from include.classes.handler import ConnectionHandler
 from include.classes.misc.guard import LoginGuard
 from include.classes.request import RequestHandler
 from include.conf_loader import global_config
@@ -43,7 +43,7 @@ class RequestLoginHandler(RequestHandler):
         password: str = handler.data["password"]
         two_factor_auth_token: str = handler.data.get("2fa_token", "")
         
-        ip = get_client_ip(handler.websocket)
+        ip = get_client_ip(handler.stream.connection._ws)
         ip_id = f"ip_limit|{ip}"
         user_id = f"user_limit|{ip}|{username}"
 

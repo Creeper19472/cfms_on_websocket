@@ -5,12 +5,10 @@ This module provides handlers for setting up, validating, and canceling
 two-factor authentication using Time-based One-Time Passwords (TOTP).
 """
 
-import json
-import time
+import orjson
 
-from include.classes.connection import ConnectionHandler
+from include.classes.handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
-from include.classes.misc.guard import LoginGuard
 from include.classes.request import RequestHandler
 from include.database.handler import Session
 from include.database.models.classic import User
@@ -295,7 +293,7 @@ class RequestGet2FAStatusHandler(RequestHandler):
                     "enabled": target.totp_enabled,
                     "method": "totp" if target.totp_enabled else None,
                     "backup_codes_count": (
-                        len(json.loads(target.totp_backup_codes))
+                        len(orjson.loads(target.totp_backup_codes))
                         if target.totp_backup_codes
                         else 0
                     ),

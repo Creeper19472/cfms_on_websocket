@@ -5,10 +5,12 @@ Provides functionality to search for documents and directories by name,
 with permission filtering, result limiting, and sorting capabilities.
 """
 
+__all__ = ["RequestSearchHandler"]
+
 import time
 from typing import List, Dict, Any
 
-from include.classes.connection import ConnectionHandler
+from include.classes.handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
 from include.classes.request import RequestHandler
 from include.conf_loader import global_config
@@ -21,9 +23,6 @@ from include.util.recursive.ancestors import (
 )
 from include.util.recursive.check import check_access_for_object
 from include.util.fetch.fetch import prefetch_user_blocks, batch_prefetch_granted_ids
-
-
-__all__ = ["RequestSearchHandler"]
 
 
 class RequestSearchHandler(RequestHandler):

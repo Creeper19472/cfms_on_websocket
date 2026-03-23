@@ -1,5 +1,3 @@
-from include.classes.version import Version
-
 __all__ = [
     "CORE_VERSION",
     "PROTOCOL_VERSION",
@@ -15,8 +13,11 @@ __all__ = [
     "ROOT_DIRECTORY_ID",
 ]
 
-CORE_VERSION = Version("0.1.0.260320_alpha")
-PROTOCOL_VERSION = 9
+from include.classes.version import Version
+
+
+CORE_VERSION = Version("0.1.0.260323_alpha")
+PROTOCOL_VERSION = 10
 
 AVAILABLE_ACCESS_TYPES = ["read", "write", "move", "manage"]
 AVAILABLE_BLOCK_TYPES: set = {"read", "write", "move"}

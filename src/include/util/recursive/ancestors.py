@@ -1,3 +1,8 @@
+__all__ = [
+    "search_documents_with_access",
+    "search_folders_with_access",
+]
+
 from collections import defaultdict
 from typing import Optional
 import time
@@ -7,11 +12,6 @@ from sqlalchemy import text
 
 from include.database.models.entity import Document, Folder
 from include.database.models.classic import ObjectAccessEntry
-
-__all__ = [
-    "search_documents_with_access",
-    "search_folders_with_access",
-]
 
 
 # ── 内部辅助：给定起始 folder_id 集合和需要查OAE的目标ID集合，

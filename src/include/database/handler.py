@@ -1,3 +1,5 @@
+__all__ = ["engine", "Session", "Base"]
+
 from sqlalchemy import URL, create_engine, event
 from sqlalchemy.orm import (
     DeclarativeBase,
@@ -10,13 +12,12 @@ from include.classes.enum.status import EntityStatus
 from include.conf_loader import global_config
 from include.constants import DEFAULT_TOKEN_EXPIRY_SECONDS
 
-__all__ = ["engine", "Session", "Base"]
-
 SUPPORTED_DB_TYPES = {
     "mysql": "mysql+mysqlconnector",
     "postgresql": "postgresql+psycopg2",
     "sqlite": "sqlite",
 }
+
 
 debug_enabled = global_config["debug"]
 
@@ -62,8 +63,12 @@ def _add_filtering_criteria(execute_state: ORMExecuteState) -> None:
         from include.database.models.entity import Folder, Document
 
         execute_state.statement = execute_state.statement.options(
-            with_loader_criteria(Folder, lambda cls: cls.status != EntityStatus.DELETED),
-            with_loader_criteria(Document, lambda cls: cls.status != EntityStatus.DELETED),
+            with_loader_criteria(
+                Folder, lambda cls: cls.status != EntityStatus.DELETED
+            ),
+            with_loader_criteria(
+                Document, lambda cls: cls.status != EntityStatus.DELETED
+            ),
         )
 
 

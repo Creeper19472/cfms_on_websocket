@@ -1,12 +1,12 @@
 import base64
 import hashlib
-import json
+import orjson
 import mmap
 import os
 import sys
 import time
 import traceback
-from typing import Iterable
+from typing import Any, Iterable
 from typing import Optional
 
 import jsonschema
@@ -16,11 +16,12 @@ from Crypto.Random import get_random_bytes
 from websockets.sync.server import ServerConnection
 from websockets.typing import Data
 
+from include.classes.frame import FrameType, MultiplexConnection, Stream
 from include.conf_loader import global_config
 from include.constants import FILE_TRANSFER_MAX_CHUNK_SIZE, FILE_TRANSFER_MIN_CHUNK_SIZE
 from include.database.handler import Session
 from include.database.models.file import File, FileTask
-from include.shared import connected_listeners
+from include.shared import clients, clients_lock
 from include.util.log import getCustomLogger
 
 logger = getCustomLogger(
@@ -58,11 +59,14 @@ _REQUEST_ENVELOPE_SCHEMA = {
 
 
 class ConnectionHandler:
-    def __init__(self, websocket: ServerConnection, message: Data) -> None:
-        self.websocket = websocket
-        self.remote_address = websocket.remote_address[0]
+    def __init__(self, stream: Stream) -> None:
+        self.stream = stream
+        self.remote_address = self.stream.connection._ws.remote_address[0]
 
-        self.request = json.loads(message)
+        # Since a thread is created only after a new request has been
+        # received, the necessary initial data should be available
+        # immediately here.
+        self.request = orjson.loads(stream.recv().data)
         self.logger = logger
 
         # Validate the request envelope structure and field types
@@ -95,10 +99,12 @@ class ConnectionHandler:
             "timestamp": time.time(),
         }
 
-        response_json = json.dumps(response, ensure_ascii=False)
+        response_json = orjson.dumps(
+            response,
+        )
         self.logger.debug(f"Sending response: {response_json}")
 
-        self.websocket.send(response_json)
+        self.stream.send(response_json, frame_type=FrameType.CONCLUSION)
 
     def send_file(self, task_id: str) -> None:
         """
@@ -154,8 +160,8 @@ class ConnectionHandler:
             chunk_size = global_config["server"]["file_chunk_size"]  # 文件分块大小
             total_chunks = (file_size + chunk_size - 1) // chunk_size
 
-            self.websocket.send(
-                json.dumps(
+            self.stream.send(
+                orjson.dumps(
                     {
                         "action": "transfer_file",
                         "data": {
@@ -165,16 +171,16 @@ class ConnectionHandler:
                             "total_chunks": total_chunks,  # 文件总分块数
                         },
                     },
-                    ensure_ascii=False,
                 )
             )
 
             received_response = (
-                self.websocket.recv()
+                self.stream.recv()
             )  # Wait for client acknowledgment before sending the file
-            if received_response != "ready":
+            if received_response.data != b"ready":
                 self.logger.error(
-                    f"Client did not acknowledge readiness for file transfer: {received_response}"
+                    "Client did not acknowledge readiness for file "
+                    f"transfer: {received_response}"
                 )
                 self.conclude_request(400, {}, "Client not ready for file transfer")
                 return
@@ -207,12 +213,16 @@ class ConnectionHandler:
                                     "chunk": base64.b64encode(encrypted_chunk).decode(),
                                 },
                             }
-                            self.websocket.send(json.dumps(payload, ensure_ascii=False))
+                            self.stream.send(
+                                orjson.dumps(
+                                    payload,
+                                )
+                            )
                             chunk_index += 1
 
                     # 发送密钥和IV
-                    self.websocket.send(
-                        json.dumps(
+                    self.stream.send(
+                        orjson.dumps(
                             {
                                 "action": "aes_key",
                                 "data": {
@@ -220,7 +230,6 @@ class ConnectionHandler:
                                     # "iv": base64.b64encode(iv).decode(),
                                 },
                             },
-                            ensure_ascii=False,
                         )
                     )
                     file_task.status = 1
@@ -254,10 +263,14 @@ class ConnectionHandler:
             "message": "waiting for file transfer",
         }
 
-        self.websocket.send(json.dumps(handshake_msg, ensure_ascii=False))
+        self.stream.send(
+            orjson.dumps(
+                handshake_msg,
+            )
+        )
         self.logger.info("Receiving file: handshake sent")
 
-        task_info = json.loads(self.websocket.recv())
+        task_info = orjson.loads(self.stream.recv().data)
 
         try:
             jsonschema.validate(
@@ -320,14 +333,14 @@ class ConnectionHandler:
                 raise ValueError(f"File not found for file_id: {file_task.file_id}")
 
             if file_size == 0:  # 空文件
-                self.websocket.send("stop")
+                self.stream.send("stop")
                 with open(file.path, "wb") as f:
                     f.truncate(0)
                 file.active = True
                 session.commit()
                 return
 
-            self.websocket.send(f"ready {chunk_size}")
+            self.stream.send(f"ready {chunk_size}")
             try:
                 # 生成保存文件的路径
                 if not file.id:
@@ -339,8 +352,8 @@ class ConnectionHandler:
                     try:
                         while True:
                             # Receive encrypted data from the client
-                            data = self.websocket.recv()
-                            f.write(data)  # type: ignore
+                            data = self.stream.recv().data
+                            f.write(data)
 
                             if not data or len(data) < chunk_size:
                                 break
@@ -411,40 +424,37 @@ class ConnectionHandler:
         """
         Adopted from websockets.asyncio.server.broadcast().
         """
-        connections: Iterable[ServerConnection] = connected_listeners
+        with clients_lock:
+            connections: set[MultiplexConnection] = clients.copy()
 
         if isinstance(message, str):
-            send_method = "send_text"
             message = message.encode()
         elif isinstance(message, (bytes, bytearray, memoryview)):
-            send_method = "send_binary"
+            pass
         else:
             raise TypeError("data must be str or bytes")
-
-        if raise_exceptions:
-            if sys.version_info[:2] < (3, 11):  # pragma: no cover
-                raise ValueError("raise_exceptions requires at least Python 3.11")
 
         exceptions: list[Exception] = []
 
         for connection in connections:
             exception: Exception
 
-            if connection.protocol.state is not websockets.protocol.OPEN:
+            if connection._ws.protocol.state is not websockets.protocol.OPEN:
                 continue
 
             try:
                 # Call connection.protocol.send_text or send_binary.
                 # Either way, message is already converted to bytes.
                 # getattr(connection.protocol, send_method)(message)
-                connection.send(message)
+                stream = connection.create_stream()
+                stream.send(message, frame_type=FrameType.CONCLUSION)
             except Exception as write_exception:
                 if raise_exceptions:
                     exception = RuntimeError("failed to write message")
                     exception.__cause__ = write_exception
                     exceptions.append(exception)
                 else:
-                    connection.logger.warning(
+                    connection._ws.logger.warning(
                         "skipped broadcast: failed to write message: %s",
                         traceback.format_exception_only(
                             # Remove first argument when dropping Python 3.9.
