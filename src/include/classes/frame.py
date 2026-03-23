@@ -4,7 +4,7 @@ import threading
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import Any, Optional, cast
-from websockets import Data
+from websockets.typing import Data
 from websockets.sync.server import ServerConnection
 
 HEADER_FORMAT = "!IB"  # 4 bytes for frame_id, 1 byte for frame_type
@@ -31,7 +31,7 @@ class Stream:
         self.frame_id = frame_id
         self._queue: queue.Queue = queue.Queue(100)
 
-    def send(self, data: Any, frame_type: FrameType = FrameType.PROCESS):
+    def send(self, data: Data, frame_type: FrameType = FrameType.PROCESS):
         """在这个流上发送数据"""
         self.connection._send_frame(self.frame_id, frame_type, data)
 

@@ -6,12 +6,10 @@ from typing import Optional, Union
 import jsonschema
 import websockets
 import websockets.sync.server
-from websockets.typing import Data
 from include.classes.enum.permissions import Permissions
 from include.classes.frame import FrameType, MultiplexConnection, Stream
 from include.classes.misc.guard import LoginGuard
 from include.classes.request import RequestHandler
-from include.classes.wrapped import ManagedConnection
 from include.conf_loader import global_config
 from include.classes.handler import ConnectionHandler
 from include.database.handler import Session
@@ -202,7 +200,7 @@ def handle_request(stream: Stream):
             "message": "Your IP has been temporarily blocked due to suspicious activity. Please try again later.",
             "timestamp": time.time(),
         }
-        stream.send(response, frame_type=FrameType.CONCLUSION)
+        stream.send(orjson.dumps(response), frame_type=FrameType.CONCLUSION)
         # 强制断开 WebSocket 连接
         # 1008 是 WebSocket 协议定义的 Policy Violation 错误码
         stream.connection.close()
