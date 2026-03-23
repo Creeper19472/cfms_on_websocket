@@ -1,5 +1,5 @@
 from typing import Optional
-from include.classes.connection import ConnectionHandler
+from include.classes.handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
 from include.classes.request import RequestHandler
 from include.database.handler import Session

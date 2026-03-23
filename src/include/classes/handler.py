@@ -6,7 +6,7 @@ import os
 import sys
 import time
 import traceback
-from typing import Iterable
+from typing import Any, Iterable
 from typing import Optional
 
 import jsonschema
@@ -16,12 +16,14 @@ from Crypto.Random import get_random_bytes
 from websockets.sync.server import ServerConnection
 from websockets.typing import Data
 
+from include.classes.frame import FrameType, Stream
 from include.conf_loader import global_config
 from include.constants import FILE_TRANSFER_MAX_CHUNK_SIZE, FILE_TRANSFER_MIN_CHUNK_SIZE
 from include.database.handler import Session
 from include.database.models.file import File, FileTask
 from include.shared import connected_listeners
 from include.util.log import getCustomLogger
+from include.classes.wrapped import ManagedConnection
 
 logger = getCustomLogger(
     "connection",
@@ -58,11 +60,14 @@ _REQUEST_ENVELOPE_SCHEMA = {
 
 
 class ConnectionHandler:
-    def __init__(self, websocket: ServerConnection, message: Data) -> None:
-        self.websocket = websocket
-        self.remote_address = websocket.remote_address[0]
+    def __init__(self, stream: Stream) -> None:
+        self.stream = stream
+        self.remote_address = self.stream.connection._ws.remote_address[0]
 
-        self.request = json.loads(message)
+        # Since a thread is created only after a new request has been 
+        # received, the necessary initial data should be available 
+        # immediately here.
+        self.request = stream.recv().data
         self.logger = logger
 
         # Validate the request envelope structure and field types
@@ -98,7 +103,7 @@ class ConnectionHandler:
         response_json = json.dumps(response, ensure_ascii=False)
         self.logger.debug(f"Sending response: {response_json}")
 
-        self.websocket.send(response_json)
+        self.stream.send(response_json, frame_type=FrameType.CONCLUSION)
 
     def send_file(self, task_id: str) -> None:
         """
@@ -154,7 +159,7 @@ class ConnectionHandler:
             chunk_size = global_config["server"]["file_chunk_size"]  # 文件分块大小
             total_chunks = (file_size + chunk_size - 1) // chunk_size
 
-            self.websocket.send(
+            self.stream.send(
                 json.dumps(
                     {
                         "action": "transfer_file",
@@ -170,9 +175,9 @@ class ConnectionHandler:
             )
 
             received_response = (
-                self.websocket.recv()
+                self.stream.recv()
             )  # Wait for client acknowledgment before sending the file
-            if received_response != "ready":
+            if received_response.data != "ready":
                 self.logger.error(
                     f"Client did not acknowledge readiness for file transfer: {received_response}"
                 )
@@ -207,11 +212,11 @@ class ConnectionHandler:
                                     "chunk": base64.b64encode(encrypted_chunk).decode(),
                                 },
                             }
-                            self.websocket.send(json.dumps(payload, ensure_ascii=False))
+                            self.stream.send(json.dumps(payload, ensure_ascii=False))
                             chunk_index += 1
 
                     # 发送密钥和IV
-                    self.websocket.send(
+                    self.stream.send(
                         json.dumps(
                             {
                                 "action": "aes_key",
@@ -254,10 +259,10 @@ class ConnectionHandler:
             "message": "waiting for file transfer",
         }
 
-        self.websocket.send(json.dumps(handshake_msg, ensure_ascii=False))
+        self.stream.send(json.dumps(handshake_msg, ensure_ascii=False))
         self.logger.info("Receiving file: handshake sent")
 
-        task_info = json.loads(self.websocket.recv())
+        task_info = json.loads(self.stream.recv().data)
 
         try:
             jsonschema.validate(
@@ -320,14 +325,14 @@ class ConnectionHandler:
                 raise ValueError(f"File not found for file_id: {file_task.file_id}")
 
             if file_size == 0:  # 空文件
-                self.websocket.send("stop")
+                self.stream.send("stop")
                 with open(file.path, "wb") as f:
                     f.truncate(0)
                 file.active = True
                 session.commit()
                 return
 
-            self.websocket.send(f"ready {chunk_size}")
+            self.stream.send(f"ready {chunk_size}")
             try:
                 # 生成保存文件的路径
                 if not file.id:
@@ -339,8 +344,8 @@ class ConnectionHandler:
                     try:
                         while True:
                             # Receive encrypted data from the client
-                            data = self.websocket.recv()
-                            f.write(data)  # type: ignore
+                            data = self.stream.recv().data
+                            f.write(data)
 
                             if not data or len(data) < chunk_size:
                                 break

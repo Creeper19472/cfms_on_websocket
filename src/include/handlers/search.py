@@ -8,7 +8,7 @@ with permission filtering, result limiting, and sorting capabilities.
 import time
 from typing import List, Dict, Any
 
-from include.classes.connection import ConnectionHandler
+from include.classes.handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
 from include.classes.request import RequestHandler
 from include.conf_loader import global_config

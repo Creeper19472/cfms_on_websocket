@@ -8,7 +8,7 @@ two-factor authentication using Time-based One-Time Passwords (TOTP).
 import json
 import time
 
-from include.classes.connection import ConnectionHandler
+from include.classes.handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
 from include.classes.misc.guard import LoginGuard
 from include.classes.request import RequestHandler

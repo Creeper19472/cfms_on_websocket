@@ -11,7 +11,7 @@ _password_hasher = PasswordHasher()
 
 from include.classes.enum.permissions import Permissions
 from include.constants import AVAILABLE_BLOCK_TYPES
-from include.classes.connection import ConnectionHandler
+from include.classes.handler import ConnectionHandler
 from include.classes.request import RequestHandler
 from include.conf_loader import global_config
 from include.database.handler import Session
