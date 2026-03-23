@@ -20,7 +20,7 @@ class FrameType(IntEnum):
 class Frame:
     frame_id: int
     frame_type: FrameType
-    data: Any
+    data: bytes  # can't be str
 
 
 class Stream:
@@ -87,11 +87,11 @@ class MultiplexConnection:
             while self._is_running:
                 raw_payload = self._ws.recv()
 
-                if isinstance(raw_payload, str):
-                    raw_payload = raw_payload.encode("utf-8")
-
                 if len(raw_payload) < HEADER_SIZE:
                     continue
+
+                if isinstance(raw_payload, str):
+                    raw_payload = raw_payload.encode("utf-8")
 
                 frame_id, frame_type_val = struct.unpack_from(
                     HEADER_FORMAT, raw_payload
