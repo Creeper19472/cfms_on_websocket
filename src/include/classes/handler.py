@@ -67,7 +67,7 @@ class ConnectionHandler:
         # Since a thread is created only after a new request has been 
         # received, the necessary initial data should be available 
         # immediately here.
-        self.request = stream.recv().data
+        self.request = json.loads(stream.recv().data)
         self.logger = logger
 
         # Validate the request envelope structure and field types

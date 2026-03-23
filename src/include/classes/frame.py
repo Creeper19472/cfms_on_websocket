@@ -4,7 +4,7 @@ import struct
 import threading
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Any, Optional
+from typing import Any, Optional, cast
 from websockets.sync.server import ServerConnection
 
 HEADER_FORMAT = "!IB"  # 4 bytes for frame_id, 1 byte for frame_type
@@ -48,7 +48,7 @@ class Stream:
 
 
 class MultiplexConnection:
-    def __init__(self, websocket: Any):
+    def __init__(self, websocket: ServerConnection):
         """
         :param websocket: ServerConnection
         """
@@ -88,27 +88,17 @@ class MultiplexConnection:
             while self._is_running:
                 raw_payload = self._ws.recv()
 
-                if isinstance(raw_payload, str):
-                    raw_payload = raw_payload.encode("utf-8")
-                elif not isinstance(raw_payload, bytes):
-                    raw_payload = bytes(raw_payload)
-
                 if len(raw_payload) < HEADER_SIZE:
                     continue
 
-                header = raw_payload[:HEADER_SIZE]
-                data_bytes = raw_payload[HEADER_SIZE:]
+                header = cast(bytes, raw_payload[:HEADER_SIZE])
+                data = raw_payload[HEADER_SIZE:]
                 frame_id, frame_type_val = struct.unpack(HEADER_FORMAT, header)
 
                 try:
                     frame_type = FrameType(frame_type_val)
                 except ValueError:
                     continue
-
-                try:
-                    data = json.loads(data_bytes.decode("utf-8"))
-                except (UnicodeDecodeError, json.JSONDecodeError):
-                    data = data_bytes
 
                 frame = Frame(frame_id=frame_id, frame_type=frame_type, data=data)
 
