@@ -370,6 +370,30 @@ class CFMSTestClient:
 
         raise RuntimeError("Unexpected response format from server")
 
+    async def send_raw_request(
+        self,
+        request: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Send a raw request object (custom nonce/timestamp) via multiplex stream."""
+        if self.multiplexer is None:
+            raise RuntimeError("Not connected to server. Call connect() first.")
+
+        stream = self.multiplexer.create_stream()
+        await stream.send(orjson.dumps(request))
+
+        frame = await stream.recv()
+        payload = await self._parse_frame_data(frame)
+
+        if isinstance(payload, dict):
+            return payload
+        if isinstance(payload, str):
+            try:
+                return orjson.loads(payload)
+            except orjson.JSONDecodeError as e:
+                raise RuntimeError(f"Invalid response from server: {e}") from e
+
+        raise RuntimeError("Unexpected response format from server")
+
     async def login(
         self, username: str, password: str, two_fa_token: Optional[str] = None
     ) -> Dict[str, Any]:
