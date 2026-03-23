@@ -51,7 +51,12 @@ class RequestLockdownHandler(RequestHandler):
 
         handler.conclude_request(200, {}, smsg.SUCCESS)
         handler.broadcast(
-            orjson.dumps({"action": "lockdown", "status": lockdown_enabled.is_set()})
+            orjson.dumps(
+                {
+                    "event": "lockdown",
+                    "data": {"status": lockdown_enabled.is_set()},
+                }
+            )
         )
         return 0, None, handler.username
 
