@@ -37,27 +37,51 @@ class Stream:
 
     def recv(self, timeout: Optional[float] = None) -> Frame:
         """接收属于这个流的数据，阻塞直到拿到为止"""
-        return self._queue.get(timeout=timeout)
+        frame = self._queue.get(timeout=timeout)
+        if frame is None:
+            raise ConnectionError("MultiplexConnection has been closed")
+        return frame
 
-    def _put_incoming_frame(self, frame: Frame):
+    def _put_incoming_frame(self, frame: Optional[Frame]):
         """由 Dispatcher 调用，将属于该流的数据塞入队列"""
         self._queue.put(frame)
 
 
 class MultiplexConnection:
-    def __init__(self, websocket: ServerConnection):
+    def __init__(self, websocket: Any):
+        """
+        :param websocket: ServerConnection
+        """
         self._ws = websocket
-        self._server_frame_id = 0
+
+        self._next_frame_id = 2
+        self._id_lock = threading.Lock()
+
         self._streams: dict[int, Stream] = {}
         self._streams_lock = threading.Lock()
         self._send_lock = threading.Lock()
 
-        # 新增队列：用于将客户端发起的新请求流传递给主线程
         self._new_streams: queue.Queue[Optional[Stream]] = queue.Queue()
 
         self._is_running = True
         self._dispatcher = threading.Thread(target=self._recv_loop, daemon=True)
         self._dispatcher.start()
+
+    def create_stream(self) -> Stream:
+        """主动发起一个新的数据流"""
+        with self._id_lock:
+            frame_id = self._next_frame_id
+            self._next_frame_id += 2  # 保持奇偶性
+
+        new_stream = Stream(self, frame_id)
+        with self._streams_lock:
+            self._streams[frame_id] = new_stream
+            
+        return new_stream
+
+    def accept_stream(self) -> Optional[Stream]:
+        """阻塞等待并获取对方创建的新的工作流"""
+        return self._new_streams.get()
 
     def _recv_loop(self):
         try:
@@ -90,7 +114,7 @@ class MultiplexConnection:
 
                 with self._streams_lock:
                     if frame.frame_id not in self._streams:
-                        # 客户端发起的新流，通知主线程
+                        # 对方发起的新流，通知本地主线程
                         new_stream = Stream(self, frame.frame_id)
                         self._streams[frame.frame_id] = new_stream
                         self._new_streams.put(new_stream)
@@ -105,11 +129,16 @@ class MultiplexConnection:
                         self._streams.pop(frame.frame_id, None)
 
         except Exception as e:
-            raise
             # logger.debug(f"[Dispatcher] Connection closed or error: {e}")
+            pass
         finally:
             self._is_running = False
-            self._new_streams.put(None)
+            self._new_streams.put(None)  # 唤醒在 accept_stream 阻塞的线程
+            
+            # 唤醒所有正在 Stream.recv() 阻塞的线程，防止死锁
+            with self._streams_lock:
+                for stream in self._streams.values():
+                    stream._put_incoming_frame(None)
 
     def _send_frame(self, frame_id: int, frame_type: FrameType, data: Any):
         header = struct.pack(HEADER_FORMAT, frame_id, frame_type.value)
@@ -131,10 +160,9 @@ class MultiplexConnection:
             with self._streams_lock:
                 self._streams.pop(frame_id, None)
 
-    def accept_stream(self) -> Optional[Stream]:
-        """阻塞等待并获取客户端创建的新的工作流"""
-        return self._new_streams.get()
-
     def close(self):
         self._is_running = False
-        self._new_streams.put(None)
+        try:
+            self._ws.close()
+        except Exception:
+            pass

@@ -205,6 +205,7 @@ def handle_request(stream: Stream):
         stream.send(response, frame_type=FrameType.CONCLUSION)
         # 强制断开 WebSocket 连接
         # 1008 是 WebSocket 协议定义的 Policy Violation 错误码
+        stream.connection.close()
         stream.connection._ws.close(code=1008, reason="IP temporarily blocked")
         return
 
