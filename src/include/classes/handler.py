@@ -177,7 +177,7 @@ class ConnectionHandler:
             received_response = (
                 self.stream.recv()
             )  # Wait for client acknowledgment before sending the file
-            if received_response.data.decode("utf-8") != "ready":
+            if received_response.data != b"ready":
                 self.logger.error(
                     "Client did not acknowledge readiness for file "
                     f"transfer: {received_response}"

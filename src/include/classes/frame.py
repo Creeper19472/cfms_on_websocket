@@ -20,7 +20,7 @@ class FrameType(IntEnum):
 class Frame:
     frame_id: int
     frame_type: FrameType
-    data: bytes  # can't be str
+    data: bytes | memoryview  # can't be str
 
 
 class Stream:
