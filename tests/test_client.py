@@ -15,9 +15,10 @@ import time
 import struct
 import queue
 import threading
+from dataclasses import dataclass
+from enum import IntEnum
 from typing import Any, Dict, Optional
 from websockets.asyncio.client import connect, ClientConnection
-from include.classes.frame import FrameType, Frame
 
 HEADER_FORMAT = "!IB"
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
@@ -39,6 +40,18 @@ def calculate_sha256(file_path: str) -> str:
         # Use memory-mapped files to map directly to memory
         mmapped_file = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
         return hashlib.sha256(mmapped_file).hexdigest()
+
+
+class FrameType(IntEnum):
+    PROCESS = 0
+    CONCLUSION = 1
+
+
+@dataclass
+class Frame:
+    frame_id: int
+    frame_type: FrameType
+    data: Any
 
 
 class AsyncStream:
