@@ -1,4 +1,4 @@
-import json
+import orjson
 import time
 from typing import Optional
 
@@ -52,7 +52,7 @@ class RequestLockdownHandler(RequestHandler):
 
         handler.conclude_request(200, {}, smsg.SUCCESS)
         handler.broadcast(
-            json.dumps({"action": "lockdown", "status": lockdown_enabled.is_set()})
+            orjson.dumps({"action": "lockdown", "status": lockdown_enabled.is_set()})
         )
         return 0, None, handler.username
 

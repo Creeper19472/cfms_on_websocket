@@ -8,7 +8,7 @@ These tests verify that the server correctly:
 4. Accepts valid requests with unique nonces
 """
 
-import json
+import orjson
 import secrets
 import time
 
@@ -48,15 +48,15 @@ class TestReplayProtection:
             "nonce": nonce,
             "timestamp": ts,
         }
-        await authenticated_client.websocket.send(json.dumps(request1))
-        response1 = json.loads(await authenticated_client.websocket.recv())
+        await authenticated_client.websocket.send(orjson.dumps(request1))
+        response1 = orjson.loads(await authenticated_client.websocket.recv())
         assert response1["code"] == 200, (
             f"First request should succeed, got: {response1}"
         )
 
         # Second request with same nonce should be rejected
-        await authenticated_client.websocket.send(json.dumps(request1))
-        response2 = json.loads(await authenticated_client.websocket.recv())
+        await authenticated_client.websocket.send(orjson.dumps(request1))
+        response2 = orjson.loads(await authenticated_client.websocket.recv())
         assert response2["code"] == 1001, (
             f"Replayed request should be rejected with 1001, got: {response2}"
         )
@@ -79,8 +79,8 @@ class TestReplayProtection:
             "nonce": secrets.token_hex(16),
             "timestamp": time.time() - 60,  # 60 seconds ago
         }
-        await authenticated_client.websocket.send(json.dumps(request))
-        response = json.loads(await authenticated_client.websocket.recv())
+        await authenticated_client.websocket.send(orjson.dumps(request))
+        response = orjson.loads(await authenticated_client.websocket.recv())
         assert response["code"] == 1001, (
             f"Expired timestamp should be rejected with 1001, got: {response}"
         )
@@ -103,8 +103,8 @@ class TestReplayProtection:
             "nonce": secrets.token_hex(16),
             "timestamp": time.time() + 60,  # 60 seconds in the future
         }
-        await authenticated_client.websocket.send(json.dumps(request))
-        response = json.loads(await authenticated_client.websocket.recv())
+        await authenticated_client.websocket.send(orjson.dumps(request))
+        response = orjson.loads(await authenticated_client.websocket.recv())
         assert response["code"] == 1001, (
             f"Future timestamp should be rejected with 1001, got: {response}"
         )
@@ -124,8 +124,8 @@ class TestReplayProtection:
             "timestamp": time.time(),
             # No nonce
         }
-        await authenticated_client.websocket.send(json.dumps(request))
-        response = json.loads(await authenticated_client.websocket.recv())
+        await authenticated_client.websocket.send(orjson.dumps(request))
+        response = orjson.loads(await authenticated_client.websocket.recv())
         assert response["code"] == 400, (
             f"Missing nonce should be rejected with 400, got: {response}"
         )
@@ -145,8 +145,8 @@ class TestReplayProtection:
             "nonce": "short",  # Less than NONCE_MIN_LENGTH (16)
             "timestamp": time.time(),
         }
-        await authenticated_client.websocket.send(json.dumps(request))
-        response = json.loads(await authenticated_client.websocket.recv())
+        await authenticated_client.websocket.send(orjson.dumps(request))
+        response = orjson.loads(await authenticated_client.websocket.recv())
         assert response["code"] == 400, (
             f"Short nonce should be rejected with 400, got: {response}"
         )
@@ -166,8 +166,8 @@ class TestReplayProtection:
             "nonce": secrets.token_hex(16),
             # No timestamp
         }
-        await authenticated_client.websocket.send(json.dumps(request))
-        response = json.loads(await authenticated_client.websocket.recv())
+        await authenticated_client.websocket.send(orjson.dumps(request))
+        response = orjson.loads(await authenticated_client.websocket.recv())
         assert response["code"] == 400, (
             f"Missing timestamp should be rejected with 400, got: {response}"
         )

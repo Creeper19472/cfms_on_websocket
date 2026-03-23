@@ -1,6 +1,6 @@
 import base64
 import hashlib
-import json
+import orjson
 import mmap
 import os
 import sys
@@ -67,7 +67,7 @@ class ConnectionHandler:
         # Since a thread is created only after a new request has been 
         # received, the necessary initial data should be available 
         # immediately here.
-        self.request = json.loads(stream.recv().data)
+        self.request = orjson.loads(stream.recv().data)
         self.logger = logger
 
         # Validate the request envelope structure and field types
@@ -100,7 +100,7 @@ class ConnectionHandler:
             "timestamp": time.time(),
         }
 
-        response_json = json.dumps(response, ensure_ascii=False)
+        response_json = orjson.dumps(response, )
         self.logger.debug(f"Sending response: {response_json}")
 
         self.stream.send(response_json, frame_type=FrameType.CONCLUSION)
@@ -160,7 +160,7 @@ class ConnectionHandler:
             total_chunks = (file_size + chunk_size - 1) // chunk_size
 
             self.stream.send(
-                json.dumps(
+                orjson.dumps(
                     {
                         "action": "transfer_file",
                         "data": {
@@ -170,7 +170,7 @@ class ConnectionHandler:
                             "total_chunks": total_chunks,  # 文件总分块数
                         },
                     },
-                    ensure_ascii=False,
+                    
                 )
             )
 
@@ -212,12 +212,12 @@ class ConnectionHandler:
                                     "chunk": base64.b64encode(encrypted_chunk).decode(),
                                 },
                             }
-                            self.stream.send(json.dumps(payload, ensure_ascii=False))
+                            self.stream.send(orjson.dumps(payload, ))
                             chunk_index += 1
 
                     # 发送密钥和IV
                     self.stream.send(
-                        json.dumps(
+                        orjson.dumps(
                             {
                                 "action": "aes_key",
                                 "data": {
@@ -225,7 +225,7 @@ class ConnectionHandler:
                                     # "iv": base64.b64encode(iv).decode(),
                                 },
                             },
-                            ensure_ascii=False,
+                            
                         )
                     )
                     file_task.status = 1
@@ -259,10 +259,10 @@ class ConnectionHandler:
             "message": "waiting for file transfer",
         }
 
-        self.stream.send(json.dumps(handshake_msg, ensure_ascii=False))
+        self.stream.send(orjson.dumps(handshake_msg, ))
         self.logger.info("Receiving file: handshake sent")
 
-        task_info = json.loads(self.stream.recv().data)
+        task_info = orjson.loads(self.stream.recv().data)
 
         try:
             jsonschema.validate(

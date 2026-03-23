@@ -1,6 +1,6 @@
 from functools import cached_property
 import hashlib
-import json
+import orjson
 import jwt
 import os
 import pyotp
@@ -196,7 +196,7 @@ class User(Base):
         hashed_codes = [
             hashlib.sha256(code.encode("utf-8")).hexdigest() for code in backup_codes
         ]
-        self.totp_backup_codes = json.dumps(hashed_codes)
+        self.totp_backup_codes = orjson.dumps(hashed_codes)
 
         # TOTP is not enabled yet until validated
         self.totp_enabled = False
@@ -254,13 +254,13 @@ class User(Base):
         # Try to verify as backup code (only if 2FA is enabled)
         if self.totp_enabled and self.totp_backup_codes:
             try:
-                hashed_codes = json.loads(self.totp_backup_codes)
+                hashed_codes = orjson.loads(self.totp_backup_codes)
                 token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
 
                 if token_hash in hashed_codes:
                     # Remove the used backup code
                     hashed_codes.remove(token_hash)
-                    self.totp_backup_codes = json.dumps(hashed_codes)
+                    self.totp_backup_codes = orjson.dumps(hashed_codes)
 
                     session = object_session(self)
                     if session is not None:
@@ -268,7 +268,7 @@ class User(Base):
                         session.commit()
 
                     return True
-            except (json.JSONDecodeError, ValueError):
+            except (orjson.JSONDecodeError, ValueError):
                 pass
 
         return False

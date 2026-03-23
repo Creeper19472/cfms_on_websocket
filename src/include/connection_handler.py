@@ -1,4 +1,4 @@
-import json
+import orjson
 import os
 import threading
 import time
@@ -220,7 +220,7 @@ def handle_request(stream: Stream):
             "timestamp": time.time(),
         }
         stream.send(
-            json.dumps(response, ensure_ascii=False), frame_type=FrameType.CONCLUSION
+            orjson.dumps(response, ), frame_type=FrameType.CONCLUSION
         )
         return
 

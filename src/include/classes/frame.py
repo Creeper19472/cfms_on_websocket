@@ -1,10 +1,10 @@
-import json
 import queue
 import struct
 import threading
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import Any, Optional, cast
+from websockets import Data
 from websockets.sync.server import ServerConnection
 
 HEADER_FORMAT = "!IB"  # 4 bytes for frame_id, 1 byte for frame_type
@@ -29,7 +29,7 @@ class Stream:
     def __init__(self, connection: "MultiplexConnection", frame_id: int):
         self.connection = connection
         self.frame_id = frame_id
-        self._queue: queue.Queue = queue.Queue()
+        self._queue: queue.Queue = queue.Queue(100)
 
     def send(self, data: Any, frame_type: FrameType = FrameType.PROCESS):
         """在这个流上发送数据"""
@@ -59,7 +59,6 @@ class MultiplexConnection:
 
         self._streams: dict[int, Stream] = {}
         self._streams_lock = threading.Lock()
-        self._send_lock = threading.Lock()
 
         self._new_streams: queue.Queue[Optional[Stream]] = queue.Queue()
 
@@ -76,7 +75,7 @@ class MultiplexConnection:
         new_stream = Stream(self, frame_id)
         with self._streams_lock:
             self._streams[frame_id] = new_stream
-            
+
         return new_stream
 
     def accept_stream(self) -> Optional[Stream]:
@@ -86,14 +85,15 @@ class MultiplexConnection:
     def _recv_loop(self):
         try:
             while self._is_running:
-                raw_payload = self._ws.recv()
+                raw_payload = cast(bytes, self._ws.recv())
 
                 if len(raw_payload) < HEADER_SIZE:
                     continue
 
-                header = cast(bytes, raw_payload[:HEADER_SIZE])
-                data = raw_payload[HEADER_SIZE:]
-                frame_id, frame_type_val = struct.unpack(HEADER_FORMAT, header)
+                frame_id, frame_type_val = struct.unpack_from(
+                    HEADER_FORMAT, raw_payload
+                )
+                data = memoryview(raw_payload)[HEADER_SIZE:]
 
                 try:
                     frame_type = FrameType(frame_type_val)
@@ -124,28 +124,26 @@ class MultiplexConnection:
         finally:
             self._is_running = False
             self._new_streams.put(None)  # 唤醒在 accept_stream 阻塞的线程
-            
+
             # 唤醒所有正在 Stream.recv() 阻塞的线程，防止死锁
             with self._streams_lock:
                 for stream in self._streams.values():
                     stream._put_incoming_frame(None)
 
-    def _send_frame(self, frame_id: int, frame_type: FrameType, data: Any):
-        header = struct.pack(HEADER_FORMAT, frame_id, frame_type.value)
-        if isinstance(data, (dict, list)):
-            data_bytes = json.dumps(data).encode("utf-8")
-        elif isinstance(data, str):
-            data_bytes = data.encode("utf-8")
-        elif isinstance(data, bytes):
-            data_bytes = data
-        else:
-            data_bytes = str(data).encode("utf-8")
+    def _send_frame(self, frame_id: int, frame_type: FrameType, data: Data):
 
-        payload = header + data_bytes
-        with self._send_lock:
-            self._ws.send(payload)
+        if isinstance(data, str):
+            data = data.encode("utf-8")
 
-        # 本地主动结束时，同样清理内存
+        data_len = len(data)
+        payload = bytearray(HEADER_SIZE + data_len)
+
+        struct.pack_into(HEADER_FORMAT, payload, 0, frame_id, frame_type.value)
+
+        payload[HEADER_SIZE:] = data
+
+        self._ws.send(payload)
+
         if frame_type == FrameType.CONCLUSION:
             with self._streams_lock:
                 self._streams.pop(frame_id, None)

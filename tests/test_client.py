@@ -5,7 +5,7 @@ This module provides a reusable WebSocket client for testing the CFMS server.
 """
 
 import hashlib
-import json
+import orjson
 import mmap
 import os
 import secrets
@@ -152,9 +152,9 @@ class CFMSTestClient:
                 request["nonce"] = nonce
                 request["timestamp"] = timestamp
         
-        await self.websocket.send(json.dumps(request, ensure_ascii=False))
+        await self.websocket.send(orjson.dumps(request, ))
         response_text = await self.websocket.recv()
-        return json.loads(response_text)
+        return orjson.loads(response_text)
     
     async def login(self, username: str, password: str, two_fa_token: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -506,7 +506,7 @@ class CFMSTestClient:
         }
 
         assert self.websocket
-        await self.websocket.send(json.dumps(task_info, ensure_ascii=False))
+        await self.websocket.send(orjson.dumps(task_info, ))
         received_response = str(await self.websocket.recv())
 
         if received_response.startswith("ready"):
@@ -529,7 +529,7 @@ class CFMSTestClient:
                             break
 
                 # need to wait for server confirmation
-                server_response = json.loads(await self.websocket.recv())
+                server_response = orjson.loads(await self.websocket.recv())
 
             except Exception:
                 raise
@@ -571,17 +571,17 @@ class CFMSTestClient:
 
     #     # Send the request for file metadata
     #     self.websocket.send(
-    #         json.dumps(
+    #         orjson.dumps(
     #             {
     #                 "action": "download_file",
     #                 "data": {"task_id": task_id},
     #             },
-    #             ensure_ascii=False,
+    #             
     #         )
     #     )
 
     #     # Receive file metadata from the server
-    #     response = json.loads(self.websocket.recv())
+    #     response = orjson.loads(self.websocket.recv())
     #     if response["action"] != "transfer_file":
     #         raise ValueError("Invalid action received for file transfer")
 
@@ -612,7 +612,7 @@ class CFMSTestClient:
     #             if not data:
     #                 raise ValueError("Received empty data from server")
 
-    #             data_json: dict = json.loads(data)
+    #             data_json: dict = orjson.loads(data)
 
     #             index = data_json["data"].get("index")
     #             if index == 0:
@@ -635,7 +635,7 @@ class CFMSTestClient:
 
     #         # Get decryption information
     #         decrypted_data = await self.recv()
-    #         decrypted_data_json: dict = json.loads(decrypted_data)
+    #         decrypted_data_json: dict = orjson.loads(decrypted_data)
 
     #         aes_key = base64.b64decode(decrypted_data_json["data"].get("key"))
 
