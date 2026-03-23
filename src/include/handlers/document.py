@@ -262,7 +262,7 @@ class RequestCreateDocumentHandler(RequestHandler):
     require_auth = True
 
     def handle(self, handler: ConnectionHandler):
-        folder_id = handler.data.get("folder_id")
+        folder_id = handler.data.get("folder_id") or None
         title = (handler.data.get("title") or "").strip()
         access_rules = handler.data.get("access_rules") or {}
         inherit_parent = handler.data.get("inherit_parent", True)
@@ -279,7 +279,6 @@ class RequestCreateDocumentHandler(RequestHandler):
                 handler.conclude_request(403, {}, "Permission denied")
                 return 403, folder_id, {"title": title}, handler.username
 
-            folder = None
             if folder_id:
                 folder = session.get(Folder, folder_id)
                 if not folder or folder.id == ROOT_DIRECTORY_ID:
@@ -307,14 +306,7 @@ class RequestCreateDocumentHandler(RequestHandler):
             if not global_config["document"]["allow_name_duplicate"]:
                 existing_doc = (
                     session.query(Document)
-                    .filter_by(
-                        folder_id=(folder_id if folder_id else None), title=title
-                    )
-                    .first()
-                )
-                existing_folder = (
-                    session.query(Folder)
-                    .filter_by(parent_id=(folder_id if folder_id else None), name=title)
+                    .filter_by(folder_id=folder_id, title=title)
                     .first()
                 )
 
@@ -365,18 +357,24 @@ class RequestCreateDocumentHandler(RequestHandler):
                                 {"title": title, "duplicate_id": existing_doc.id},
                                 handler.username,
                             )
-                elif existing_folder:
-                    resp_id = (
-                        existing_folder.id
-                        if existing_folder.check_access_requirements(user, "read")
-                        else None
+                else:
+                    existing_folder = (
+                        session.query(Folder)
+                        .filter_by(parent_id=folder_id, name=title)
+                        .first()
                     )
-                    handler.conclude_request(
-                        409,
-                        {"type": "directory", "id": resp_id},
-                        smsg.DIRECTORY_NAME_DUPLICATE,
-                    )
-                    return
+                    if existing_folder:
+                        resp_id = (
+                            existing_folder.id
+                            if existing_folder.check_access_requirements(user, "read")
+                            else None
+                        )
+                        handler.conclude_request(
+                            409,
+                            {"type": "directory", "id": resp_id},
+                            smsg.DIRECTORY_NAME_DUPLICATE,
+                        )
+                        return
 
             today = datetime.date.today()
             file_id = secrets.token_hex(32)
@@ -389,7 +387,7 @@ class RequestCreateDocumentHandler(RequestHandler):
             new_document = Document(
                 id=secrets.token_hex(32),
                 title=title,
-                folder_id=(folder_id if folder_id else None),
+                folder_id=folder_id,
             )
             new_revision = DocumentRevision(file_id=new_file.id)
             new_document.revisions.append(new_revision)
@@ -417,6 +415,7 @@ class RequestCreateDocumentHandler(RequestHandler):
                     {"document_id": new_document.id, "task_data": task_data},
                     "Task successfully created",
                 )
+
                 return 0, folder_id, {"title": title}, handler.username
 
             except (ValueError, jsonschema.ValidationError) as exc:
@@ -425,11 +424,6 @@ class RequestCreateDocumentHandler(RequestHandler):
                     400, {}, f"Set access rules failed: {str(exc)}"
                 )
                 return 400, folder_id, {"title": title}, handler.username
-
-            except Exception:
-                session.rollback()
-                handler.conclude_request(500, {}, "Internal server error")
-                return 500, folder_id, {"title": title}, handler.username
 
 
 class RequestUploadDocumentHandler(RequestHandler):
