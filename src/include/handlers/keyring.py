@@ -13,6 +13,14 @@ Security constraints enforced by these handlers:
   preference key automatically demotes the previous one.
 """
 
+__all__ = [
+    "RequestUploadUserKeyHandler",
+    "RequestGetUserKeyHandler",
+    "RequestDeleteUserKeyHandler",
+    "RequestSetPreferenceDEKHandler",
+    "RequestListUserKeysHandler",
+]
+
 import time
 
 from include.classes.handler import ConnectionHandler
@@ -22,14 +30,6 @@ from include.database.handler import Session
 from include.database.models.classic import User
 from include.database.models.keyring import UserKey
 import include.system.messages as smsg
-
-__all__ = [
-    "RequestUploadUserKeyHandler",
-    "RequestGetUserKeyHandler",
-    "RequestDeleteUserKeyHandler",
-    "RequestSetPreferenceDEKHandler",
-    "RequestListUserKeysHandler",
-]
 
 
 class RequestUploadUserKeyHandler(RequestHandler):

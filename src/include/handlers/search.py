@@ -5,6 +5,8 @@ Provides functionality to search for documents and directories by name,
 with permission filtering, result limiting, and sorting capabilities.
 """
 
+__all__ = ["RequestSearchHandler"]
+
 import time
 from typing import List, Dict, Any
 
@@ -21,9 +23,6 @@ from include.util.recursive.ancestors import (
 )
 from include.util.recursive.check import check_access_for_object
 from include.util.fetch.fetch import prefetch_user_blocks, batch_prefetch_granted_ids
-
-
-__all__ = ["RequestSearchHandler"]
 
 
 class RequestSearchHandler(RequestHandler):

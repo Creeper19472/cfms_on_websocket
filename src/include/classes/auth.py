@@ -1,9 +1,9 @@
+__all__ = ["Token"]
+
 import time
 from typing import Optional
 
 import jwt
-
-__all__ = ["Token"]
 
 
 class Token:

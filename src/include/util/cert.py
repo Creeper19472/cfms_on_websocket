@@ -1,7 +1,7 @@
+__all__ = ["get_client_cert_subject"]
+
 import ssl
 import websockets.sync.server
-
-__all__ = ["get_client_cert_subject"]
 
 
 def get_client_cert_subject(
@@ -11,7 +11,7 @@ def get_client_cert_subject(
     Extract the subject common name (CN) from the client's TLS certificate,
     if one was presented during the handshake.
 
-    Returns the CN string, or None when no client certificate is available, 
+    Returns the CN string, or None when no client certificate is available,
     or commonName is missing.
     """
     try:

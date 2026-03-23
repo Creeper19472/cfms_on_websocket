@@ -1,3 +1,16 @@
+__all__ = [
+    "RequestGetDocumentInfoHandler",
+    "RequestGetDocumentHandler",
+    "RequestCreateDocumentHandler",
+    "RequestUploadDocumentHandler",
+    "RequestDeleteDocumentHandler",
+    "RequestRenameDocumentHandler",
+    "RequestDownloadFileHandler",
+    "RequestUploadFileHandler",
+    "RequestSetDocumentRulesHandler",
+    "RequestMoveDocumentHandler",
+]
+
 import datetime
 import secrets
 import time
@@ -22,19 +35,6 @@ from include.database.models.entity import (
 from include.database.models.file import File, FileTask
 from include.util.rule.applying import apply_access_rules
 import include.system.messages as smsg
-
-__all__ = [
-    "RequestGetDocumentInfoHandler",
-    "RequestGetDocumentHandler",
-    "RequestCreateDocumentHandler",
-    "RequestUploadDocumentHandler",
-    "RequestDeleteDocumentHandler",
-    "RequestRenameDocumentHandler",
-    "RequestDownloadFileHandler",
-    "RequestUploadFileHandler",
-    "RequestSetDocumentRulesHandler",
-    "RequestMoveDocumentHandler",
-]
 
 
 def create_file_task(file: File, transfer_mode: int = 0):

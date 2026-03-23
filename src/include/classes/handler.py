@@ -16,12 +16,12 @@ from Crypto.Random import get_random_bytes
 from websockets.sync.server import ServerConnection
 from websockets.typing import Data
 
-from include.classes.frame import FrameType, Stream
+from include.classes.frame import FrameType, MultiplexConnection, Stream
 from include.conf_loader import global_config
 from include.constants import FILE_TRANSFER_MAX_CHUNK_SIZE, FILE_TRANSFER_MIN_CHUNK_SIZE
 from include.database.handler import Session
 from include.database.models.file import File, FileTask
-from include.shared import connected_listeners
+from include.shared import clients, clients_lock
 from include.util.log import getCustomLogger
 
 logger = getCustomLogger(
@@ -63,8 +63,8 @@ class ConnectionHandler:
         self.stream = stream
         self.remote_address = self.stream.connection._ws.remote_address[0]
 
-        # Since a thread is created only after a new request has been 
-        # received, the necessary initial data should be available 
+        # Since a thread is created only after a new request has been
+        # received, the necessary initial data should be available
         # immediately here.
         self.request = orjson.loads(stream.recv().data)
         self.logger = logger
@@ -99,7 +99,9 @@ class ConnectionHandler:
             "timestamp": time.time(),
         }
 
-        response_json = orjson.dumps(response, )
+        response_json = orjson.dumps(
+            response,
+        )
         self.logger.debug(f"Sending response: {response_json}")
 
         self.stream.send(response_json, frame_type=FrameType.CONCLUSION)
@@ -169,7 +171,6 @@ class ConnectionHandler:
                             "total_chunks": total_chunks,  # 文件总分块数
                         },
                     },
-                    
                 )
             )
 
@@ -211,7 +212,11 @@ class ConnectionHandler:
                                     "chunk": base64.b64encode(encrypted_chunk).decode(),
                                 },
                             }
-                            self.stream.send(orjson.dumps(payload, ))
+                            self.stream.send(
+                                orjson.dumps(
+                                    payload,
+                                )
+                            )
                             chunk_index += 1
 
                     # 发送密钥和IV
@@ -224,7 +229,6 @@ class ConnectionHandler:
                                     # "iv": base64.b64encode(iv).decode(),
                                 },
                             },
-                            
                         )
                     )
                     file_task.status = 1
@@ -258,7 +262,11 @@ class ConnectionHandler:
             "message": "waiting for file transfer",
         }
 
-        self.stream.send(orjson.dumps(handshake_msg, ))
+        self.stream.send(
+            orjson.dumps(
+                handshake_msg,
+            )
+        )
         self.logger.info("Receiving file: handshake sent")
 
         task_info = orjson.loads(self.stream.recv().data)
@@ -415,40 +423,37 @@ class ConnectionHandler:
         """
         Adopted from websockets.asyncio.server.broadcast().
         """
-        connections: Iterable[ServerConnection] = connected_listeners
+        with clients_lock:
+            connections: set[MultiplexConnection] = clients.copy()
 
         if isinstance(message, str):
-            send_method = "send_text"
             message = message.encode()
         elif isinstance(message, (bytes, bytearray, memoryview)):
-            send_method = "send_binary"
+            pass
         else:
             raise TypeError("data must be str or bytes")
-
-        if raise_exceptions:
-            if sys.version_info[:2] < (3, 11):  # pragma: no cover
-                raise ValueError("raise_exceptions requires at least Python 3.11")
 
         exceptions: list[Exception] = []
 
         for connection in connections:
             exception: Exception
 
-            if connection.protocol.state is not websockets.protocol.OPEN:
+            if connection._ws.protocol.state is not websockets.protocol.OPEN:
                 continue
 
             try:
                 # Call connection.protocol.send_text or send_binary.
                 # Either way, message is already converted to bytes.
                 # getattr(connection.protocol, send_method)(message)
-                connection.send(message)
+                stream = connection.create_stream()
+                stream.send(message, frame_type=FrameType.CONCLUSION)
             except Exception as write_exception:
                 if raise_exceptions:
                     exception = RuntimeError("failed to write message")
                     exception.__cause__ = write_exception
                     exceptions.append(exception)
                 else:
-                    connection.logger.warning(
+                    connection._ws.logger.warning(
                         "skipped broadcast: failed to write message: %s",
                         traceback.format_exception_only(
                             # Remove first argument when dropping Python 3.9.

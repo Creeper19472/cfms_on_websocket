@@ -1,5 +1,3 @@
-from include.classes.version import Version
-
 __all__ = [
     "CORE_VERSION",
     "PROTOCOL_VERSION",
@@ -14,6 +12,9 @@ __all__ = [
     "NONCE_MIN_LENGTH",
     "ROOT_DIRECTORY_ID",
 ]
+
+from include.classes.version import Version
+
 
 CORE_VERSION = Version("0.1.0.260320_alpha")
 PROTOCOL_VERSION = 9

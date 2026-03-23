@@ -1,6 +1,6 @@
-from enum import IntEnum
-
 __all__ = ["EntityStatus", "DocumentRevisionStatus"]
+
+from enum import IntEnum
 
 
 class EntityStatus(IntEnum):

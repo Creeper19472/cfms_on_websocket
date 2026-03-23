@@ -101,7 +101,7 @@ from include.handlers.keyring import (
 
 from include.constants import CORE_VERSION, NONCE_MIN_LENGTH, PROTOCOL_VERSION
 from include.nonce_store import nonce_store
-from include.shared import lockdown_enabled
+from include.shared import lockdown_enabled, clients, clients_lock
 
 import cProfile, pstats, io
 from pstats import SortKey
@@ -167,14 +167,15 @@ def handle_connection(websocket: websockets.sync.server.ServerConnection):
 
     multiplexer = MultiplexConnection(websocket)
 
+    with clients_lock:
+        clients.add(multiplexer)
+
     try:
         while True:
-            # 持续监听客户端发出的新的请求流
             stream = multiplexer.accept_stream()
             if stream is None:
-                break  # 连接已断开，结束循环
+                break  # Connection closed
 
-            # 每一个逻辑上的 Request 独立分配一个线程处理
             threading.Thread(target=handle_request, args=(stream,), daemon=True).start()
 
     except Exception as e:
@@ -182,6 +183,9 @@ def handle_connection(websocket: websockets.sync.server.ServerConnection):
     finally:
         multiplexer.close()
         websocket.close()
+
+        with clients_lock:
+            clients.discard(multiplexer)
 
 
 def handle_request(stream: Stream):
@@ -218,7 +222,10 @@ def handle_request(stream: Stream):
             "timestamp": time.time(),
         }
         stream.send(
-            orjson.dumps(response, ), frame_type=FrameType.CONCLUSION
+            orjson.dumps(
+                response,
+            ),
+            frame_type=FrameType.CONCLUSION,
         )
         return
 

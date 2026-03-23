@@ -1,6 +1,6 @@
-from enum import StrEnum
-
 __all__ = ["Permissions"]
+
+from enum import StrEnum
 
 
 class Permissions(StrEnum):
