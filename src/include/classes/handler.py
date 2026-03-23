@@ -3,17 +3,14 @@ import hashlib
 import orjson
 import mmap
 import os
-import sys
 import time
 import traceback
-from typing import Any, Iterable
 from typing import Optional
 
 import jsonschema
 import websockets
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
-from websockets.sync.server import ServerConnection
 from websockets.typing import Data
 
 from include.classes.frame import FrameType, MultiplexConnection, Stream

@@ -78,9 +78,9 @@ class RequestLoginHandler(RequestHandler):
                         )
                     except ValueError:
                         handler.conclude_request(
-                            403, {}, "Password must be changed before you can log in"
+                            4001, {}, "Password must be changed before you can log in"
                         )
-                        return 403, username
+                        return 4001, username
 
                     # enforce password expiration
                     if (
@@ -89,9 +89,9 @@ class RequestLoginHandler(RequestHandler):
                         > 3600 * 24 * cfg["passwd_expire_after_days"]
                     ):
                         handler.conclude_request(
-                            403, {}, "Password should be changed because it's expired"
+                            4002, {}, "Password should be changed because it's expired"
                         )
-                        return 403, username
+                        return 4002, username
 
                     success_data = {
                         "token": token.raw,
