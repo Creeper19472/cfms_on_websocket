@@ -103,7 +103,7 @@ from include.handlers.keyring import (
 
 from include.constants import CORE_VERSION, NONCE_MIN_LENGTH, PROTOCOL_VERSION
 from include.nonce_store import nonce_store
-from include.shared import connected_listeners, lockdown_enabled
+from include.shared import lockdown_enabled
 
 import cProfile, pstats, io
 from pstats import SortKey

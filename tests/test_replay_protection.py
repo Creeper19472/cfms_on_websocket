@@ -8,7 +8,6 @@ These tests verify that the server correctly:
 4. Accepts valid requests with unique nonces
 """
 
-import orjson
 import secrets
 import time
 

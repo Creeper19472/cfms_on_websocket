@@ -1,6 +1,5 @@
 import orjson
 import time
-from typing import Optional
 
 from sqlalchemy import desc, update, func, true
 from include.classes.handler import ConnectionHandler
