@@ -85,7 +85,10 @@ class MultiplexConnection:
     def _recv_loop(self):
         try:
             while self._is_running:
-                raw_payload = cast(bytes, self._ws.recv())
+                raw_payload = self._ws.recv()
+
+                if isinstance(raw_payload, str):
+                    raw_payload = raw_payload.encode("utf-8")
 
                 if len(raw_payload) < HEADER_SIZE:
                     continue

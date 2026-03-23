@@ -23,7 +23,6 @@ from include.database.handler import Session
 from include.database.models.file import File, FileTask
 from include.shared import connected_listeners
 from include.util.log import getCustomLogger
-from include.classes.wrapped import ManagedConnection
 
 logger = getCustomLogger(
     "connection",
