@@ -129,6 +129,10 @@ class MultiplexConnection:
 
         except websockets.exceptions.ConnectionClosed:
             logger.info(f"({self.remote_address[0]}): WebSocket connection closed")
+        except Exception:
+            logger.exception(
+                f"({self.remote_address[0]}): Error in receive loop", exc_info=True
+            )
         finally:
             self._is_running = False
             self._new_streams.put(None)  # 唤醒在 accept_stream 阻塞的线程
