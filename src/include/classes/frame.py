@@ -3,12 +3,17 @@ import struct
 import threading
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Any, Optional, cast
+from typing import Optional
+import websockets
 from websockets.typing import Data
 from websockets.sync.server import ServerConnection
 
+from include.util.log import getCustomLogger
+
 HEADER_FORMAT = "!IB"  # 4 bytes for frame_id, 1 byte for frame_type
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
+
+logger = getCustomLogger("frame", filepath="./content/logs/connection.log")
 
 
 class FrameType(IntEnum):
@@ -53,6 +58,7 @@ class MultiplexConnection:
         :param websocket: ServerConnection
         """
         self._ws = websocket
+        self.remote_address = self._ws.remote_address
 
         self._next_frame_id = 2
         self._id_lock = threading.Lock()
@@ -121,9 +127,12 @@ class MultiplexConnection:
                     with self._streams_lock:
                         self._streams.pop(frame.frame_id, None)
 
-        except Exception as e:
-            # logger.debug(f"[Dispatcher] Connection closed or error: {e}")
-            pass
+        except websockets.exceptions.ConnectionClosed:
+            logger.info(f"({self.remote_address[0]}): WebSocket connection closed")
+        except Exception:
+            logger.exception(
+                f"({self.remote_address[0]}): Error in receive loop", exc_info=True
+            )
         finally:
             self._is_running = False
             self._new_streams.put(None)  # 唤醒在 accept_stream 阻塞的线程

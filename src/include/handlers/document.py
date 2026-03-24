@@ -758,6 +758,8 @@ class RequestSetDocumentRulesHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
         """
         Handles the document access rules setting request from the client.
@@ -774,11 +776,7 @@ class RequestSetDocumentRulesHandler(RequestHandler):
 
         with Session() as session:
             user = session.get(User, handler.username)
-            if not user or not user.is_token_valid(handler.token):
-                handler.conclude_request(
-                    **{"code": 403, "message": "Invalid user or token", "data": {}}
-                )
-                return 401, document_id
+            assert user is not None
 
             document = session.get(Document, document_id)
 
