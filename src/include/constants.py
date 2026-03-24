@@ -16,8 +16,8 @@ __all__ = [
 from include.classes.version import Version
 
 
-CORE_VERSION = Version("0.1.0.260323_alpha")
-PROTOCOL_VERSION = 10
+CORE_VERSION = Version("0.1.0.260324_alpha")
+PROTOCOL_VERSION = 11
 
 AVAILABLE_ACCESS_TYPES = ["read", "write", "move", "manage"]
 AVAILABLE_BLOCK_TYPES: set = {"read", "write", "move"}
