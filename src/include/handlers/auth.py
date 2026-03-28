@@ -1,7 +1,8 @@
 import time
-from typing import Optional
+from typing import Any, Optional
 
 from include.classes.enum.status import UserStatus
+from include.classes.exceptions import UserNotActiveError
 from include.classes.handler import ConnectionHandler
 from include.classes.misc.guard import LoginGuard
 from include.classes.request import RequestHandler
@@ -39,7 +40,7 @@ class RequestLoginHandler(RequestHandler):
         ip_id = f"ip_limit|{ip}"
         user_id = f"user_limit|{ip}|{username}"
 
-        def respond(code: int, message: str, data: Optional[dict] = None):
+        def respond(code: int, message: str, data: Optional[dict[str, Any]] = None):
             handler.conclude_request(code=code, data=data or {}, message=message)
             return code, username
 
@@ -59,13 +60,19 @@ class RequestLoginHandler(RequestHandler):
             if not user:
                 return fail(401, "Invalid credentials")
 
-            token = user.authenticate_and_create_token(password)
+            try:
+                token = user.authenticate_and_create_token(password)
+            except UserNotActiveError:
+                return fail(4003, "User account is not active")
+
             if not token:
                 return fail(401, "Invalid credentials")
 
             if user.totp_enabled:
                 if not totp_token:
-                    return respond(202, "Two-factor authentication required", {"method": "totp"})
+                    return respond(
+                        202, "Two-factor authentication required", {"method": "totp"}
+                    )
                 if not user.verify_totp(totp_token):
                     return fail(401, "Invalid two-factor authentication token")
 
@@ -88,7 +95,9 @@ class RequestLoginHandler(RequestHandler):
             if cfg["enable_passwd_force_expiration"]:
                 expiration_seconds = 3600 * 24 * cfg["passwd_expire_after_days"]
                 if time.time() - user.passwd_last_modified > expiration_seconds:
-                    return respond(4002, "Password should be changed because it's expired")
+                    return respond(
+                        4002, "Password should be changed because it's expired"
+                    )
 
             success_data = {
                 "token": token.raw,

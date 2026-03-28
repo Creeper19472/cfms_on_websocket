@@ -23,6 +23,7 @@ from sqlalchemy.orm.session import object_session
 from include.classes.auth import Token
 from include.classes.enum.permissions import Permissions
 from include.classes.enum.status import UserStatus
+from include.classes.exceptions import UserNotActiveError
 from include.conf_loader import global_config
 from include.constants import DEFAULT_TOKEN_EXPIRY_SECONDS
 from include.database.handler import Base, Session
@@ -114,11 +115,22 @@ class User(Base):
             f"created_time={self.created_time!r})"
         )
 
-    def authenticate_and_create_token(self, plain_password: str) -> Optional[Token]:
+    def authenticate(self, plain_password: str) -> bool:
         try:
-            _password_hasher.verify(self.pass_hash, plain_password)
+            if not _password_hasher.verify(self.pass_hash, plain_password):
+                return False
         except (VerifyMismatchError, VerificationError, InvalidHashError):
-            return None
+            return False
+
+        if self.status != UserStatus.ACTIVE:
+            raise UserNotActiveError
+
+        return True
+
+    def authenticate_and_create_token(self, plain_password: str) -> Optional[Token]:
+        if not self.authenticate(plain_password):
+            return None  # exceptions should be handled by caller
+
         secret = (
             global_config["server"]["secret_key"]
             if not self.secret_key

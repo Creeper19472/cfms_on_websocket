@@ -21,6 +21,7 @@ from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHas
 from typing import Optional
 
 from include.classes.enum.status import UserStatus
+from include.classes.exceptions import UserNotActiveError
 
 # Module-level PasswordHasher instance — reused across all calls to avoid
 # repeated construction overhead.
@@ -897,14 +898,18 @@ class RequestSetPasswdHandler(RequestHandler):
                     )
                     return
 
-                if not user.authenticate_and_create_token(old_passwd):
-                    handler.conclude_request(
-                        **{
-                            "code": 401,
-                            "message": "Invalid credentials",
-                            "data": {},
-                        }
-                    )
+                try:
+                    if not user.authenticate_and_create_token(old_passwd):
+                        handler.conclude_request(
+                            **{
+                                "code": 401,
+                                "message": "Invalid credentials",
+                                "data": {},
+                            }
+                        )
+                        return
+                except UserNotActiveError:
+                    handler.conclude_request(4003, {}, "User account is not active")
                     return
 
                 if not (
