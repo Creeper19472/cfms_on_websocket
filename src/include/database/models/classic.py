@@ -22,6 +22,7 @@ from sqlalchemy.orm.session import object_session
 
 from include.classes.auth import Token
 from include.classes.enum.permissions import Permissions
+from include.classes.enum.status import UserStatus
 from include.conf_loader import global_config
 from include.constants import DEFAULT_TOKEN_EXPIRY_SECONDS
 from include.database.handler import Base, Session
@@ -53,6 +54,10 @@ class User(Base):
 
     last_login: Mapped[Optional[float]] = mapped_column(Float)
     created_time: Mapped[Optional[float]] = mapped_column(Float, nullable=False)
+
+    status: Mapped[UserStatus] = mapped_column(
+        Integer, default=UserStatus.ACTIVE.value, nullable=False
+    )
 
     # 这是对应每个用户的 secret_key. 每次更改密码时将重新生成，如果该属性不为空，则在验证 token 时使用此
     # 密钥，否则，使用从 config.toml 加载的全局密钥。
