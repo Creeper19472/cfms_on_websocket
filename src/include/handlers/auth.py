@@ -2,7 +2,11 @@ import time
 from typing import Any, Optional
 
 from include.classes.enum.status import UserStatus
-from include.classes.exceptions import UserNotActiveError, UserTOTPFailedError, UserTOTPRequiredError
+from include.classes.exceptions import (
+    UserNotActiveError,
+    UserTOTPFailedError,
+    UserTOTPRequiredError,
+)
 from include.classes.handler import ConnectionHandler
 from include.classes.misc.guard import LoginGuard
 from include.classes.request import RequestHandler
@@ -61,7 +65,9 @@ class RequestLoginHandler(RequestHandler):
                 return fail(401, "Invalid credentials")
 
             try:
-                token = user.authenticate_and_create_token(password)
+                token = user.authenticate_and_create_token(
+                    password, totp_token=totp_token
+                )
             except UserTOTPRequiredError:
                 return respond(
                     202, "Two-factor authentication required", {"method": "totp"}

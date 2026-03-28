@@ -142,8 +142,10 @@ class User(Base):
 
         return True
 
-    def authenticate_and_create_token(self, plain_password: str) -> Optional[Token]:
-        if not self.authenticate(plain_password):
+    def authenticate_and_create_token(
+        self, plain_password: str, totp_token: Optional[str] = None
+    ) -> Optional[Token]:
+        if not self.authenticate(plain_password, totp_token=totp_token):
             return None  # exceptions should be handled by caller
 
         secret = (
