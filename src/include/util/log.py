@@ -55,7 +55,7 @@ def log_exception_with_id(
     """
     log_id = uuid.uuid4().hex
     if context:
-        logger.error("[%s] %s: \n%s", log_id, context, exc_info=exc)
+        logger.error("[%s] %s: \n", log_id, context, exc_info=exc)
     else:
-        logger.error("[%s] Exception: \n%s", log_id, exc_info=exc)
+        logger.error("[%s] Error occurred: \n", log_id, exc_info=exc)
     return log_id
