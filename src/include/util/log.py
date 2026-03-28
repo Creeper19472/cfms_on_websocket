@@ -45,7 +45,7 @@ def getCustomLogger(
 
 
 def log_exception_with_id(
-    logger: logging.Logger, context: str | None = None
+    exc: Exception, logger: logging.Logger, context: str | None = None
 ) -> str:
     """
     Log an exception with a generated UUID4 log id and return the id.
@@ -54,9 +54,8 @@ def log_exception_with_id(
     and the returned id can be shared with clients for correlation.
     """
     log_id = uuid.uuid4().hex
-    tb = traceback.format_exc()
     if context:
-        logger.error("[%s] %s: \n%s", log_id, context, tb)
+        logger.error("[%s] %s: \n%s", log_id, context, exc_info=exc)
     else:
-        logger.error("[%s] Exception: \n%s", log_id, tb)
+        logger.error("[%s] Exception: \n%s", log_id, exc_info=exc)
     return log_id

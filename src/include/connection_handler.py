@@ -422,7 +422,7 @@ def handle_request(stream: Stream):
         ):
             raise
         except Exception as e:
-            this_handler.report_error()
+            this_handler.report_error(e)
             return
 
         if type(callback) is tuple:
