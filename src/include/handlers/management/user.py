@@ -898,18 +898,19 @@ class RequestSetPasswdHandler(RequestHandler):
                     )
                     return
 
-                try:
-                    if not user.authenticate_and_create_token(old_passwd):
-                        handler.conclude_request(
-                            **{
-                                "code": 401,
-                                "message": "Invalid credentials",
-                                "data": {},
-                            }
-                        )
-                        return
-                except UserNotActiveError:
-                    handler.conclude_request(4003, {}, "User account is not active")
+                if not user.verify_password(old_passwd):
+                    handler.conclude_request(
+                        **{
+                            "code": 401,
+                            "message": "Invalid credentials",
+                            "data": {},
+                        }
+                    )
+                    return
+                if user.status != UserStatus.ACTIVE:
+                    handler.conclude_request(
+                        403, {}, "Account is not active"
+                    )
                     return
 
                 if not (

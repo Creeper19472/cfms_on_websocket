@@ -7,6 +7,7 @@ two-factor authentication using Time-based One-Time Passwords (TOTP).
 
 import orjson
 
+from include.classes.enum.status import UserStatus
 from include.classes.exceptions import UserNotActiveError
 from include.classes.handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
@@ -179,12 +180,14 @@ class RequestDisable2FAHandler(RequestHandler):
                 return
 
             try:
-                if user.authenticate_and_create_token(password):
+                if user.verify_password(password):
+                    if user.status != UserStatus.ACTIVE:
+                        raise UserNotActiveError
                     user.disable_totp()
                     success = True
             except UserNotActiveError:
                 handler.conclude_request(4003, {}, "User account is not active")
-                return
+                return 4003, username
 
         if success:
             handler.conclude_request(200, {}, "2FA disabled successfully")

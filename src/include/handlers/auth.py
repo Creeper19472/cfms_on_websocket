@@ -2,7 +2,7 @@ import time
 from typing import Any, Optional
 
 from include.classes.enum.status import UserStatus
-from include.classes.exceptions import UserNotActiveError
+from include.classes.exceptions import UserNotActiveError, UserTOTPFailedError, UserTOTPRequiredError
 from include.classes.handler import ConnectionHandler
 from include.classes.misc.guard import LoginGuard
 from include.classes.request import RequestHandler
@@ -62,22 +62,17 @@ class RequestLoginHandler(RequestHandler):
 
             try:
                 token = user.authenticate_and_create_token(password)
+            except UserTOTPRequiredError:
+                return respond(
+                    202, "Two-factor authentication required", {"method": "totp"}
+                )
+            except UserTOTPFailedError:
+                return fail(401, "Invalid two-factor authentication token")
             except UserNotActiveError:
                 return fail(4003, "User account is not active")
 
             if not token:
                 return fail(401, "Invalid credentials")
-
-            if user.totp_enabled:
-                if not totp_token:
-                    return respond(
-                        202, "Two-factor authentication required", {"method": "totp"}
-                    )
-                if not user.verify_totp(totp_token):
-                    return fail(401, "Invalid two-factor authentication token")
-
-            if user.status != UserStatus.ACTIVE:
-                return fail(403, "User account is not active")
 
             LoginGuard.report_success(user_id)
             LoginGuard.report_success(ip_id)
