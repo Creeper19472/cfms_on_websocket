@@ -105,9 +105,8 @@ class ConnectionHandler:
 
     def report_error(
         self,
-        exc: Exception,
         code: int = 500,
-        user_message: Optional[str] = None,
+        context: Optional[str] = None,
         send_to_client: bool = True,
     ) -> str:
         """
@@ -115,15 +114,14 @@ class ConnectionHandler:
 
         Returns the generated log id.
         """
-        log_id = log_exception_with_id(exc, self.logger, context=None)
+        log_id = log_exception_with_id(self.logger, context=context)
         if send_to_client:
-            msg = user_message if user_message is not None else "Internal server error"
             self.conclude_request(
                 code,
                 {
                     "log_id": log_id,
                 },
-                msg,
+                context if context is not None else "Internal server error",
             )
         return log_id
 
@@ -257,8 +255,7 @@ class ConnectionHandler:
                     session.commit()
 
                 except Exception as e:
-                    self.logger.error(f"Error sending file {file_path}: {e}")
-                    self.report_error(e)
+                    self.report_error(context=f"Error sending file {file_path}")
 
             else:
                 self.logger.info("Empty file, no need to send")
@@ -434,8 +431,7 @@ class ConnectionHandler:
                 raise
 
             except Exception as e:
-                self.logger.error(f"Error receiving file: {e}", exc_info=True)
-                self.report_error(e)
+                self.report_error(context=f"Error receiving file for task {task_id}")
 
     def broadcast(
         self,

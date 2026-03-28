@@ -23,7 +23,7 @@ Functions:
 def getCustomLogger(
     logname: str,
     level: Tuple[int, int] = (logging.DEBUG, logging.INFO),
-    filepath: str = "default.log"
+    filepath: str = "default.log",
 ) -> logging.Logger:
     logger = logging.getLogger(logname)
     logger.setLevel(level=logging.DEBUG)  # This level must be 'logging.DEBUG'.
@@ -44,7 +44,9 @@ def getCustomLogger(
     return logger
 
 
-def log_exception_with_id(exc: Exception, logger: logging.Logger, context: str | None = None) -> str:
+def log_exception_with_id(
+    logger: logging.Logger, context: str | None = None
+) -> str:
     """
     Log an exception with a generated UUID4 log id and return the id.
 
@@ -54,7 +56,7 @@ def log_exception_with_id(exc: Exception, logger: logging.Logger, context: str |
     log_id = uuid.uuid4().hex
     tb = traceback.format_exc()
     if context:
-        logger.error("[%s] %s: %s\n%s", log_id, context, str(exc), tb)
+        logger.error("[%s] %s: \n%s", log_id, context, tb)
     else:
-        logger.error("[%s] Exception: %s\n%s", log_id, str(exc), tb)
+        logger.error("[%s] Exception: \n%s", log_id, tb)
     return log_id
