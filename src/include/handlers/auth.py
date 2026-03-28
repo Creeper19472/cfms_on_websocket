@@ -1,4 +1,5 @@
 import time
+from typing import Optional
 
 from include.classes.enum.status import UserStatus
 from include.classes.handler import ConnectionHandler
@@ -32,134 +33,82 @@ class RequestLoginHandler(RequestHandler):
     def handle(self, handler: ConnectionHandler):
         username: str = handler.data["username"]
         password: str = handler.data["password"]
-        two_factor_auth_token: str = handler.data.get("2fa_token", "")
+        totp_token: str = handler.data.get("2fa_token", "")
 
         ip = get_client_ip(handler.stream.connection._ws)
         ip_id = f"ip_limit|{ip}"
         user_id = f"user_limit|{ip}|{username}"
 
+        def respond(code: int, message: str, data: Optional[dict] = None):
+            handler.conclude_request(code=code, data=data or {}, message=message)
+            return code, username
+
+        def fail(code: int, message: str):
+            LoginGuard.report_failure(user_id, max_attempts=5)
+            LoginGuard.report_failure(ip_id, max_attempts=20)
+            return respond(code, message)
+
         if not LoginGuard.check_access(user_id):
-            handler.conclude_request(
-                429, {}, "Too many login attempts. Please try again later."
-            )
-            return 429, username
+            return respond(429, "Too many login attempts. Please try again later.")
 
         cfg = global_config["security"]
-        response_invalid = {"code": 401, "message": "Invalid credentials", "data": {}}
-
-        # fallback
-        response = response_invalid
-
-        failed = False
-        login_actually_success = False
 
         with Session() as session:
             user = session.get(User, username)
 
             if not user:
-                response = response_invalid
-                failed = True
-            else:
-                token = user.authenticate_and_create_token(password)
-                if not token:
-                    response = response_invalid
-                    failed = True
-                else:
-                    totp_passed = False
+                return fail(401, "Invalid credentials")
 
-                    if user.totp_enabled:
-                        if not two_factor_auth_token:
-                            response = {
-                                "code": 202,
-                                "message": "Two-factor authentication required",
-                                "data": {"method": "totp"},
-                            }
-                        elif not user.verify_totp(two_factor_auth_token):
-                            response = {
-                                "code": 401,
-                                "message": "Invalid two-factor authentication token",
-                                "data": {},
-                            }
-                            failed = True
-                        else:
-                            totp_passed = True
-                    else:
-                        totp_passed = True
+            token = user.authenticate_and_create_token(password)
+            if not token:
+                return fail(401, "Invalid credentials")
 
-                    if totp_passed:
-                        if user.status != UserStatus.ACTIVE:
-                            response = {
-                                "code": 403,
-                                "message": "User account is not active",
-                                "data": {},
-                            }
-                            failed = True
-                        else:
-                            try:
-                                check_passwd_requirements(
-                                    password,
-                                    cfg["passwd_min_length"],
-                                    cfg["passwd_max_length"],
-                                    cfg["passwd_must_contain"],
-                                )
-                            except ValueError:
-                                handler.conclude_request(
-                                    4001,
-                                    {},
-                                    "Password must be changed before you can log in",
-                                )
-                                return 4001, username
+            if user.totp_enabled:
+                if not totp_token:
+                    return respond(202, "Two-factor authentication required", {"method": "totp"})
+                if not user.verify_totp(totp_token):
+                    return fail(401, "Invalid two-factor authentication token")
 
-                            if (
-                                cfg["enable_passwd_force_expiration"]
-                                and time.time() - user.passwd_last_modified
-                                > 3600 * 24 * cfg["passwd_expire_after_days"]
-                            ):
-                                handler.conclude_request(
-                                    4002,
-                                    {},
-                                    "Password should be changed because it's expired",
-                                )
-                                return 4002, username
+            if user.status != UserStatus.ACTIVE:
+                return fail(403, "User account is not active")
 
-                            # 生成最终的成功响应数据
-                            success_data = {
-                                "token": token.raw,
-                                "exp": token.exp,
-                                "nickname": user.nickname,
-                                "avatar_id": user.avatar_id,
-                                "permissions": list(user.all_permissions),
-                                "groups": list(user.all_groups),
-                            }
-
-                            preference_dek = (
-                                session.get(UserKey, user.preference_dek_id)
-                                if user.preference_dek_id
-                                else None
-                            )
-                            if preference_dek:
-                                success_data["preference_dek"] = {
-                                    "key_id": preference_dek.id,
-                                    "key_content": preference_dek.content,
-                                    "label": preference_dek.label,
-                                }
-
-                            response = {
-                                "code": 200,
-                                "message": "Login successful",
-                                "data": success_data,
-                            }
-                            login_actually_success = True
-
-        if login_actually_success:
             LoginGuard.report_success(user_id)
             LoginGuard.report_success(ip_id)
-        elif failed:
-            LoginGuard.report_failure(user_id, max_attempts=5)
-            LoginGuard.report_failure(ip_id, max_attempts=20)
 
-        handler.conclude_request(**response)
-        return response["code"], username
+            try:
+                check_passwd_requirements(
+                    password,
+                    cfg["passwd_min_length"],
+                    cfg["passwd_max_length"],
+                    cfg["passwd_must_contain"],
+                )
+            except ValueError:
+                return respond(4001, "Password must be changed before you can log in")
+
+            if cfg["enable_passwd_force_expiration"]:
+                expiration_seconds = 3600 * 24 * cfg["passwd_expire_after_days"]
+                if time.time() - user.passwd_last_modified > expiration_seconds:
+                    return respond(4002, "Password should be changed because it's expired")
+
+            success_data = {
+                "token": token.raw,
+                "exp": token.exp,
+                "nickname": user.nickname,
+                "avatar_id": user.avatar_id,
+                "permissions": list(user.all_permissions),
+                "groups": list(user.all_groups),
+            }
+
+            if user.preference_dek_id:
+                preference_dek = session.get(UserKey, user.preference_dek_id)
+                if preference_dek:
+                    success_data["preference_dek"] = {
+                        "key_id": preference_dek.id,
+                        "key_content": preference_dek.content,
+                        "label": preference_dek.label,
+                    }
+
+            return respond(200, "Login successful", success_data)
 
 
 class RequestRefreshTokenHandler(RequestHandler):
