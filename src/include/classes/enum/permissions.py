@@ -40,6 +40,7 @@ class Permissions(StrEnum):
     CREATE_USER = "create_user"
     DELETE_USER = "delete_user"
     RENAME_USER = "rename_user"
+    MANAGE_USER_STATUS = "manage_user_status"
     GET_USER_INFO = "get_user_info"
     LIST_USERS = "list_users"
     MANAGE_2FA = "manage_2fa"

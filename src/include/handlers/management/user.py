@@ -1,9 +1,26 @@
-import math
+__all__ = [
+    "RequestListUsersHandler",
+    "RequestCreateUserHandler",
+    "RequestDeleteUserHandler",
+    "RequestRenameUserHandler",
+    "RequestBlockUserHandler",
+    "RequestUnblockUserHandler",
+    "RequestListUserBlocksHandler",
+    "RequestGetUserInfoHandler",
+    "RequestGetUserAvatarHandler",
+    "RequestSetUserAvatarHandler",
+    "RequestChangeUserGroupsHandler",
+    "RequestSetPasswdHandler",
+    "RequestManageUserStatusHandler",
+]
+
 import time
 import filetype
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHashError
 from typing import Optional
+
+from include.classes.enum.status import UserStatus
 
 # Module-level PasswordHasher instance — reused across all calls to avoid
 # repeated construction overhead.
@@ -967,3 +984,45 @@ class RequestSetPasswdHandler(RequestHandler):
         }
 
         handler.conclude_request(**response)
+
+
+class RequestManageUserStatusHandler(RequestHandler):
+    data_schema = {
+        "type": "object",
+        "properties": {
+            "status": {"enum": ["active", "disabled"]},
+        },
+        "required": ["status"],
+        "additionalProperties": False,
+    }
+
+    require_auth = True
+
+    def handle(self, handler: ConnectionHandler):
+        new_status: str = handler.data["status"]
+
+        with Session() as session:
+            this_user = session.get(User, handler.username)
+            assert this_user is not None
+
+            if Permissions.MANAGE_USER_STATUS not in this_user.all_permissions:
+                handler.conclude_request(
+                    403, {}, "You do not have permission to manage user status"
+                )
+                return 403, None, handler.username
+
+            mapping = {
+                "active": UserStatus.ACTIVE,
+                "disabled": UserStatus.DISABLED,
+            }
+
+            if this_user.status == mapping[new_status]:
+                handler.conclude_request(400, {}, f"User is already {new_status}")
+                return 400, None, handler.username
+            else:
+                this_user.status = mapping[new_status]
+
+            session.commit()
+
+        handler.conclude_request(200, {}, "User status updated successfully")
+        return 200, None, handler.username

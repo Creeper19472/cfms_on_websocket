@@ -123,6 +123,7 @@ def server_init():
             {"permission": Permissions.CREATE_USER},
             {"permission": Permissions.DELETE_USER},
             {"permission": Permissions.RENAME_USER},
+            {"permission": Permissions.MANAGE_USER_STATUS},
             {"permission": Permissions.GET_USER_INFO},
             {"permission": Permissions.GET_GROUP_INFO},
             {"permission": Permissions.CHANGE_USER_GROUPS},
