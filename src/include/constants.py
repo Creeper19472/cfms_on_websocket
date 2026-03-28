@@ -16,7 +16,7 @@ __all__ = [
 from include.classes.version import Version
 
 
-CORE_VERSION = Version("0.1.0.260324_alpha")
+CORE_VERSION = Version("0.1.0.260328_alpha")
 PROTOCOL_VERSION = 11
 
 AVAILABLE_ACCESS_TYPES = ["read", "write", "move", "manage"]
