@@ -423,7 +423,7 @@ def handle_request(stream: Stream):
             raise
         except Exception as e:
             this_handler.logger.error(
-                f"Error detected when handling requests.", exc_info=True
+                "Error detected when handling requests.", exc_info=True
             )
             this_handler.report_error(e)
             return
