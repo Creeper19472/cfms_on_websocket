@@ -141,8 +141,10 @@ class User(Base):
     def is_token_valid(self, token: str) -> bool:
         """
         验证JWT令牌的有效性。
-        如果令牌有效且未过期，返回True；否则返回False。
+        如果令牌有效且未过期，且用户账户处于活跃状态，返回True；否则返回False。
         """
+        if self.status != UserStatus.ACTIVE:
+            return False
         try:
             payload = jwt.decode(
                 token,

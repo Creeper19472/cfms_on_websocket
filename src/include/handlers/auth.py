@@ -65,6 +65,13 @@ class RequestLoginHandler(RequestHandler):
             if not user:
                 response = response_invalid
                 failed = True
+            elif user.status != UserStatus.ACTIVE:
+                response = {
+                    "code": 403,
+                    "message": "User account is not active",
+                    "data": {},
+                }
+                failed = True
             else:
                 token = user.authenticate_and_create_token(password)
                 if not token:
