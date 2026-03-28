@@ -993,7 +993,7 @@ class RequestManageUserStatusHandler(RequestHandler):
             "status": {"enum": ["active", "disabled"]},
             "username": {"type": "string", "minLength": 1},
         },
-        "required": ["status"],
+        "required": ["status", "username"],
         "additionalProperties": False,
     }
 
@@ -1001,7 +1001,7 @@ class RequestManageUserStatusHandler(RequestHandler):
 
     def handle(self, handler: ConnectionHandler):
         new_status: str = handler.data["status"]
-        username: str = handler.data.get("username") or handler.username
+        username: str = handler.data["username"]
 
         with Session() as session:
             this_user = session.get(User, handler.username)
@@ -1017,6 +1017,12 @@ class RequestManageUserStatusHandler(RequestHandler):
                 "active": UserStatus.ACTIVE,
                 "disabled": UserStatus.DISABLED,
             }
+
+            if username == handler.username:
+                handler.conclude_request(
+                    400, {}, "Cannot change your own account status"
+                )
+                return 400, username, handler.username
 
             user = session.get(User, username)
             if not user:
