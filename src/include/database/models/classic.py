@@ -13,7 +13,7 @@ from typing import List
 from typing import Optional
 from typing import Set
 
-from sqlalchemy import VARCHAR, Boolean, Float, ForeignKey, Integer, JSON, Text
+from sqlalchemy import VARCHAR, Boolean, Enum, Float, ForeignKey, Integer, JSON, Text
 from sqlalchemy import event
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
@@ -56,7 +56,7 @@ class User(Base):
     created_time: Mapped[Optional[float]] = mapped_column(Float, nullable=False)
 
     status: Mapped[UserStatus] = mapped_column(
-        Integer, default=UserStatus.ACTIVE.value, nullable=False
+        Enum(UserStatus), default=UserStatus.ACTIVE.value, nullable=False
     )
 
     # 这是对应每个用户的 secret_key. 每次更改密码时将重新生成，如果该属性不为空，则在验证 token 时使用此

@@ -43,13 +43,15 @@ class RequestLoginHandler(RequestHandler):
         username: str = handler.data["username"]
         password: str = handler.data["password"]
         two_factor_auth_token: str = handler.data.get("2fa_token", "")
-        
+
         ip = get_client_ip(handler.stream.connection._ws)
         ip_id = f"ip_limit|{ip}"
         user_id = f"user_limit|{ip}|{username}"
 
         if not LoginGuard.check_access(user_id):
-            handler.conclude_request(429, {}, "Too many login attempts. Please try again later.")
+            handler.conclude_request(
+                429, {}, "Too many login attempts. Please try again later."
+            )
             return 429, username
 
         cfg = global_config["security"]
@@ -145,16 +147,6 @@ class RequestLoginHandler(RequestHandler):
                             "data": success_data,
                         }
                         login_actually_success = True
-
-                    if user.status != UserStatus.ACTIVE:
-                        response = {
-                            "code": 403,
-                            "message": "User account is not active",
-                            "data": {},
-                        }
-                        # ensure an inactive user is never treated as a successful login
-                        login_actually_success = False
-                        failed = True
 
         if login_actually_success:
             LoginGuard.report_success(user_id)

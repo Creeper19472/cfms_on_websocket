@@ -991,6 +991,7 @@ class RequestManageUserStatusHandler(RequestHandler):
         "type": "object",
         "properties": {
             "status": {"enum": ["active", "disabled"]},
+            "username": {"type": "string", "minLength": 1},
         },
         "required": ["status"],
         "additionalProperties": False,
@@ -1000,6 +1001,7 @@ class RequestManageUserStatusHandler(RequestHandler):
 
     def handle(self, handler: ConnectionHandler):
         new_status: str = handler.data["status"]
+        username: str = handler.data.get("username") or handler.username
 
         with Session() as session:
             this_user = session.get(User, handler.username)
@@ -1016,13 +1018,18 @@ class RequestManageUserStatusHandler(RequestHandler):
                 "disabled": UserStatus.DISABLED,
             }
 
-            if this_user.status == mapping[new_status]:
+            user = session.get(User, username)
+            if not user:
+                handler.conclude_request(404, {}, "User does not exist")
+                return 404, None, handler.username
+
+            if user.status == mapping[new_status]:
                 handler.conclude_request(400, {}, f"User is already {new_status}")
                 return 400, None, handler.username
             else:
-                this_user.status = mapping[new_status]
+                user.status = mapping[new_status]
 
             session.commit()
 
         handler.conclude_request(200, {}, "User status updated successfully")
-        return 200, None, handler.username
+        return 200, username, handler.username
