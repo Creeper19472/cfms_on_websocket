@@ -117,10 +117,14 @@ class ConnectionHandler:
         """
         log_id = log_exception_with_id(exc, self.logger, context=None)
         if send_to_client:
-            msg = (
-                user_message if user_message is not None else f"Internal server error. id: {log_id}"
+            msg = user_message if user_message is not None else "Internal server error"
+            self.conclude_request(
+                code,
+                {
+                    "log_id": log_id,
+                },
+                msg,
             )
-            self.conclude_request(code, {}, msg)
         return log_id
 
     def send_file(self, task_id: str) -> None:
