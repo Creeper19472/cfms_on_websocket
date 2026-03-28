@@ -1,5 +1,6 @@
 import time
 
+from include.classes.enum.status import UserStatus
 from include.classes.handler import ConnectionHandler
 from include.classes.misc.guard import LoginGuard
 from include.classes.request import RequestHandler
@@ -144,6 +145,16 @@ class RequestLoginHandler(RequestHandler):
                             "data": success_data,
                         }
                         login_actually_success = True
+
+                    if user.status != UserStatus.ACTIVE:
+                        response = {
+                            "code": 403,
+                            "message": "User account is not active",
+                            "data": {},
+                        }
+                        # ensure an inactive user is never treated as a successful login
+                        login_actually_success = False
+                        failed = True
 
         if login_actually_success:
             LoginGuard.report_success(user_id)
