@@ -257,6 +257,7 @@ class ConnectionHandler:
 
                 except Exception as e:
                     self.report_error(e, context=f"Error sending file {file_path}")
+                    return
 
             else:
                 self.logger.info("Empty file, no need to send")
@@ -433,6 +434,7 @@ class ConnectionHandler:
 
             except Exception as e:
                 self.report_error(e, context=f"Error receiving file for task {task_id}")
+                return
 
     def broadcast(
         self,
