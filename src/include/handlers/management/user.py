@@ -1,9 +1,27 @@
-import math
+__all__ = [
+    "RequestListUsersHandler",
+    "RequestCreateUserHandler",
+    "RequestDeleteUserHandler",
+    "RequestRenameUserHandler",
+    "RequestBlockUserHandler",
+    "RequestUnblockUserHandler",
+    "RequestListUserBlocksHandler",
+    "RequestGetUserInfoHandler",
+    "RequestGetUserAvatarHandler",
+    "RequestSetUserAvatarHandler",
+    "RequestChangeUserGroupsHandler",
+    "RequestSetPasswdHandler",
+    "RequestManageUserStatusHandler",
+]
+
 import time
 import filetype
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHashError
 from typing import Optional
+
+from include.classes.enum.status import UserStatus
+from include.classes.exceptions import UserNotActiveError
 
 # Module-level PasswordHasher instance — reused across all calls to avoid
 # repeated construction overhead.
@@ -880,13 +898,18 @@ class RequestSetPasswdHandler(RequestHandler):
                     )
                     return
 
-                if not user.authenticate_and_create_token(old_passwd):
+                if not user.verify_password(old_passwd):
                     handler.conclude_request(
                         **{
                             "code": 401,
                             "message": "Invalid credentials",
                             "data": {},
                         }
+                    )
+                    return
+                if user.status != UserStatus.ACTIVE:
+                    handler.conclude_request(
+                        403, {}, "Account is not active"
                     )
                     return
 
@@ -967,3 +990,58 @@ class RequestSetPasswdHandler(RequestHandler):
         }
 
         handler.conclude_request(**response)
+
+
+class RequestManageUserStatusHandler(RequestHandler):
+    data_schema = {
+        "type": "object",
+        "properties": {
+            "status": {"enum": ["active", "disabled"]},
+            "username": {"type": "string", "minLength": 1},
+        },
+        "required": ["status", "username"],
+        "additionalProperties": False,
+    }
+
+    require_auth = True
+
+    def handle(self, handler: ConnectionHandler):
+        new_status: str = handler.data["status"]
+        username: str = handler.data["username"]
+
+        with Session() as session:
+            this_user = session.get(User, handler.username)
+            assert this_user is not None
+
+            if Permissions.MANAGE_USER_STATUS not in this_user.all_permissions:
+                handler.conclude_request(
+                    403, {}, "You do not have permission to manage user status"
+                )
+                return 403, None, handler.username
+
+            mapping = {
+                "active": UserStatus.ACTIVE,
+                "disabled": UserStatus.DISABLED,
+            }
+
+            if username == handler.username:
+                handler.conclude_request(
+                    400, {}, "Cannot change your own account status"
+                )
+                return 400, username, handler.username
+
+            user = session.get(User, username)
+            if not user:
+                handler.conclude_request(404, {}, "User does not exist")
+                return 404, None, handler.username
+
+            if user.status == mapping[new_status]:
+                handler.conclude_request(400, {}, f"User is already {new_status}")
+                return 400, None, handler.username
+            else:
+                user.status = mapping[new_status]
+
+            session.commit()
+
+        handler.conclude_request(200, {}, "User status updated successfully")
+        return 200, username, handler.username

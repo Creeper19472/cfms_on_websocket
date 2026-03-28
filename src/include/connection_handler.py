@@ -65,6 +65,7 @@ from include.handlers.management.user import (
     RequestBlockUserHandler,
     RequestListUserBlocksHandler,
     RequestGetUserAvatarHandler,
+    RequestManageUserStatusHandler,
     RequestSetUserAvatarHandler,
     RequestUnblockUserHandler,
     RequestListUsersHandler,
@@ -281,6 +282,7 @@ def handle_request(stream: Stream):
         # Search
         "search": RequestSearchHandler,
         # Users
+        "manage_user_status": RequestManageUserStatusHandler,
         "block_user": RequestBlockUserHandler,
         "unblock_user": RequestUnblockUserHandler,
         "list_user_blocks": RequestListUserBlocksHandler,

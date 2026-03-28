@@ -13,7 +13,7 @@ from typing import List
 from typing import Optional
 from typing import Set
 
-from sqlalchemy import VARCHAR, Boolean, Float, ForeignKey, Integer, JSON, Text
+from sqlalchemy import VARCHAR, Boolean, Enum, Float, ForeignKey, Integer, JSON, Text
 from sqlalchemy import event
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
@@ -22,6 +22,12 @@ from sqlalchemy.orm.session import object_session
 
 from include.classes.auth import Token
 from include.classes.enum.permissions import Permissions
+from include.classes.enum.status import UserStatus
+from include.classes.exceptions import (
+    UserNotActiveError,
+    UserTOTPFailedError,
+    UserTOTPRequiredError,
+)
 from include.conf_loader import global_config
 from include.constants import DEFAULT_TOKEN_EXPIRY_SECONDS
 from include.database.handler import Base, Session
@@ -53,6 +59,10 @@ class User(Base):
 
     last_login: Mapped[Optional[float]] = mapped_column(Float)
     created_time: Mapped[Optional[float]] = mapped_column(Float, nullable=False)
+
+    status: Mapped[UserStatus] = mapped_column(
+        Enum(UserStatus), default=UserStatus.ACTIVE.value, nullable=False
+    )
 
     # 这是对应每个用户的 secret_key. 每次更改密码时将重新生成，如果该属性不为空，则在验证 token 时使用此
     # 密钥，否则，使用从 config.toml 加载的全局密钥。
@@ -109,11 +119,35 @@ class User(Base):
             f"created_time={self.created_time!r})"
         )
 
-    def authenticate_and_create_token(self, plain_password: str) -> Optional[Token]:
+    def verify_password(self, plain_password: str) -> bool:
         try:
-            _password_hasher.verify(self.pass_hash, plain_password)
+            return _password_hasher.verify(self.pass_hash, plain_password)
         except (VerifyMismatchError, VerificationError, InvalidHashError):
-            return None
+            return False
+
+    def authenticate(
+        self, plain_password: str, totp_token: Optional[str] = None
+    ) -> bool:
+        if not self.verify_password(plain_password):
+            return False
+
+        if self.totp_enabled:
+            if not totp_token:
+                raise UserTOTPRequiredError
+            elif not self.verify_totp(totp_token):
+                raise UserTOTPFailedError
+
+        if self.status != UserStatus.ACTIVE:
+            raise UserNotActiveError
+
+        return True
+
+    def authenticate_and_create_token(
+        self, plain_password: str, totp_token: Optional[str] = None
+    ) -> Optional[Token]:
+        if not self.authenticate(plain_password, totp_token=totp_token):
+            return None  # exceptions should be handled by caller
+
         secret = (
             global_config["server"]["secret_key"]
             if not self.secret_key
@@ -136,8 +170,10 @@ class User(Base):
     def is_token_valid(self, token: str) -> bool:
         """
         验证JWT令牌的有效性。
-        如果令牌有效且未过期，返回True；否则返回False。
+        如果令牌有效且未过期，且用户账户处于活跃状态，返回True；否则返回False。
         """
+        if self.status != UserStatus.ACTIVE:
+            return False
         try:
             payload = jwt.decode(
                 token,

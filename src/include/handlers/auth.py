@@ -1,5 +1,12 @@
 import time
+from typing import Any, Optional
 
+from include.classes.enum.status import UserStatus
+from include.classes.exceptions import (
+    UserNotActiveError,
+    UserTOTPFailedError,
+    UserTOTPRequiredError,
+)
 from include.classes.handler import ConnectionHandler
 from include.classes.misc.guard import LoginGuard
 from include.classes.request import RequestHandler
@@ -15,16 +22,6 @@ from include.util.pwd import check_passwd_requirements
 class RequestLoginHandler(RequestHandler):
     """
     Handles user login requests.
-    This util processes a login request by extracting the username and password from the handler's data,
-    validates the credentials against the database, and generates an authentication token if successful.
-    It sends an appropriate response back to the client, indicating success or failure.
-    Args:
-        handler (ConnectionHandler): The connection handler containing request data and methods for responding.
-    Response Codes:
-        200   - Login successful, returns a token in the response data.
-        400 - Missing username or password in the request.
-        401 - Invalid credentials.
-        500 - Internal server error, with the exception message.
     """
 
     data_schema = {
@@ -41,119 +38,87 @@ class RequestLoginHandler(RequestHandler):
     def handle(self, handler: ConnectionHandler):
         username: str = handler.data["username"]
         password: str = handler.data["password"]
-        two_factor_auth_token: str = handler.data.get("2fa_token", "")
-        
+        totp_token: str = handler.data.get("2fa_token", "")
+
         ip = get_client_ip(handler.stream.connection._ws)
         ip_id = f"ip_limit|{ip}"
         user_id = f"user_limit|{ip}|{username}"
 
+        def respond(code: int, message: str, data: Optional[dict[str, Any]] = None):
+            handler.conclude_request(code=code, data=data or {}, message=message)
+            return code, username
+
+        def fail(code: int, message: str):
+            LoginGuard.report_failure(user_id, max_attempts=5)
+            LoginGuard.report_failure(ip_id, max_attempts=20)
+            return respond(code, message)
+
         if not LoginGuard.check_access(user_id):
-            handler.conclude_request(429, {}, "Too many login attempts. Please try again later.")
-            return 429, username
+            return respond(429, "Too many login attempts. Please try again later.")
 
         cfg = global_config["security"]
-        response_invalid = {"code": 401, "message": "Invalid credentials", "data": {}}
-        failed = False
-        login_actually_success = False
 
         with Session() as session:
             user = session.get(User, username)
 
             if not user:
-                response = response_invalid
-                failed = True
-            else:
-                token = user.authenticate_and_create_token(password)
-                if not token:
-                    response = response_invalid
-                    failed = True
-                else:
-                    # enforce password policy (force change)
-                    try:
-                        check_passwd_requirements(
-                            password,
-                            cfg["passwd_min_length"],
-                            cfg["passwd_max_length"],
-                            cfg["passwd_must_contain"],
-                        )
-                    except ValueError:
-                        handler.conclude_request(
-                            4001, {}, "Password must be changed before you can log in"
-                        )
-                        return 4001, username
+                return fail(401, "Invalid credentials")
 
-                    # enforce password expiration
-                    if (
-                        cfg["enable_passwd_force_expiration"]
-                        and time.time() - user.passwd_last_modified
-                        > 3600 * 24 * cfg["passwd_expire_after_days"]
-                    ):
-                        handler.conclude_request(
-                            4002, {}, "Password should be changed because it's expired"
-                        )
-                        return 4002, username
+            try:
+                token = user.authenticate_and_create_token(
+                    password, totp_token=totp_token
+                )
+            except UserTOTPRequiredError:
+                return respond(
+                    202, "Two-factor authentication required", {"method": "totp"}
+                )
+            except UserTOTPFailedError:
+                return fail(401, "Invalid two-factor authentication token")
+            except UserNotActiveError:
+                return fail(4003, "User account is not active")
 
-                    success_data = {
-                        "token": token.raw,
-                        "exp": token.exp,
-                        "nickname": user.nickname,
-                        "avatar_id": user.avatar_id,
-                        "permissions": list(user.all_permissions),
-                        "groups": list(user.all_groups),
-                    }
+            if not token:
+                return fail(401, "Invalid credentials")
 
-                    # Return the preference keyring key if one is set, so clients
-                    # can transparently retrieve the config-encryption DEK.
-                    preference_dek = (
-                        session.get(UserKey, user.preference_dek_id)
-                        if user.preference_dek_id
-                        else None
-                    )
-                    if preference_dek:
-                        success_data["preference_dek"] = {
-                            "key_id": preference_dek.id,
-                            "key_content": preference_dek.content,
-                            "label": preference_dek.label,
-                        }
-
-                    if user.totp_enabled:
-                        if not two_factor_auth_token:
-                            response = {
-                                "code": 202,
-                                "message": "Two-factor authentication required",
-                                "data": {"method": "totp"},
-                            }
-                        elif not user.verify_totp(two_factor_auth_token):
-                            response = {
-                                "code": 401,
-                                "message": "Invalid two-factor authentication token",
-                                "data": {},
-                            }
-                            failed = True
-                        else:
-                            response = {
-                                "code": 200,
-                                "message": "Login successful",
-                                "data": success_data,
-                            }
-                            login_actually_success = True
-                    else:
-                        response = {
-                            "code": 200,
-                            "message": "Login successful",
-                            "data": success_data,
-                        }
-                        login_actually_success = True
-
-        if login_actually_success:
             LoginGuard.report_success(user_id)
             LoginGuard.report_success(ip_id)
-        elif failed:
-            LoginGuard.report_failure(user_id, max_attempts=5)
-            LoginGuard.report_failure(ip_id, max_attempts=20)
 
-        handler.conclude_request(**response)
-        return response["code"], username
+            try:
+                check_passwd_requirements(
+                    password,
+                    cfg["passwd_min_length"],
+                    cfg["passwd_max_length"],
+                    cfg["passwd_must_contain"],
+                )
+            except ValueError:
+                return respond(4001, "Password must be changed before you can log in")
+
+            if cfg["enable_passwd_force_expiration"]:
+                expiration_seconds = 3600 * 24 * cfg["passwd_expire_after_days"]
+                if time.time() - user.passwd_last_modified > expiration_seconds:
+                    return respond(
+                        4002, "Password should be changed because it's expired"
+                    )
+
+            success_data = {
+                "token": token.raw,
+                "exp": token.exp,
+                "nickname": user.nickname,
+                "avatar_id": user.avatar_id,
+                "permissions": list(user.all_permissions),
+                "groups": list(user.all_groups),
+            }
+
+            if user.preference_dek_id:
+                preference_dek = session.get(UserKey, user.preference_dek_id)
+                if preference_dek:
+                    success_data["preference_dek"] = {
+                        "key_id": preference_dek.id,
+                        "key_content": preference_dek.content,
+                        "label": preference_dek.label,
+                    }
+
+            return respond(200, "Login successful", success_data)
 
 
 class RequestRefreshTokenHandler(RequestHandler):
