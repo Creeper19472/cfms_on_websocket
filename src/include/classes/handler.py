@@ -19,7 +19,7 @@ from include.constants import FILE_TRANSFER_MAX_CHUNK_SIZE, FILE_TRANSFER_MIN_CH
 from include.database.handler import Session
 from include.database.models.file import File, FileTask
 from include.shared import clients, clients_lock
-from include.util.log import getCustomLogger
+from include.util.log import getCustomLogger, log_exception_with_id
 
 logger = getCustomLogger(
     "connection",
@@ -102,6 +102,26 @@ class ConnectionHandler:
         self.logger.debug(f"Sending response: {response_json}")
 
         self.stream.send(response_json, frame_type=FrameType.CONCLUSION)
+
+    def report_error(
+        self,
+        exc: Exception,
+        code: int = 500,
+        user_message: Optional[str] = None,
+        send_to_client: bool = True,
+    ) -> str:
+        """
+        Log an exception with a generated log id and optionally send a safe message to client.
+
+        Returns the generated log id.
+        """
+        log_id = log_exception_with_id(exc, self.logger, context=None)
+        if send_to_client:
+            msg = (
+                user_message if user_message is not None else f"Internal server error. id: {log_id}"
+            )
+            self.conclude_request(code, {}, msg)
+        return log_id
 
     def send_file(self, task_id: str) -> None:
         """
@@ -234,7 +254,7 @@ class ConnectionHandler:
 
                 except Exception as e:
                     self.logger.error(f"Error sending file {file_path}: {e}")
-                    self.conclude_request(500, {}, f"Error sending file: {str(e)}")
+                    self.report_error(e)
 
             else:
                 self.logger.info("Empty file, no need to send")
@@ -411,7 +431,7 @@ class ConnectionHandler:
 
             except Exception as e:
                 self.logger.error(f"Error receiving file: {e}", exc_info=True)
-                self.conclude_request(500, {}, f"Error receiving file: {str(e)}")
+                self.report_error(e)
 
     def broadcast(
         self,

@@ -932,14 +932,10 @@ class RequestSetPasswdHandler(RequestHandler):
                         global_config["security"]["passwd_must_contain"],
                     )
             except InvaildPasswordLengthError as e:
-                handler.conclude_request(
-                    400,
-                    {"min_length": e.min_length, "max_length": e.max_length},
-                    str(e),
-                )
+                handler.report_error(e, code=400, user_message=str(e))
                 return 400, target_username
             except MissingComponentsError as e:
-                handler.conclude_request(400, {"missing": e.missing}, str(e))
+                handler.report_error(e, code=400, user_message=str(e))
                 return 400, target_username
 
             try:

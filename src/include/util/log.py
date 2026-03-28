@@ -1,6 +1,8 @@
 import logging
 from logging.handlers import RotatingFileHandler
 from typing import Tuple
+import uuid
+import traceback
 
 """
 Provides a utility util to create and configure a custom logger with both file and console handlers.
@@ -40,3 +42,19 @@ def getCustomLogger(
     logger.addHandler(cshandler)
 
     return logger
+
+
+def log_exception_with_id(exc: Exception, logger: logging.Logger, context: str | None = None) -> str:
+    """
+    Log an exception with a generated UUID4 log id and return the id.
+
+    The full traceback will be written to the provided logger at ERROR level
+    and the returned id can be shared with clients for correlation.
+    """
+    log_id = uuid.uuid4().hex
+    tb = traceback.format_exc()
+    if context:
+        logger.error("[%s] %s: %s\n%s", log_id, context, str(exc), tb)
+    else:
+        logger.error("[%s] Exception: %s\n%s", log_id, str(exc), tb)
+    return log_id
