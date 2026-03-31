@@ -1,4 +1,4 @@
-__all__ = ["pm"]
+__all__ = ["pm", "load_plugins_from_directory"]
 
 from typing import Dict, Type, Optional, Set, Union
 import os
@@ -19,13 +19,21 @@ logger = getCustomLogger("PluginManager", filepath="./content/logs/plugin_manage
 
 # ext = extension
 class ServerHookSpecs:
-    """Hook specifications for the CFMS WebSocket server plugins."""
+    """Hook specifications for server extensions."""
 
     @hookspec
     def ext_register_handlers(self) -> Dict[str, Type[RequestHandler]]:
         """
         注册自定义的 Request Handlers。
         返回字典: {"action_name": RequestHandlerClass}
+        """
+        ...
+
+    @hookspec
+    def ext_unregister_handlers(self) -> Set[str]:
+        """
+        Unregister handlers for specific actions.
+        Should return a set of action names whose handlers should be unregistered.
         """
         ...
 
@@ -46,10 +54,12 @@ class ServerHookSpecs:
         """当客户端断开连接时触发"""
 
     @hookspec(firstresult=True)
-    def ext_pre_request(self, handler: ConnectionHandler) -> Optional[bool]:
+    def ext_pre_request(
+        self, request_handler: RequestHandler, connection_handler: ConnectionHandler
+    ) -> Optional[bool]:
         """
-        在请求被处理前触发。
-        如果返回 True，则表示插件已接管或拒绝了该请求（已调用 conclude_request），核心逻辑应中止。
+        Triggered before processing a request. 
+        If any plugin returns False, the request will be rejected immediately.
         """
 
     @hookspec(firstresult=True)
@@ -74,8 +84,7 @@ class ServerHookSpecs:
             None,
         ],
         time_cost: float,
-    ) -> None:
-        ...
+    ) -> None: ...
 
 
 def load_plugins_from_directory(plugin_dir: str):
