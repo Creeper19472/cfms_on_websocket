@@ -74,7 +74,6 @@ def ext_register_handlers():
 
 @hookimpl
 def ext_post_request(
-    self,
     action: str,
     handler: ConnectionHandler,
     callback: Union[
