@@ -105,13 +105,13 @@ class ServerHookSpecs:
 
 def load_extensions_from_directory(extension_dir: str | Path):
 
-    if not os.path.exists(extension_dir):
+    if not os.path.isdir(extension_dir):
         logger.warning(
-            f"Extension directory '{extension_dir}' does not exist. Skipping."
+            f"Extension directory '{extension_dir}' does not exist or is not a directory. Skipping."
         )
         return
 
-    for filename in os.listdir(extension_dir):
+    for filename in sorted(os.listdir(extension_dir)):
         if filename.endswith(".py") and not filename.startswith(("_", ".")):
             ext_name = filename[:-3]  # remove .py extension
             ext_path = os.path.join(extension_dir, filename)
