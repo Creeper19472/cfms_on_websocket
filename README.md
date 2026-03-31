@@ -1,4 +1,4 @@
-# CFMS on Websocket
+# CFMS on WebSocket
 
 CFMS (Confidential File Management System), is a complete solution for 
 managing confidential documents. This is the repository used to 
@@ -35,6 +35,11 @@ uv sync --upgrade
 
 # Activate virtual environment
 source .venv/bin/activate
+```
+
+## Run
+```bash
+python main.py # DO NOT use `-O`!
 ```
 
 ## Testing
