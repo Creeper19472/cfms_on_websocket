@@ -359,6 +359,8 @@ class ConnectionHandler:
                     f.truncate(0)
                 file.active = True
                 session.commit()
+
+                pm.hook.ext_on_file_uploaded(path=file.path)
                 return
 
             self.stream.send(f"ready {chunk_size}")

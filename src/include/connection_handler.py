@@ -190,6 +190,16 @@ available_functions: dict[str, type[RequestHandler]] = {
     "list_user_keys": RequestListUserKeysHandler,
 }
 
+# 定义白名单内的请求。这些请求即使在防范禁闭时也对所有用户可用。
+whitelisted_functions = [
+    "server_info",
+    "login",
+    "refresh_token",
+    "validate_2fa",
+    "upload_file",
+    "download_file",
+]
+
 
 def _validate_replay_protection(
     handler: ConnectionHandler,
@@ -312,34 +322,6 @@ def handle_request(stream: Stream):
     if action is None:
         this_handler.conclude_request(400, {}, "No action specified in request")
         return
-
-    # Debugging
-    if global_config["debug"]:
-        available_functions["throw_exception"] = RequestThrowExceptionHandler
-
-    # Load available request handlers from extensions
-    extension_handlers = pm.hook.ext_register_handlers()
-    for handler_dict in extension_handlers:
-        available_functions.update(handler_dict)
-
-    ext_unregistered_handlers = pm.hook.ext_unregister_handlers()
-    for i in ext_unregistered_handlers:
-        for handler_name in i:
-            if handler_name in available_functions:
-                del available_functions[handler_name]
-
-    # 定义白名单内的请求。这些请求即使在防范禁闭时也对所有用户可用。
-    whitelisted_functions = [
-        "server_info",
-        "login",
-        "refresh_token",
-        "validate_2fa",
-        "upload_file",
-        "download_file",
-    ]
-
-    for ext_whitelisted_actions in pm.hook.ext_register_whitelisted_actions():
-        whitelisted_functions.extend(ext_whitelisted_actions)
 
     user_permissions: set[Permissions] = set()
     authenticated = False

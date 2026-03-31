@@ -23,6 +23,7 @@ Constants:
 import os
 
 from include.classes.enum.permissions import Permissions
+from include.handlers.debugging.throw import RequestThrowExceptionHandler
 from include.util.entrance import global_process_request
 
 # fix
@@ -35,7 +36,11 @@ import ssl
 from websockets.sync.server import serve
 
 from include.conf_loader import global_config
-from include.connection_handler import handle_connection
+from include.connection_handler import (
+    handle_connection,
+    available_functions,
+    whitelisted_functions,
+)
 from include.constants import CORE_VERSION
 from include.constants import DEFAULT_SSL_CERT_VALIDITY_DAYS
 from include.constants import ROOT_DIRECTORY_ID
@@ -48,7 +53,7 @@ from include.database.models.file import File
 from include.util.log import getCustomLogger
 from include.util.rule.applying import set_access_rules
 from include.classes.misc.guard import LoginGuard
-from include.system.ext_manager import load_extensions_from_directory
+from include.system.ext_manager import load_extensions_from_directory, pm
 
 
 def ensure_root_folder():
@@ -268,6 +273,37 @@ def server_init():
     ensure_root_folder()
 
 
+def prepare_handlers():
+    """
+    Prepares the available request handlers by loading built-in handlers and
+    extension handlers.
+
+    This function populates the `available_functions` dictionary with handlers
+    for processing client requests.
+
+    It also populates the `whitelisted_functions` list with actions that are
+    allowed even during lockdown.
+    """
+
+    # Debugging
+    if global_config["debug"]:
+        available_functions["throw_exception"] = RequestThrowExceptionHandler
+
+    # Load available request handlers from extensions
+    extension_handlers = pm.hook.ext_register_handlers()
+    for handler_dict in extension_handlers:
+        available_functions.update(handler_dict)
+
+    ext_unregistered_handlers = pm.hook.ext_unregister_handlers()
+    for i in ext_unregistered_handlers:
+        for handler_name in i:
+            if handler_name in available_functions:
+                del available_functions[handler_name]
+
+    for ext_whitelisted_actions in pm.hook.ext_register_whitelisted_actions():
+        whitelisted_functions.extend(ext_whitelisted_actions)
+
+
 def main():
     logger = getCustomLogger(
         "CFMS", filepath=ROOT_ABSPATH / "content" / "logs" / "core.log"
@@ -328,6 +364,9 @@ def main():
 
     # Register plugins after database initialization
     load_extensions_from_directory(ROOT_ABSPATH / "include" / "extensions")
+
+    # Initialize available request handlers
+    prepare_handlers()
 
     # Preload banned subnet list into memory for LoginGuard
     LoginGuard.reload_networks()
