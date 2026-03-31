@@ -323,9 +323,10 @@ def handle_request(stream: Stream):
         available_functions.update(handler_dict)
 
     ext_unregistered_handlers = pm.hook.ext_unregister_handlers()
-    for handler_name in ext_unregistered_handlers:
-        if handler_name in available_functions:
-            del available_functions[handler_name]
+    for i in ext_unregistered_handlers:
+        for handler_name in i:
+            if handler_name in available_functions:
+                del available_functions[handler_name]
 
     # 定义白名单内的请求。这些请求即使在防范禁闭时也对所有用户可用。
     whitelisted_functions = [
@@ -400,7 +401,7 @@ def handle_request(stream: Stream):
                     request_handler=_request_handler,
                     connection_handler=this_handler,
                 )
-                == False
+                is False
             ):
                 return
             t1 = time.perf_counter()
@@ -479,7 +480,7 @@ def handle_request(stream: Stream):
             # 2. 为不适合采用 return 提交审计信息的逻辑预留。
             return
         else:
-            raise ValueError("Invaild returned value")
+            raise ValueError(f"Invalid returned value from handler: {callback!r}")
     else:
         # Handle unknown actions
         this_handler.conclude_request(400, {}, f"Unknown action: {this_handler.action}")

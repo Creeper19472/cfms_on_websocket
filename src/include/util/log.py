@@ -1,5 +1,6 @@
 import logging
 from logging.handlers import RotatingFileHandler
+from pathlib import Path
 from typing import Tuple
 import uuid
 import traceback
@@ -23,7 +24,7 @@ Functions:
 def getCustomLogger(
     logname: str,
     level: Tuple[int, int] = (logging.DEBUG, logging.INFO),
-    filepath: str = "default.log",
+    filepath: str | Path = "default.log",
 ) -> logging.Logger:
     logger = logging.getLogger(logname)
     logger.setLevel(level=logging.DEBUG)  # This level must be 'logging.DEBUG'.

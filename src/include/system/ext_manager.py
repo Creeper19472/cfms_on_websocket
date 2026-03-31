@@ -1,9 +1,9 @@
 __all__ = ["pm", "load_extensions_from_directory"]
 
+from pathlib import Path
 from typing import Dict, Type, Optional, Set, Union, TYPE_CHECKING
 import os
 import importlib.util
-from venv import logger
 import pluggy
 import websockets.sync.server
 from include.util.log import getCustomLogger
@@ -103,7 +103,7 @@ class ServerHookSpecs:
         """
 
 
-def load_extensions_from_directory(extension_dir: str):
+def load_extensions_from_directory(extension_dir: str | Path):
 
     if not os.path.exists(extension_dir):
         logger.warning(

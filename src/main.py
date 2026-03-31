@@ -39,6 +39,7 @@ from include.connection_handler import handle_connection
 from include.constants import CORE_VERSION
 from include.constants import DEFAULT_SSL_CERT_VALIDITY_DAYS
 from include.constants import ROOT_DIRECTORY_ID
+from include.constants import ROOT_ABSPATH
 from include.database.handler import Base
 from include.database.handler import Session
 from include.database.handler import engine
@@ -268,7 +269,9 @@ def server_init():
 
 
 def main():
-    logger = getCustomLogger("CFMS", filepath="./content/logs/core.log")
+    logger = getCustomLogger(
+        "CFMS", filepath=ROOT_ABSPATH / "content" / "logs" / "core.log"
+    )
 
     if not os.path.exists("./init"):
         logger.info("Database not initialized, initializing now...")
@@ -324,7 +327,7 @@ def main():
     ensure_root_folder()
 
     # Register plugins after database initialization
-    load_extensions_from_directory("./include/extensions")
+    load_extensions_from_directory(ROOT_ABSPATH / "include" / "extensions")
 
     # Preload banned subnet list into memory for LoginGuard
     LoginGuard.reload_networks()
