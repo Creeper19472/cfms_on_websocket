@@ -14,7 +14,7 @@ from include.conf_loader import global_config
 from include.classes.handler import ConnectionHandler
 from include.database.handler import Session
 from include.database.models.classic import User
-from include.system.plugin_manager import pm
+from include.system.ext_manager import pm
 from include.util.address import get_client_ip
 from include.util.audit import log_audit
 from include.handlers.auth import RequestLoginHandler, RequestRefreshTokenHandler

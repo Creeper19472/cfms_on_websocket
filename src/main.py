@@ -47,7 +47,7 @@ from include.database.models.file import File
 from include.util.log import getCustomLogger
 from include.util.rule.applying import set_access_rules
 from include.classes.misc.guard import LoginGuard
-from include.system.plugin_manager import load_extensions_from_directory
+from include.system.ext_manager import load_extensions_from_directory
 
 
 def ensure_root_folder():

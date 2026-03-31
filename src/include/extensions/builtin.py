@@ -10,7 +10,7 @@ from include.constants import CORE_VERSION, PROTOCOL_VERSION
 from include.database.handler import Session
 from include.database.models.classic import User
 from include.shared import lockdown_enabled
-from include.system.plugin_manager import hookimpl
+from include.system.ext_manager import hookimpl
 from include.util.log import getCustomLogger
 
 logger = getCustomLogger("BuiltinExtension", filepath="./content/logs/connection.log")
