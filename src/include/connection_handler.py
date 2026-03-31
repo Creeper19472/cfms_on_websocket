@@ -1,5 +1,4 @@
 import orjson
-import os
 import threading
 import time
 from typing import Optional, Union
@@ -101,16 +100,9 @@ from include.handlers.keyring import (
     RequestListUserKeysHandler,
 )
 
-from include.constants import CORE_VERSION, NONCE_MIN_LENGTH, PROTOCOL_VERSION
+from include.constants import NONCE_MIN_LENGTH
 from include.nonce_store import nonce_store
 from include.shared import lockdown_enabled, clients, clients_lock
-
-import cProfile, pstats, io
-from pstats import SortKey
-
-pr = cProfile.Profile()
-
-
 from include.util.cert import get_client_cert_subject
 from include.util.log import getCustomLogger
 
@@ -403,7 +395,6 @@ def handle_request(stream: Stream):
             return
 
         try:
-            # pr.enable()
             if (
                 pm.hook.ext_pre_request(
                     request_handler=_request_handler,
@@ -413,6 +404,7 @@ def handle_request(stream: Stream):
             ):
                 return
             t1 = time.perf_counter()
+
             callback: Union[
                 int,
                 tuple[int, Optional[str]],
@@ -421,11 +413,7 @@ def handle_request(stream: Stream):
                 tuple[int, Optional[str], dict, str],
                 None,
             ] = _request_handler.handle(this_handler)
-            # pr.disable()
-            # s = io.StringIO()
-            # ps = pstats.Stats(pr, stream=s).sort_stats(SortKey.CUMULATIVE)
-            # ps.print_stats()
-            # print(s.getvalue())
+
             t2 = time.perf_counter()
             pm.hook.ext_post_request(
                 action=action,
@@ -491,7 +479,7 @@ def handle_request(stream: Stream):
             # 2. 为不适合采用 return 提交审计信息的逻辑预留。
             return
         else:
-            raise TypeError("Invaild returned value")
+            raise ValueError("Invaild returned value")
     else:
         # Handle unknown actions
         this_handler.conclude_request(400, {}, f"Unknown action: {this_handler.action}")
