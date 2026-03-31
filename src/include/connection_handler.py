@@ -1,5 +1,4 @@
 import orjson
-import os
 import threading
 import time
 from typing import Optional, Union
@@ -14,6 +13,7 @@ from include.conf_loader import global_config
 from include.classes.handler import ConnectionHandler
 from include.database.handler import Session
 from include.database.models.classic import User
+from include.system.ext_manager import pm
 from include.util.address import get_client_ip
 from include.util.audit import log_audit
 from include.handlers.auth import RequestLoginHandler, RequestRefreshTokenHandler
@@ -100,22 +100,105 @@ from include.handlers.keyring import (
     RequestListUserKeysHandler,
 )
 
-from include.constants import CORE_VERSION, NONCE_MIN_LENGTH, PROTOCOL_VERSION
+from include.constants import NONCE_MIN_LENGTH
 from include.nonce_store import nonce_store
 from include.shared import lockdown_enabled, clients, clients_lock
-
-import cProfile, pstats, io
-from pstats import SortKey
-
-pr = cProfile.Profile()
-
-
 from include.util.cert import get_client_cert_subject
 from include.util.log import getCustomLogger
 
 logger = getCustomLogger(
     "connection_handler", filepath="./content/logs/connection_handler.log"
 )
+
+available_functions: dict[str, type[RequestHandler]] = {
+    # 认证类
+    "login": RequestLoginHandler,
+    "refresh_token": RequestRefreshTokenHandler,
+    # 两步验证类
+    "setup_2fa": RequestSetup2FAHandler,
+    "cancel_2fa_setup": RequestCancel2FASetupHandler,  # especially for cancelling setup
+    "validate_2fa": RequestValidate2FAHandler,
+    "disable_2fa": RequestDisable2FAHandler,
+    "get_2fa_status": RequestGet2FAStatusHandler,
+    # 文档类
+    "get_document": RequestGetDocumentHandler,
+    "create_document": RequestCreateDocumentHandler,
+    "upload_document": RequestUploadDocumentHandler,
+    "delete_document": RequestDeleteDocumentHandler,
+    "restore_document": RequestRestoreDocumentHandler,
+    "purge_document": RequestPurgeDocumentHandler,
+    "rename_document": RequestRenameDocumentHandler,
+    "move_document": RequestMoveDocumentHandler,
+    "get_document_info": RequestGetDocumentInfoHandler,
+    "get_document_access_rules": RequestGetDocumentAccessRulesHandler,
+    "set_document_rules": RequestSetDocumentRulesHandler,
+    # 修订版本类
+    "list_revisions": RequestListRevisionsHandler,
+    "get_revision": RequestGetRevisionHandler,
+    "set_current_revision": RequestSetDocumentRevisionHandler,
+    "delete_revision": RequestDeleteRevisionHandler,
+    # 文件类
+    "download_file": RequestDownloadFileHandler,
+    "upload_file": RequestUploadFileHandler,
+    # 目录类
+    "list_directory": RequestListDirectoryHandler,
+    "get_directory_info": RequestGetDirectoryInfoHandler,
+    "get_directory_access_rules": RequestGetDirectoryAccessRulesHandler,
+    "set_directory_rules": RequestSetDirectoryRulesHandler,
+    "create_directory": RequestCreateDirectoryHandler,
+    "delete_directory": RequestDeleteDirectoryHandler,
+    "restore_directory": RequestRestoreDirectoryHandler,
+    "purge_directory": RequestPurgeDirectoryHandler,
+    "rename_directory": RequestRenameDirectoryHandler,
+    "move_directory": RequestMoveDirectoryHandler,
+    "list_deleted_items": RequestListDeletedItemsHandler,
+    # Search
+    "search": RequestSearchHandler,
+    # Users
+    "manage_user_status": RequestManageUserStatusHandler,
+    "block_user": RequestBlockUserHandler,
+    "unblock_user": RequestUnblockUserHandler,
+    "list_user_blocks": RequestListUserBlocksHandler,
+    "list_users": RequestListUsersHandler,
+    "create_user": RequestCreateUserHandler,
+    "delete_user": RequestDeleteUserHandler,
+    "rename_user": RequestRenameUserHandler,
+    "get_user_info": RequestGetUserInfoHandler,
+    "get_user_avatar": RequestGetUserAvatarHandler,
+    "set_user_avatar": RequestSetUserAvatarHandler,
+    "change_user_groups": RequestChangeUserGroupsHandler,
+    "set_passwd": RequestSetPasswdHandler,
+    # 用户组类
+    "list_groups": RequestListGroupsHandler,
+    "create_group": RequestCreateGroupHandler,
+    "delete_group": RequestDeleteGroupHandler,
+    "rename_group": RequestRenameGroupHandler,
+    "get_group_info": RequestGetGroupInfoHandler,
+    "change_group_permissions": RequestChangeGroupPermissionsHandler,
+    # 访问类
+    "grant_access": RequestGrantAccessHandler,
+    "revoke_access": RequestRevokeAccessHandler,
+    "view_access_entries": RequestViewAccessEntriesHandler,
+    # 系统类
+    "lockdown": RequestLockdownHandler,
+    "view_audit_logs": RequestViewAuditLogsHandler,
+    # Keyring
+    "upload_user_key": RequestUploadUserKeyHandler,
+    "get_user_key": RequestGetUserKeyHandler,
+    "delete_user_key": RequestDeleteUserKeyHandler,
+    "set_user_preference_dek": RequestSetPreferenceDEKHandler,
+    "list_user_keys": RequestListUserKeysHandler,
+}
+
+# 定义白名单内的请求。这些请求即使在防范禁闭时也对所有用户可用。
+whitelisted_functions = [
+    "server_info",
+    "login",
+    "refresh_token",
+    "validate_2fa",
+    "upload_file",
+    "download_file",
+]
 
 
 def _validate_replay_protection(
@@ -171,6 +254,8 @@ def handle_connection(websocket: websockets.sync.server.ServerConnection):
     with clients_lock:
         clients.add(multiplexer)
 
+    pm.hook.ext_on_connect(websocket=websocket)
+
     try:
         while True:
             stream = multiplexer.accept_stream()
@@ -187,6 +272,8 @@ def handle_connection(websocket: websockets.sync.server.ServerConnection):
 
         with clients_lock:
             clients.discard(multiplexer)
+
+        pm.hook.ext_post_disconnect()
 
 
 def handle_request(stream: Stream):
@@ -236,102 +323,6 @@ def handle_request(stream: Stream):
         this_handler.conclude_request(400, {}, "No action specified in request")
         return
 
-    available_functions: dict[str, type[RequestHandler]] = {
-        "server_info": RequestServerInfoHandler,
-        # 认证类
-        "login": RequestLoginHandler,
-        "refresh_token": RequestRefreshTokenHandler,
-        # 两步验证类
-        "setup_2fa": RequestSetup2FAHandler,
-        "cancel_2fa_setup": RequestCancel2FASetupHandler,  # especially for cancelling setup
-        "validate_2fa": RequestValidate2FAHandler,
-        "disable_2fa": RequestDisable2FAHandler,
-        "get_2fa_status": RequestGet2FAStatusHandler,
-        # 文档类
-        "get_document": RequestGetDocumentHandler,
-        "create_document": RequestCreateDocumentHandler,
-        "upload_document": RequestUploadDocumentHandler,
-        "delete_document": RequestDeleteDocumentHandler,
-        "restore_document": RequestRestoreDocumentHandler,
-        "purge_document": RequestPurgeDocumentHandler,
-        "rename_document": RequestRenameDocumentHandler,
-        "move_document": RequestMoveDocumentHandler,
-        "get_document_info": RequestGetDocumentInfoHandler,
-        "get_document_access_rules": RequestGetDocumentAccessRulesHandler,
-        "set_document_rules": RequestSetDocumentRulesHandler,
-        # 修订版本类
-        "list_revisions": RequestListRevisionsHandler,
-        "get_revision": RequestGetRevisionHandler,
-        "set_current_revision": RequestSetDocumentRevisionHandler,
-        "delete_revision": RequestDeleteRevisionHandler,
-        # 文件类
-        "download_file": RequestDownloadFileHandler,
-        "upload_file": RequestUploadFileHandler,
-        # 目录类
-        "list_directory": RequestListDirectoryHandler,
-        "get_directory_info": RequestGetDirectoryInfoHandler,
-        "get_directory_access_rules": RequestGetDirectoryAccessRulesHandler,
-        "set_directory_rules": RequestSetDirectoryRulesHandler,
-        "create_directory": RequestCreateDirectoryHandler,
-        "delete_directory": RequestDeleteDirectoryHandler,
-        "restore_directory": RequestRestoreDirectoryHandler,
-        "purge_directory": RequestPurgeDirectoryHandler,
-        "rename_directory": RequestRenameDirectoryHandler,
-        "move_directory": RequestMoveDirectoryHandler,
-        "list_deleted_items": RequestListDeletedItemsHandler,
-        # Search
-        "search": RequestSearchHandler,
-        # Users
-        "manage_user_status": RequestManageUserStatusHandler,
-        "block_user": RequestBlockUserHandler,
-        "unblock_user": RequestUnblockUserHandler,
-        "list_user_blocks": RequestListUserBlocksHandler,
-        "list_users": RequestListUsersHandler,
-        "create_user": RequestCreateUserHandler,
-        "delete_user": RequestDeleteUserHandler,
-        "rename_user": RequestRenameUserHandler,
-        "get_user_info": RequestGetUserInfoHandler,
-        "get_user_avatar": RequestGetUserAvatarHandler,
-        "set_user_avatar": RequestSetUserAvatarHandler,
-        "change_user_groups": RequestChangeUserGroupsHandler,
-        "set_passwd": RequestSetPasswdHandler,
-        # 用户组类
-        "list_groups": RequestListGroupsHandler,
-        "create_group": RequestCreateGroupHandler,
-        "delete_group": RequestDeleteGroupHandler,
-        "rename_group": RequestRenameGroupHandler,
-        "get_group_info": RequestGetGroupInfoHandler,
-        "change_group_permissions": RequestChangeGroupPermissionsHandler,
-        # 访问类
-        "grant_access": RequestGrantAccessHandler,
-        "revoke_access": RequestRevokeAccessHandler,
-        "view_access_entries": RequestViewAccessEntriesHandler,
-        # 系统类
-        "lockdown": RequestLockdownHandler,
-        "view_audit_logs": RequestViewAuditLogsHandler,
-        # Keyring
-        "upload_user_key": RequestUploadUserKeyHandler,
-        "get_user_key": RequestGetUserKeyHandler,
-        "delete_user_key": RequestDeleteUserKeyHandler,
-        "set_user_preference_dek": RequestSetPreferenceDEKHandler,
-        "list_user_keys": RequestListUserKeysHandler,
-    }
-
-    # Debugging
-    if global_config["debug"]:
-        available_functions["throw_exception"] = RequestThrowExceptionHandler
-
-    # 定义白名单内的请求。这些请求即使在防范禁闭时也对所有用户可用。
-    whitelisted_functions = [
-        # "echo",
-        "server_info",
-        "login",
-        "refresh_token",
-        "validate_2fa",
-        "upload_file",
-        "download_file",
-    ]
-
     user_permissions: set[Permissions] = set()
     authenticated = False
     if this_handler.username and this_handler.token:
@@ -360,21 +351,7 @@ def handle_request(stream: Stream):
     if authenticated and _validate_replay_protection(this_handler) is not None:
         return
 
-    if action == "shutdown":
-        if not authenticated:
-            this_handler.conclude_request(401, {}, "Authentication required")
-            return
-
-        if "shutdown" not in user_permissions:
-            this_handler.conclude_request(403, {}, "Permission denied")
-            return
-
-        # Shutdown the server
-        this_handler.conclude_request(200, {}, "Server is shutting down")
-        logger.info("Server is shutting down")
-        threading.Thread(target=os._exit(0), daemon=True).start()
-    elif action in available_functions:
-
+    if action in available_functions:
         _request_handler: RequestHandler = available_functions[action]()
 
         try:
@@ -401,8 +378,16 @@ def handle_request(stream: Stream):
             return
 
         try:
+            if (
+                pm.hook.ext_pre_request(
+                    request_handler=_request_handler,
+                    connection_handler=this_handler,
+                )
+                is False
+            ):
+                return
             t1 = time.perf_counter()
-            # pr.enable()
+
             callback: Union[
                 int,
                 tuple[int, Optional[str]],
@@ -411,13 +396,14 @@ def handle_request(stream: Stream):
                 tuple[int, Optional[str], dict, str],
                 None,
             ] = _request_handler.handle(this_handler)
-            # pr.disable()
-            # s = io.StringIO()
-            # ps = pstats.Stats(pr, stream=s).sort_stats(SortKey.CUMULATIVE)
-            # ps.print_stats()
-            # print(s.getvalue())
+
             t2 = time.perf_counter()
-            logger.debug(f"Handled action '{action}' in {t2 - t1:.3f} seconds")
+            pm.hook.ext_post_request(
+                action=action,
+                handler=this_handler,
+                callback=callback,
+                time_cost=t2 - t1,
+            )
         except (
             websockets.exceptions.ConnectionClosedOK,
             websockets.exceptions.ConnectionClosedError,
@@ -476,33 +462,9 @@ def handle_request(stream: Stream):
             # 2. 为不适合采用 return 提交审计信息的逻辑预留。
             return
         else:
-            raise TypeError("Invaild returned value")
+            raise ValueError(f"Invalid returned value from handler: {callback!r}")
     else:
         # Handle unknown actions
         this_handler.conclude_request(400, {}, f"Unknown action: {this_handler.action}")
 
     return
-
-
-class RequestServerInfoHandler(RequestHandler):
-    """
-    Handle the 'server_info' action to return server information.
-
-    Args:
-        this_handler: The ConnectionHandler instance handling the request.
-    """
-
-    data_schema = {"type": "object", "properties": {}, "additionalProperties": False}
-
-    def handle(self, handler: ConnectionHandler):
-
-        server_info = {
-            "server_name": global_config["server"]["name"],
-            "version": CORE_VERSION.original,
-            "protocol_version": PROTOCOL_VERSION,
-            "lockdown": lockdown_enabled.is_set(),
-        }
-        handler.conclude_request(
-            200, server_info, "Server information retrieved successfully"
-        )
-        return

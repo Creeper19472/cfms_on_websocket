@@ -1,6 +1,7 @@
 __all__ = [
     "CORE_VERSION",
     "PROTOCOL_VERSION",
+    "ROOT_ABSPATH",
     "AVAILABLE_ACCESS_TYPES",
     "AVAILABLE_BLOCK_TYPES",
     "DEFAULT_TOKEN_EXPIRY_SECONDS",
@@ -11,13 +12,19 @@ __all__ = [
     "REPLAY_PROTECTION_TIME_WINDOW_SECONDS",
     "NONCE_MIN_LENGTH",
     "ROOT_DIRECTORY_ID",
+    "MAX_PARAM_SIZE",
+    "QUERY_CHUNK_SIZE",
+    "TRUSTED_PROXY_IPS",
 ]
 
+from pathlib import Path
 from include.classes.version import Version
 
 
-CORE_VERSION = Version("0.1.0.260328_alpha")
+CORE_VERSION = Version("0.1.0.260331_alpha")
 PROTOCOL_VERSION = 11
+
+ROOT_ABSPATH = Path(__file__).resolve().parent.parent
 
 AVAILABLE_ACCESS_TYPES = ["read", "write", "move", "manage"]
 AVAILABLE_BLOCK_TYPES: set = {"read", "write", "move"}
