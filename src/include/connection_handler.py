@@ -330,6 +330,11 @@ def handle_request(stream: Stream):
     for handler_dict in extension_handlers:
         available_functions.update(handler_dict)
 
+    ext_unregistered_handlers = pm.hook.ext_unregister_handlers()
+    for handler_name in ext_unregistered_handlers:
+        if handler_name in available_functions:
+            del available_functions[handler_name]
+
     # 定义白名单内的请求。这些请求即使在防范禁闭时也对所有用户可用。
     whitelisted_functions = [
         "server_info",
