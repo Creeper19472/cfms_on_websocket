@@ -1,5 +1,3 @@
-from typing import Optional, Union
-
 from include.classes.request import RequestHandler
 from include.conf_loader import global_config
 from include.classes.handler import ConnectionHandler
