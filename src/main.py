@@ -47,6 +47,7 @@ from include.database.models.file import File
 from include.util.log import getCustomLogger
 from include.util.rule.applying import set_access_rules
 from include.classes.misc.guard import LoginGuard
+from include.system.plugin_manager import load_plugins_from_dir, pm
 
 
 def ensure_root_folder():
@@ -321,6 +322,9 @@ def main():
 
     # Ensure the root folder record exists (handles upgrades from older versions)
     ensure_root_folder()
+
+    # Register plugins after database initialization
+    load_plugins_from_dir(pm, "./include/extensions")
 
     # Preload banned subnet list into memory for LoginGuard
     LoginGuard.reload_networks()

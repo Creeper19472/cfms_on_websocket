@@ -323,7 +323,6 @@ def handle_request(stream: Stream):
 
     # 定义白名单内的请求。这些请求即使在防范禁闭时也对所有用户可用。
     whitelisted_functions = [
-        # "echo",
         "server_info",
         "login",
         "refresh_token",
