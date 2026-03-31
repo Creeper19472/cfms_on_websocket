@@ -252,6 +252,8 @@ def handle_connection(websocket: websockets.sync.server.ServerConnection):
     with clients_lock:
         clients.add(multiplexer)
 
+    pm.hook.ext_on_connect(websocket=websocket)
+
     try:
         while True:
             stream = multiplexer.accept_stream()
@@ -268,6 +270,8 @@ def handle_connection(websocket: websockets.sync.server.ServerConnection):
 
         with clients_lock:
             clients.discard(multiplexer)
+
+        pm.hook.ext_post_disconnect()
 
 
 def handle_request(stream: Stream):

@@ -1,4 +1,4 @@
-__all__ = ["pm", "load_plugins_from_directory"]
+__all__ = ["pm", "load_extensions_from_directory"]
 
 from typing import Dict, Type, Optional, Set, Union
 import os
@@ -8,13 +8,14 @@ import pluggy
 import websockets.sync.server
 from include.classes.handler import ConnectionHandler
 from include.classes.request import RequestHandler
-from include.classes.enum.permissions import Permissions
 from include.util.log import getCustomLogger
 
 hookspec = pluggy.HookspecMarker("cfms")
 hookimpl = pluggy.HookimplMarker("cfms")
 
-logger = getCustomLogger("PluginManager", filepath="./content/logs/plugin_manager.log")
+logger = getCustomLogger(
+    "ExtensionManager", filepath="./content/logs/extension_manager.log"
+)
 
 
 # ext = extension
@@ -24,8 +25,10 @@ class ServerHookSpecs:
     @hookspec
     def ext_register_handlers(self) -> Dict[str, Type[RequestHandler]]:
         """
-        注册自定义的 Request Handlers。
-        返回字典: {"action_name": RequestHandlerClass}
+        Register handlers for specific actions.
+
+        Should return a dictionary mapping action names to their
+        corresponding RequestHandler classes.
         """
         ...
 
@@ -33,41 +36,45 @@ class ServerHookSpecs:
     def ext_unregister_handlers(self) -> Set[str]:
         """
         Unregister handlers for specific actions.
-        Should return a set of action names whose handlers should be unregistered.
+
+        Should return a set of action names whose handlers should
+        be unregistered.
         """
         ...
 
     @hookspec
     def ext_register_whitelisted_actions(self) -> Set[str]:
         """
-        Register actions that should be whitelisted (allowed even during lockdown).
+        Register actions that should be whitelisted (allowed even
+        during lockdown).
+
         Should return a set of action names.
         """
         ...
 
     @hookspec
     def ext_on_connect(self, websocket: websockets.sync.server.ServerConnection):
-        """当客户端建立连接时触发"""
+        """
+        Triggered when a new client connects, providing the websocket
+        connection object.
+        """
 
     @hookspec
-    def ext_on_disconnect(self, websocket: websockets.sync.server.ServerConnection):
-        """当客户端断开连接时触发"""
+    def ext_post_disconnect(self):
+        """
+        Triggered after a client disconnects, regardless of
+        the reason.
+        """
 
     @hookspec(firstresult=True)
     def ext_pre_request(
         self, request_handler: RequestHandler, connection_handler: ConnectionHandler
     ) -> Optional[bool]:
         """
-        Triggered before processing a request. 
-        If any plugin returns False, the request will be rejected immediately.
-        """
+        Triggered before processing a request.
 
-    @hookspec(firstresult=True)
-    def ext_authenticate(self, username: str, token: str) -> Optional[Set[Permissions]]:
-        """
-        自定义鉴权钩子。由于设置了 firstresult=True，
-        第一个成功返回权限集合的插件将终止其他鉴权插件的调用。
-        如果验证失败，应返回 None。
+        If any extension returns False, the request will be rejected
+        immediately.
         """
 
     @hookspec
@@ -87,33 +94,35 @@ class ServerHookSpecs:
     ) -> None: ...
 
 
-def load_plugins_from_directory(plugin_dir: str):
+def load_extensions_from_directory(extension_dir: str):
 
-    if not os.path.exists(plugin_dir):
-        logger.warning(f"Plugin directory '{plugin_dir}' does not exist. Skipping.")
+    if not os.path.exists(extension_dir):
+        logger.warning(
+            f"Extension directory '{extension_dir}' does not exist. Skipping."
+        )
         return
 
-    for filename in os.listdir(plugin_dir):
+    for filename in os.listdir(extension_dir):
         if filename.endswith(".py") and not filename.startswith(("_", ".")):
-            plugin_name = filename[:-3]  # remove .py extension
-            plugin_path = os.path.join(plugin_dir, filename)
+            ext_name = filename[:-3]  # remove .py extension
+            ext_path = os.path.join(extension_dir, filename)
 
             try:
-                spec = importlib.util.spec_from_file_location(plugin_name, plugin_path)
+                spec = importlib.util.spec_from_file_location(ext_name, ext_path)
                 if spec is None or spec.loader is None:
-                    logger.error(f"Failed to load spec for plugin: {plugin_name}")
+                    logger.error(f"Failed to load spec for extension: {ext_name}")
                     continue
 
                 module = importlib.util.module_from_spec(spec)
 
                 spec.loader.exec_module(module)
-                pm.register(module, name=plugin_name)
+                pm.register(module, name=ext_name)
 
-                logger.info(f"Successfully loaded CFMS plugin: {plugin_name}")
+                logger.info(f"Successfully loaded extension: {ext_name}")
 
             except Exception as e:
                 logger.error(
-                    f"Failed to load plugin '{plugin_name}': {e}", exc_info=True
+                    f"Failed to load extension '{ext_name}': {e}", exc_info=True
                 )
 
 
