@@ -1,17 +1,20 @@
-__all__ = ["pm", "load_plugins_from_dir"]
+__all__ = ["pm"]
 
-import importlib.util
-import pathlib
-
-import pluggy
 from typing import Dict, Type, Optional, Set
+import os
+import importlib.util
+from venv import logger
+import pluggy
+import websockets.sync.server
 from include.classes.handler import ConnectionHandler
 from include.classes.request import RequestHandler
 from include.classes.enum.permissions import Permissions
-import websockets.sync.server
+from include.util.log import getCustomLogger
 
 hookspec = pluggy.HookspecMarker("cfms")
 hookimpl = pluggy.HookimplMarker("cfms")
+
+logger = getCustomLogger("PluginManager", filepath="./content/logs/plugin_manager.log")
 
 
 # ext = extension
@@ -23,6 +26,14 @@ class ServerHookSpecs:
         """
         注册自定义的 Request Handlers。
         返回字典: {"action_name": RequestHandlerClass}
+        """
+        ...
+
+    @hookspec
+    def ext_register_whitelisted_actions(self) -> Set[str]:
+        """
+        Register actions that should be whitelisted (allowed even during lockdown).
+        Should return a set of action names.
         """
         ...
 
@@ -56,26 +67,35 @@ class ServerHookSpecs:
         """在请求处理完毕，准备写入审计日志时触发。可用于 Prometheus 监控打点等操作"""
 
 
-def load_plugins_from_dir(pm: pluggy.PluginManager, plugin_dir: str):
-    path = pathlib.Path(plugin_dir)
+def load_plugins_from_directory(plugin_dir: str):
 
-    for file_path in path.glob("*.py"):
-        if file_path.name == "__init__.py":
-            continue
+    if not os.path.exists(plugin_dir):
+        logger.warning(f"Plugin directory '{plugin_dir}' does not exist. Skipping.")
+        return
 
-        module_name = f"extensions.{file_path.stem}"
+    for filename in os.listdir(plugin_dir):
+        if filename.endswith(".py") and not filename.startswith(("_", ".")):
+            plugin_name = filename[:-3]  # remove .py extension
+            plugin_path = os.path.join(plugin_dir, filename)
 
-        spec = importlib.util.spec_from_file_location(module_name, file_path)
-        if spec and spec.loader:
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+            try:
+                spec = importlib.util.spec_from_file_location(plugin_name, plugin_path)
+                if spec is None or spec.loader is None:
+                    logger.error(f"Failed to load spec for plugin: {plugin_name}")
+                    continue
 
-            pm.register(module)
-            print(f"成功导入并注册插件: {file_path.name}")
+                module = importlib.util.module_from_spec(spec)
+
+                spec.loader.exec_module(module)
+                pm.register(module, name=plugin_name)
+
+                logger.info(f"Successfully loaded CFMS plugin: {plugin_name}")
+
+            except Exception as e:
+                logger.error(
+                    f"Failed to load plugin '{plugin_name}': {e}", exc_info=True
+                )
 
 
 pm = pluggy.PluginManager("cfms")
 pm.add_hookspecs(ServerHookSpecs)
-
-# (可选) 你可以在这里加载你自己的内置插件或第三方插件
-# pm.register(MyCorePlugin())

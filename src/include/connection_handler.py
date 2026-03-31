@@ -14,6 +14,7 @@ from include.conf_loader import global_config
 from include.classes.handler import ConnectionHandler
 from include.database.handler import Session
 from include.database.models.classic import User
+from include.system.plugin_manager import pm
 from include.util.address import get_client_ip
 from include.util.audit import log_audit
 from include.handlers.auth import RequestLoginHandler, RequestRefreshTokenHandler
@@ -237,7 +238,6 @@ def handle_request(stream: Stream):
         return
 
     available_functions: dict[str, type[RequestHandler]] = {
-        "server_info": RequestServerInfoHandler,
         # 认证类
         "login": RequestLoginHandler,
         "refresh_token": RequestRefreshTokenHandler,
@@ -321,6 +321,11 @@ def handle_request(stream: Stream):
     if global_config["debug"]:
         available_functions["throw_exception"] = RequestThrowExceptionHandler
 
+    # Load available request handlers from extensions
+    extension_handlers = pm.hook.ext_register_handlers()
+    for handler_dict in extension_handlers:
+        available_functions.update(handler_dict)
+
     # 定义白名单内的请求。这些请求即使在防范禁闭时也对所有用户可用。
     whitelisted_functions = [
         "server_info",
@@ -330,6 +335,9 @@ def handle_request(stream: Stream):
         "upload_file",
         "download_file",
     ]
+
+    for ext_whitelisted_actions in pm.hook.ext_register_whitelisted_actions():
+        whitelisted_functions.extend(ext_whitelisted_actions)
 
     user_permissions: set[Permissions] = set()
     authenticated = False
@@ -481,27 +489,3 @@ def handle_request(stream: Stream):
         this_handler.conclude_request(400, {}, f"Unknown action: {this_handler.action}")
 
     return
-
-
-class RequestServerInfoHandler(RequestHandler):
-    """
-    Handle the 'server_info' action to return server information.
-
-    Args:
-        this_handler: The ConnectionHandler instance handling the request.
-    """
-
-    data_schema = {"type": "object", "properties": {}, "additionalProperties": False}
-
-    def handle(self, handler: ConnectionHandler):
-
-        server_info = {
-            "server_name": global_config["server"]["name"],
-            "version": CORE_VERSION.original,
-            "protocol_version": PROTOCOL_VERSION,
-            "lockdown": lockdown_enabled.is_set(),
-        }
-        handler.conclude_request(
-            200, server_info, "Server information retrieved successfully"
-        )
-        return
