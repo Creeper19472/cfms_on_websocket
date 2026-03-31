@@ -424,6 +424,12 @@ def handle_request(stream: Stream):
             # ps.print_stats()
             # print(s.getvalue())
             t2 = time.perf_counter()
+            pm.hook.ext_post_request(
+                action=action,
+                handler=this_handler,
+                callback=callback,
+                time_cost=t2 - t1,
+            )
             logger.debug(f"Handled action '{action}' in {t2 - t1:.3f} seconds")
         except (
             websockets.exceptions.ConnectionClosedOK,

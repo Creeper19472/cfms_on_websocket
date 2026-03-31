@@ -1,6 +1,6 @@
 __all__ = ["pm"]
 
-from typing import Dict, Type, Optional, Set
+from typing import Dict, Type, Optional, Set, Union
 import os
 import importlib.util
 from venv import logger
@@ -62,9 +62,20 @@ class ServerHookSpecs:
 
     @hookspec
     def ext_post_request(
-        self, action: str, handler: ConnectionHandler, result: tuple, time_cost: float
-    ):
-        """在请求处理完毕，准备写入审计日志时触发。可用于 Prometheus 监控打点等操作"""
+        self,
+        action: str,
+        handler: ConnectionHandler,
+        callback: Union[
+            int,
+            tuple[int, Optional[str]],
+            tuple[int, Optional[str], dict],
+            tuple[int, Optional[str], str],
+            tuple[int, Optional[str], dict, str],
+            None,
+        ],
+        time_cost: float,
+    ) -> None:
+        ...
 
 
 def load_plugins_from_directory(plugin_dir: str):
