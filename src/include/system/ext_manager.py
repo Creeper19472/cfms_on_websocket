@@ -1,14 +1,16 @@
 __all__ = ["pm", "load_extensions_from_directory"]
 
-from typing import Dict, Type, Optional, Set, Union
+from typing import Dict, Type, Optional, Set, Union, TYPE_CHECKING
 import os
 import importlib.util
 from venv import logger
 import pluggy
 import websockets.sync.server
-from include.classes.handler import ConnectionHandler
-from include.classes.request import RequestHandler
 from include.util.log import getCustomLogger
+
+if TYPE_CHECKING:
+    from include.classes.request import RequestHandler
+    from include.classes.handler import ConnectionHandler
 
 hookspec = pluggy.HookspecMarker("cfms")
 hookimpl = pluggy.HookimplMarker("cfms")
@@ -23,7 +25,7 @@ class ServerHookSpecs:
     """Hook specifications for server extensions."""
 
     @hookspec
-    def ext_register_handlers(self) -> Dict[str, Type[RequestHandler]]:
+    def ext_register_handlers(self) -> Dict[str, Type["RequestHandler"]]:
         """
         Register handlers for specific actions.
 
@@ -68,7 +70,7 @@ class ServerHookSpecs:
 
     @hookspec(firstresult=True)
     def ext_pre_request(
-        self, request_handler: RequestHandler, connection_handler: ConnectionHandler
+        self, request_handler: "RequestHandler", connection_handler: "ConnectionHandler"
     ) -> Optional[bool]:
         """
         Triggered before processing a request.
@@ -81,7 +83,7 @@ class ServerHookSpecs:
     def ext_post_request(
         self,
         action: str,
-        handler: ConnectionHandler,
+        handler: "ConnectionHandler",
         callback: Union[
             int,
             tuple[int, Optional[str]],
@@ -92,6 +94,13 @@ class ServerHookSpecs:
         ],
         time_cost: float,
     ) -> None: ...
+
+    @hookspec
+    def ext_on_file_uploaded(self, path: str):
+        """
+        Triggered when a file is uploaded to the server,
+        providing the filename.
+        """
 
 
 def load_extensions_from_directory(extension_dir: str):
@@ -118,7 +127,7 @@ def load_extensions_from_directory(extension_dir: str):
                 spec.loader.exec_module(module)
                 pm.register(module, name=ext_name)
 
-                logger.info(f"Successfully loaded extension: {ext_name}")
+                logger.info(f"Loaded extension: {ext_name}")
 
             except Exception as e:
                 logger.error(
