@@ -112,6 +112,7 @@ def ext_on_file_uploaded(id: str, path: str, sha256: str):
                 session.query(File)
                 .filter(File.sha256 == sha256)
                 .filter(File.id != uploaded.id)
+                .filter(File.active == True)
                 .order_by(File.created_time.asc())
                 .first()
             )
