@@ -22,21 +22,14 @@ Constants:
 
 import os
 import sys
+import socket
+import ssl
+from websockets.sync.server import serve
+from loguru import logger
 
 from include.classes.enum.permissions import Permissions
 from include.handlers.debugging.throw import RequestThrowExceptionHandler
 from include.util.entrance import global_process_request
-
-# fix
-os.makedirs("./content/logs/", exist_ok=True)
-os.makedirs("./content/ssl/", exist_ok=True)
-
-import socket
-import ssl
-
-from websockets.sync.server import serve
-from loguru import logger
-
 from include.conf_loader import global_config
 from include.connection_handler import (
     handle_connection,
@@ -55,6 +48,10 @@ from include.database.models.file import File
 from include.util.rule.applying import set_access_rules
 from include.classes.misc.guard import LoginGuard
 from include.system.ext_manager import load_extensions_from_directory, pm
+
+# fix
+os.makedirs(ROOT_ABSPATH / "content" / "logs", exist_ok=True)
+os.makedirs(ROOT_ABSPATH / "content" / "ssl", exist_ok=True)
 
 
 def ensure_root_folder():
