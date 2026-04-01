@@ -9,8 +9,8 @@ import websockets.sync.server
 from loguru import logger as log
 
 if TYPE_CHECKING:
-    from include.classes.request import RequestHandler
-    from include.classes.handler import ConnectionHandler
+    from include.classes.request_handler import RequestHandler
+    from include.classes.connection_handler import ConnectionHandler
 
 hookspec = pluggy.HookspecMarker("cfms")
 hookimpl = pluggy.HookimplMarker("cfms")

@@ -2,9 +2,9 @@ import orjson
 import time
 
 from sqlalchemy import desc, update, func, true
-from include.classes.handler import ConnectionHandler
+from include.classes.connection_handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
-from include.classes.request import RequestHandler
+from include.classes.request_handler import RequestHandler
 from include.database.handler import Session
 from include.database.models.file import FileTask
 from include.database.models.classic import User, AuditEntry

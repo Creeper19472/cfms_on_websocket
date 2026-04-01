@@ -4,9 +4,9 @@ from typing import Optional, Union
 from loguru import logger as log
 
 from include.classes.enum.permissions import Permissions
-from include.classes.request import RequestHandler
+from include.classes.request_handler import RequestHandler
 from include.conf_loader import global_config
-from include.classes.handler import ConnectionHandler
+from include.classes.connection_handler import ConnectionHandler
 from include.constants import CORE_VERSION, PROTOCOL_VERSION
 from include.database.handler import Session
 from include.database.models.classic import User

@@ -7,9 +7,9 @@ from include.classes.exceptions import (
     UserTOTPFailedError,
     UserTOTPRequiredError,
 )
-from include.classes.handler import ConnectionHandler
+from include.classes.connection_handler import ConnectionHandler
 from include.classes.misc.guard import LoginGuard
-from include.classes.request import RequestHandler
+from include.classes.request_handler import RequestHandler
 from include.conf_loader import global_config
 from include.database.handler import Session
 from include.database.models.keyring import UserKey

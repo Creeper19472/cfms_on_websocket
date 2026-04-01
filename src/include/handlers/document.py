@@ -17,10 +17,10 @@ import time
 
 import jsonschema
 
-from include.classes.handler import ConnectionHandler
+from include.classes.connection_handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
 from include.classes.enum.status import EntityStatus
-from include.classes.request import RequestHandler
+from include.classes.request_handler import RequestHandler
 from include.conf_loader import global_config
 from include.constants import FILE_TASK_DEFAULT_DURATION_SECONDS
 from include.constants import ROOT_DIRECTORY_ID

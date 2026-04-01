@@ -7,10 +7,10 @@ import websockets
 import websockets.sync.server
 from loguru import logger as log
 from include.classes.enum.permissions import Permissions
-from include.classes.frame import FrameType, MultiplexConnection, Stream
+from include.classes.multiplexer import FrameType, MultiplexConnection, Stream
 from include.classes.misc.guard import LoginGuard
-from include.classes.request import RequestHandler
-from include.classes.handler import ConnectionHandler
+from include.classes.request_handler import RequestHandler
+from include.classes.connection_handler import ConnectionHandler
 from include.database.handler import Session
 from include.database.models.classic import User
 from include.system.ext_manager import pm
