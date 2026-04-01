@@ -426,6 +426,8 @@ class ConnectionHandler:
 
                 self.conclude_request(200, {}, "File received successfully")
 
+                pm.hook.ext_on_file_uploaded(id=file.id, path=file.path, sha256=sha256)
+
             except (
                 websockets.ConnectionClosed,
                 websockets.exceptions.ConnectionClosedError,
@@ -436,8 +438,6 @@ class ConnectionHandler:
             except Exception as e:
                 self.report_error(e, context=f"Error receiving file for task {task_id}")
                 return
-
-        pm.hook.ext_on_file_uploaded(path=file.path)
 
     def broadcast(
         self,
