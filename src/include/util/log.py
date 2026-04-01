@@ -1,9 +1,9 @@
 """
 Utility functions for logging exceptions with correlation IDs.
 
-This module provides a helper function `log_exception_with_id` that generates 
-a unique log ID for each exception, logs the full traceback to the provided 
-logger, and returns the log ID for correlation with clients. This allows for 
+This module provides a helper function `log_exception_with_id` that generates
+a unique log ID for each exception, logs the full traceback to the provided
+logger, and returns the log ID for correlation with clients. This allows for
 easier debugging and tracking of errors in complex systems.
 """
 
@@ -15,7 +15,7 @@ import loguru
 
 def log_exception_with_id(
     exc: Exception,
-    logger: Union[loguru.Logger, logging.Logger],
+    logger: Union["loguru.Logger", logging.Logger],
     context: str | None = None,
 ) -> str:
     """
