@@ -94,10 +94,21 @@ class ServerHookSpecs:
     ) -> None: ...
 
     @hookspec
-    def ext_on_file_uploaded(self, path: str):
+    def ext_on_file_uploaded(self, id: str, path: str, sha256: str):
         """
-        Triggered when a file is uploaded to the server,
-        providing the filename.
+        Triggered when a file is uploaded to the server, providing the
+        file's id, path, and sha256 hash.
+
+        This can be used to implement features like file deduplication,
+        virus scanning, or triggering post-upload processing.
+        """
+
+    @hookspec
+    def ext_on_empty_file_uploaded(self, id: str, path: str):
+        """
+        Triggered when an empty file is uploaded to the server,
+        providing the filename. This can be used to clean up
+        placeholder files that were created but never filled.
         """
 
 

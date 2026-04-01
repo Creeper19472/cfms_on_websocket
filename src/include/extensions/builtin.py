@@ -10,6 +10,8 @@ from include.classes.handler import ConnectionHandler
 from include.constants import CORE_VERSION, PROTOCOL_VERSION
 from include.database.handler import Session
 from include.database.models.classic import User
+from include.database.models.file import File
+from include.database.models.entity import DocumentRevision
 from include.shared import lockdown_enabled
 from include.system.ext_manager import hookimpl
 
@@ -87,3 +89,54 @@ def ext_post_request(
     time_cost: float,
 ) -> None:
     logger.debug(f"Handled action '{action}' in {time_cost:.3f} seconds")
+
+
+@hookimpl
+def ext_on_file_uploaded(id: str, path: str, sha256: str):
+    # TODO: use a unified file reference counter
+    with Session() as session:
+        try:
+            if not sha256:
+                return
+
+            uploaded = session.get(File, id)
+            if not uploaded:
+                return
+
+            # Ensure uploaded record has sha256 set
+            if not uploaded.sha256:
+                uploaded.sha256 = sha256
+                session.commit()
+
+            existing = (
+                session.query(File)
+                .filter(File.sha256 == sha256)
+                .filter(File.id != uploaded.id)
+                .filter(File.active == True)
+                .order_by(File.created_time.asc())
+                .first()
+            )
+
+            if not existing:
+                return
+
+            session.query(DocumentRevision).filter(
+                DocumentRevision.file_id == uploaded.id
+            ).update({"file_id": existing.id}, synchronize_session=False)
+
+            session.query(User).filter(User.avatar_id == uploaded.id).update(
+                {"avatar_id": existing.id}, synchronize_session=False
+            )
+
+            uploaded.delete()
+            session.delete(uploaded)
+            session.commit()
+
+            logger.info(
+                "Merged uploaded file {} into existing file {} and removed duplicate",
+                uploaded.id,
+                existing.id,
+            )
+
+        except Exception:
+            logger.exception("Failed to process uploaded file for deduplication")

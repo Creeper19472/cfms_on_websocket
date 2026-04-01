@@ -358,15 +358,11 @@ class ConnectionHandler:
                 file.active = True
                 session.commit()
 
-                pm.hook.ext_on_file_uploaded(path=file.path)
+                pm.hook.ext_on_empty_file_uploaded(id=file.id, path=file.path)
                 return
 
             self.stream.send(f"ready {chunk_size}")
             try:
-                # 生成保存文件的路径
-                if not file.id:
-                    raise ValueError(f"File path not found for file_id: {file.id}")
-
                 logger.info("Receiving file: transfer started")
                 os.makedirs(os.path.dirname(file.path), exist_ok=True)
                 with open(file.path, "wb") as f:
@@ -420,6 +416,8 @@ class ConnectionHandler:
                 file.active = True
                 session.commit()
 
+                pm.hook.ext_on_file_uploaded(id=file.id, path=file.path, sha256=sha256)
+
                 self.logger.info(
                     f"File received and saved to {file.path}, total size: {actual_size}"
                 )
@@ -436,8 +434,6 @@ class ConnectionHandler:
             except Exception as e:
                 self.report_error(e, context=f"Error receiving file for task {task_id}")
                 return
-
-        pm.hook.ext_on_file_uploaded(path=file.path)
 
     def broadcast(
         self,
