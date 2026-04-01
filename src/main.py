@@ -329,7 +329,7 @@ def prepare_logger():
     logger.add(
         log_file,
         level="DEBUG",
-        format="{time:YYYY-MM-DD HH:mm:ss,SSS} {level: <8} | {name}:{function}:{line} - {message}",
+        format="{time:YYYY-MM-DD HH:mm:ss,SSS} {level: <8} | {extra[name]}:{function}:{line} - {message}",
         rotation="10 MB",
         retention="1 week",
         compression="zip",

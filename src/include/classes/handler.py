@@ -23,7 +23,7 @@ from include.shared import clients, clients_lock
 from include.system.ext_manager import pm
 from include.util.log import log_exception_with_id
 
-logger = log.bind(name="incoming")
+logger = log.bind(name="conn")
 
 
 def calculate_sha256(file_path):
