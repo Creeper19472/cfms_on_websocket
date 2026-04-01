@@ -92,12 +92,12 @@ def server_init():
     Initializes the server by checking if the database is already set up.
     If not, it creates the necessary tables and a default admin user.
     """
-    if os.path.exists("./app.db"):
-        os.remove("./app.db")
-    if os.path.exists("./ssl_cert.pem"):
-        os.remove("./ssl_cert.pem")
-    if os.path.exists("./ssl_key.pem"):
-        os.remove("./ssl_key.pem")
+    if os.path.exists(ROOT_ABSPATH / "app.db"):
+        os.remove(ROOT_ABSPATH / "app.db")
+    if os.path.exists(ROOT_ABSPATH / "ssl_cert.pem"):
+        os.remove(ROOT_ABSPATH / "ssl_cert.pem")
+    if os.path.exists(ROOT_ABSPATH / "ssl_key.pem"):
+        os.remove(ROOT_ABSPATH / "ssl_key.pem")
 
     # Create database tables before inserting data
     Base.metadata.create_all(engine)
@@ -164,6 +164,7 @@ def server_init():
     )
 
     with Session() as session:
+        # not using `ROOT_ABSPATH` here to allow easy migration
         init_file = File(id="init", path="./content/hello", active=True)
         session.add(init_file)
 
@@ -201,11 +202,11 @@ def server_init():
         ],
     )
 
-    # 将密码输出到运行目录下的 admin_password.txt 文件
-    with open("admin_password.txt", "w", encoding="utf-8") as pwd_file:
+    # 将密码输出到根目录下的 admin_password.txt 文件
+    with open(ROOT_ABSPATH / "admin_password.txt", "w", encoding="utf-8") as pwd_file:
         pwd_file.write(f"{password}\n")
 
-    os.makedirs("./content", exist_ok=True)
+    os.makedirs(ROOT_ABSPATH / "content", exist_ok=True)
 
     from cryptography import x509
     from cryptography.x509.oid import NameOID
@@ -265,7 +266,7 @@ def server_init():
         with open(cert_path, "wb") as f:
             f.write(cert.public_bytes(serialization.Encoding.PEM))
 
-    with open("./init", "w") as f:
+    with open(ROOT_ABSPATH / "init", "w") as f:
         f.write("This file indicates that the database has been initialized.\n")
 
     ensure_root_folder()
@@ -339,7 +340,7 @@ def prepare_logger():
 def main():
     prepare_logger()
 
-    if not os.path.exists("./init"):
+    if not os.path.exists(ROOT_ABSPATH / "init"):
         logger.info("Database not initialized, initializing now...")
         server_init()
 
