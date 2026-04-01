@@ -1,6 +1,7 @@
 import os
 import threading
 from typing import Optional, Union
+from loguru import logger as log
 
 from include.classes.enum.permissions import Permissions
 from include.classes.request import RequestHandler
@@ -11,9 +12,8 @@ from include.database.handler import Session
 from include.database.models.classic import User
 from include.shared import lockdown_enabled
 from include.system.ext_manager import hookimpl
-from include.util.log import getCustomLogger
 
-logger = getCustomLogger("BuiltinExtension", filepath="./content/logs/connection.log")
+logger = log.bind(name="builtin")
 
 
 class RequestServerInfoHandler(RequestHandler):

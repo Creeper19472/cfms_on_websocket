@@ -21,6 +21,7 @@ Constants:
 """
 
 import os
+import sys
 
 from include.classes.enum.permissions import Permissions
 from include.handlers.debugging.throw import RequestThrowExceptionHandler
@@ -34,6 +35,7 @@ import socket
 import ssl
 
 from websockets.sync.server import serve
+from loguru import logger
 
 from include.conf_loader import global_config
 from include.connection_handler import (
@@ -50,7 +52,6 @@ from include.database.handler import Session
 from include.database.handler import engine
 from include.database.models.entity import Document, DocumentRevision, Folder
 from include.database.models.file import File
-from include.util.log import getCustomLogger
 from include.util.rule.applying import set_access_rules
 from include.classes.misc.guard import LoginGuard
 from include.system.ext_manager import load_extensions_from_directory, pm
@@ -304,10 +305,42 @@ def prepare_handlers():
         whitelisted_functions.extend(ext_whitelisted_actions)
 
 
-def main():
-    logger = getCustomLogger(
-        "CFMS", filepath=ROOT_ABSPATH / "content" / "logs" / "core.log"
+def prepare_logger():
+    """
+    Prepares the logger using loguru with both console and file handlers.
+
+    The console handler outputs colored logs at INFO level, while the file
+    handler writes detailed logs at DEBUG level with automatic rotation
+    and compression.
+
+    The log file is located at "./content/logs/server.log".
+    """
+
+    log_file = ROOT_ABSPATH / "content" / "logs" / "server.log"
+    fmt = "[<green>{time:YYYY-MM-DD HH:mm:ss,SSS}</green> <level>{level: <8}</level>] <level>{message}</level>"
+
+    # reset default logger to avoid conflicts with loguru's configuration
+    logger.remove()
+
+    logger.configure(extra={"name": "main"})
+    logger.add(
+        sys.stderr,
+        level="INFO",
+        format=fmt,
     )
+    logger.add(
+        log_file,
+        level="DEBUG",
+        format="{time:YYYY-MM-DD HH:mm:ss,SSS} {level: <8} | {name}:{function}:{line} - {message}",
+        rotation="10 MB",
+        retention="1 week",
+        compression="zip",
+        enqueue=True,
+    )
+
+
+def main():
+    prepare_logger()
 
     if not os.path.exists("./init"):
         logger.info("Database not initialized, initializing now...")

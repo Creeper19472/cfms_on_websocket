@@ -7,13 +7,12 @@ from typing import Optional
 import websockets
 from websockets.typing import Data
 from websockets.sync.server import ServerConnection
-
-from include.util.log import getCustomLogger
+from loguru import logger as log
 
 HEADER_FORMAT = "!IB"  # 4 bytes for frame_id, 1 byte for frame_type
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
 
-logger = getCustomLogger("frame", filepath="./content/logs/connection.log")
+logger = log.bind(name="multiplexer")
 
 
 class FrameType(IntEnum):

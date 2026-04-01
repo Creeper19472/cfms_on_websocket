@@ -1,9 +1,9 @@
 import secrets
 import time
 from typing import Optional
+from itertools import batched
 
 import jsonschema
-from itertools import batched
 
 from include.classes.handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
@@ -14,14 +14,10 @@ from include.constants import ROOT_DIRECTORY_ID, QUERY_CHUNK_SIZE
 from include.database.handler import Session
 from include.database.models.classic import User
 from include.database.models.entity import Folder, Document
-from include.util.audit import log_audit
 from include.util.bulk.purge import purge_documents_bulk
 from include.util.rule.applying import apply_access_rules
 from include.util.recursive.subtree import fetch_subtree_for_deletion
-from include.util.log import getCustomLogger
 import include.system.messages as smsg
-
-logger = getCustomLogger(__name__, filepath="./content/logs/directory.log")
 
 
 class RequestListDirectoryHandler(RequestHandler):

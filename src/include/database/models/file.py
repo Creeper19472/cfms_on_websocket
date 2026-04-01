@@ -10,11 +10,11 @@ from sqlalchemy.orm import Mapped, Session
 from sqlalchemy.orm import mapped_column
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm.session import object_session
+from loguru import logger as log
 
 from include.database.handler import Base
-from include.util.log import getCustomLogger
 
-logger = getCustomLogger(__name__, filepath="./content/logs/file.log")
+logger = log.bind(name="database.file")
 
 
 def _queue_deferred_file_deletion(session: Session, path: str) -> None:
@@ -47,7 +47,8 @@ def _queue_deferred_file_deletion(session: Session, path: str) -> None:
                     # error so operators can clean up manually.
                     logger.warning(
                         "Failed to remove file after commit (orphaned file): %s — %s",
-                        path, exc,
+                        path,
+                        exc,
                     )
 
         @event.listens_for(session, "after_rollback")

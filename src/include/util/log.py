@@ -1,10 +1,3 @@
-import logging
-from logging.handlers import RotatingFileHandler
-from pathlib import Path
-from typing import Tuple
-import uuid
-import traceback
-
 """
 Provides a utility util to create and configure a custom logger with both file and console handlers.
 Functions:
@@ -20,7 +13,18 @@ Functions:
             logging.Logger: The configured logger instance.
 """
 
+import logging
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
+from typing import Tuple, Union
+import uuid
+from warnings import deprecated
+import loguru
 
+
+@deprecated(
+    "This function is deprecated and will be removed in future versions. Use loguru.logger instead."
+)
 def getCustomLogger(
     logname: str,
     level: Tuple[int, int] = (logging.DEBUG, logging.INFO),
@@ -46,7 +50,9 @@ def getCustomLogger(
 
 
 def log_exception_with_id(
-    exc: Exception, logger: logging.Logger, context: str | None = None
+    exc: Exception,
+    logger: Union[loguru.Logger, logging.Logger],
+    context: str | None = None,
 ) -> str:
     """
     Log an exception with a generated UUID4 log id and return the id.

@@ -6,7 +6,7 @@ import os
 import importlib.util
 import pluggy
 import websockets.sync.server
-from include.util.log import getCustomLogger
+from loguru import logger as log
 
 if TYPE_CHECKING:
     from include.classes.request import RequestHandler
@@ -15,9 +15,7 @@ if TYPE_CHECKING:
 hookspec = pluggy.HookspecMarker("cfms")
 hookimpl = pluggy.HookimplMarker("cfms")
 
-logger = getCustomLogger(
-    "ExtensionManager", filepath="./content/logs/extension_manager.log"
-)
+logger = log.bind(name="ext_manager")
 
 
 # ext = extension
