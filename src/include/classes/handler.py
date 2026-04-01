@@ -416,13 +416,13 @@ class ConnectionHandler:
                 file.active = True
                 session.commit()
 
+                pm.hook.ext_on_file_uploaded(id=file.id, path=file.path, sha256=sha256)
+
                 self.logger.info(
                     f"File received and saved to {file.path}, total size: {actual_size}"
                 )
 
                 self.conclude_request(200, {}, "File received successfully")
-
-                pm.hook.ext_on_file_uploaded(id=file.id, path=file.path, sha256=sha256)
 
             except (
                 websockets.ConnectionClosed,
