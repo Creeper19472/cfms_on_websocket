@@ -21,20 +21,15 @@ Constants:
 """
 
 import os
+import sys
+import socket
+import ssl
+from websockets.sync.server import serve
+from loguru import logger
 
 from include.classes.enum.permissions import Permissions
 from include.handlers.debugging.throw import RequestThrowExceptionHandler
 from include.util.entrance import global_process_request
-
-# fix
-os.makedirs("./content/logs/", exist_ok=True)
-os.makedirs("./content/ssl/", exist_ok=True)
-
-import socket
-import ssl
-
-from websockets.sync.server import serve
-
 from include.conf_loader import global_config
 from include.connection_handler import (
     handle_connection,
@@ -50,10 +45,13 @@ from include.database.handler import Session
 from include.database.handler import engine
 from include.database.models.entity import Document, DocumentRevision, Folder
 from include.database.models.file import File
-from include.util.log import getCustomLogger
 from include.util.rule.applying import set_access_rules
 from include.classes.misc.guard import LoginGuard
 from include.system.ext_manager import load_extensions_from_directory, pm
+
+# fix
+os.makedirs(ROOT_ABSPATH / "content" / "logs", exist_ok=True)
+os.makedirs(ROOT_ABSPATH / "content" / "ssl", exist_ok=True)
 
 
 def ensure_root_folder():
@@ -94,12 +92,12 @@ def server_init():
     Initializes the server by checking if the database is already set up.
     If not, it creates the necessary tables and a default admin user.
     """
-    if os.path.exists("./app.db"):
-        os.remove("./app.db")
-    if os.path.exists("./ssl_cert.pem"):
-        os.remove("./ssl_cert.pem")
-    if os.path.exists("./ssl_key.pem"):
-        os.remove("./ssl_key.pem")
+    if os.path.exists(ROOT_ABSPATH / "app.db"):
+        os.remove(ROOT_ABSPATH / "app.db")
+    if os.path.exists(ROOT_ABSPATH / "ssl_cert.pem"):
+        os.remove(ROOT_ABSPATH / "ssl_cert.pem")
+    if os.path.exists(ROOT_ABSPATH / "ssl_key.pem"):
+        os.remove(ROOT_ABSPATH / "ssl_key.pem")
 
     # Create database tables before inserting data
     Base.metadata.create_all(engine)
@@ -166,6 +164,7 @@ def server_init():
     )
 
     with Session() as session:
+        # not using `ROOT_ABSPATH` here to allow easy migration
         init_file = File(id="init", path="./content/hello", active=True)
         session.add(init_file)
 
@@ -203,11 +202,11 @@ def server_init():
         ],
     )
 
-    # 将密码输出到运行目录下的 admin_password.txt 文件
-    with open("admin_password.txt", "w", encoding="utf-8") as pwd_file:
+    # 将密码输出到根目录下的 admin_password.txt 文件
+    with open(ROOT_ABSPATH / "admin_password.txt", "w", encoding="utf-8") as pwd_file:
         pwd_file.write(f"{password}\n")
 
-    os.makedirs("./content", exist_ok=True)
+    os.makedirs(ROOT_ABSPATH / "content", exist_ok=True)
 
     from cryptography import x509
     from cryptography.x509.oid import NameOID
@@ -267,7 +266,7 @@ def server_init():
         with open(cert_path, "wb") as f:
             f.write(cert.public_bytes(serialization.Encoding.PEM))
 
-    with open("./init", "w") as f:
+    with open(ROOT_ABSPATH / "init", "w") as f:
         f.write("This file indicates that the database has been initialized.\n")
 
     ensure_root_folder()
@@ -304,12 +303,44 @@ def prepare_handlers():
         whitelisted_functions.extend(ext_whitelisted_actions)
 
 
-def main():
-    logger = getCustomLogger(
-        "CFMS", filepath=ROOT_ABSPATH / "content" / "logs" / "core.log"
+def prepare_logger():
+    """
+    Prepares the logger using loguru with both console and file handlers.
+
+    The console handler outputs colored logs at INFO level, while the file
+    handler writes detailed logs at DEBUG level with automatic rotation
+    and compression.
+
+    The log file is located at "./content/logs/server.log".
+    """
+
+    log_file = ROOT_ABSPATH / "content" / "logs" / "server.log"
+    fmt = "[<green>{time:YYYY-MM-DD HH:mm:ss,SSS}</green> <level>{level: <8}</level>] <level>{message}</level>"
+
+    # reset default logger to avoid conflicts with loguru's configuration
+    logger.remove()
+
+    logger.configure(extra={"name": "main"})
+    logger.add(
+        sys.stderr,
+        level="INFO",
+        format=fmt,
+    )
+    logger.add(
+        log_file,
+        level="DEBUG",
+        format="{time:YYYY-MM-DD HH:mm:ss,SSS} {level: <8} | {extra[name]}:{function}:{line} - {message}",
+        rotation="10 MB",
+        retention="1 week",
+        compression="zip",
+        enqueue=True,
     )
 
-    if not os.path.exists("./init"):
+
+def main():
+    prepare_logger()
+
+    if not os.path.exists(ROOT_ABSPATH / "init"):
         logger.info("Database not initialized, initializing now...")
         server_init()
 

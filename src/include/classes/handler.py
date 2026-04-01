@@ -12,6 +12,7 @@ import websockets
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
 from websockets.typing import Data
+from loguru import logger as log
 
 from include.classes.frame import FrameType, MultiplexConnection, Stream
 from include.conf_loader import global_config
@@ -20,12 +21,9 @@ from include.database.handler import Session
 from include.database.models.file import File, FileTask
 from include.shared import clients, clients_lock
 from include.system.ext_manager import pm
-from include.util.log import getCustomLogger, log_exception_with_id
+from include.util.log import log_exception_with_id
 
-logger = getCustomLogger(
-    "connection",
-    filepath="./content/logs/connection.log",
-)
+logger = log.bind(name="conn")
 
 
 def calculate_sha256(file_path):

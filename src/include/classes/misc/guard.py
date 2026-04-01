@@ -3,13 +3,13 @@ import threading
 import time
 from datetime import datetime, timedelta
 from typing import Optional, Union
+from loguru import logger as log
 
 from include.database.handler import Session
 from include.database.models.security.banned_subnet import BannedSubnet
 from include.database.models.security.login import LoginSecurity
-from include.util.log import getCustomLogger
 
-logger = getCustomLogger("login_guard", filepath="./content/logs/login_guard.log")
+logger = log.bind(name="login_guard")
 
 
 class LoginGuard:
@@ -45,9 +45,7 @@ class LoginGuard:
         with cls._cache_lock:
             cls._banned_networks = networks
             cls._networks_loaded = True
-            logger.info(
-                f"Loaded {len(networks)} banned subnet(s) from database."
-            )
+            logger.info(f"Loaded {len(networks)} banned subnet(s) from database.")
 
     @classmethod
     def _extract_ip(cls, identifier: str) -> Optional[str]:

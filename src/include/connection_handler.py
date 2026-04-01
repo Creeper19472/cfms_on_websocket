@@ -5,11 +5,11 @@ from typing import Optional, Union
 import jsonschema
 import websockets
 import websockets.sync.server
+from loguru import logger as log
 from include.classes.enum.permissions import Permissions
 from include.classes.frame import FrameType, MultiplexConnection, Stream
 from include.classes.misc.guard import LoginGuard
 from include.classes.request import RequestHandler
-from include.conf_loader import global_config
 from include.classes.handler import ConnectionHandler
 from include.database.handler import Session
 from include.database.models.classic import User
@@ -90,7 +90,6 @@ from include.handlers.management.system import (
     RequestLockdownHandler,
     RequestViewAuditLogsHandler,
 )
-from include.handlers.debugging.throw import RequestThrowExceptionHandler
 from include.handlers.search import RequestSearchHandler
 from include.handlers.keyring import (
     RequestUploadUserKeyHandler,
@@ -104,11 +103,8 @@ from include.constants import NONCE_MIN_LENGTH
 from include.nonce_store import nonce_store
 from include.shared import lockdown_enabled, clients, clients_lock
 from include.util.cert import get_client_cert_subject
-from include.util.log import getCustomLogger
 
-logger = getCustomLogger(
-    "connection_handler", filepath="./content/logs/connection_handler.log"
-)
+logger = log.bind(name="connection_handler")
 
 available_functions: dict[str, type[RequestHandler]] = {
     # 认证类
@@ -265,7 +261,7 @@ def handle_connection(websocket: websockets.sync.server.ServerConnection):
             threading.Thread(target=handle_request, args=(stream,), daemon=True).start()
 
     except Exception as e:
-        logger.error(f"Error handling WebSocket connection: {e}", exc_info=True)
+        logger.exception(f"Error handling WebSocket connection: {e}")
     finally:
         multiplexer.close()
         websocket.close()
