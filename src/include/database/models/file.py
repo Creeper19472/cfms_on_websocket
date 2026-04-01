@@ -46,7 +46,7 @@ def _queue_deferred_file_deletion(session: Session, path: str) -> None:
                     # has already been deleted so the file becomes an orphan.  Log the
                     # error so operators can clean up manually.
                     logger.warning(
-                        "Failed to remove file after commit (orphaned file): %s — %s",
+                        "Failed to remove file after commit (orphaned file): {} — {}",
                         path,
                         exc,
                     )

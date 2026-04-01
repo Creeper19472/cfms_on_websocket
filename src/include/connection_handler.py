@@ -261,7 +261,7 @@ def handle_connection(websocket: websockets.sync.server.ServerConnection):
             threading.Thread(target=handle_request, args=(stream,), daemon=True).start()
 
     except Exception as e:
-        logger.error(f"Error handling WebSocket connection: {e}", exc_info=True)
+        logger.exception(f"Error handling WebSocket connection: {e}")
     finally:
         multiplexer.close()
         websocket.close()

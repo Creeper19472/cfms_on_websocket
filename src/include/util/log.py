@@ -7,15 +7,13 @@ logger, and returns the log ID for correlation with clients. This allows for
 easier debugging and tracking of errors in complex systems.
 """
 
-from typing import Union
-import logging
 import uuid
 import loguru
 
 
 def log_exception_with_id(
     exc: Exception,
-    logger: Union["loguru.Logger", logging.Logger],
+    logger: "loguru.Logger",
     context: str | None = None,
 ) -> str:
     """
@@ -26,7 +24,7 @@ def log_exception_with_id(
     """
     log_id = uuid.uuid4().hex
     if context:
-        logger.error("[%s] %s: \n", log_id, context, exc_info=exc)
+        logger.opt(exception=exc).error("[{}] {}: \n", log_id, context)
     else:
-        logger.error("[%s] Error occurred: \n", log_id, exc_info=exc)
+        logger.opt(exception=exc).error("[{}] Error occurred: \n", log_id)
     return log_id
