@@ -417,6 +417,8 @@ class RequestDeleteDirectoryHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
 
         # Parse the directory deletion request
@@ -428,15 +430,6 @@ class RequestDeleteDirectoryHandler(RequestHandler):
 
         with Session() as session:
             this_user = User.get_existing(session, handler.username)
-            if not this_user or not this_user.is_token_valid(handler.token):
-                handler.conclude_request(
-                    **{
-                        "code": 403,
-                        "message": "Invalid user or token",
-                        "data": {},
-                    }
-                )
-                return 401, folder_id
             folder = session.get(Folder, folder_id)
             if not folder:
                 handler.conclude_request(
