@@ -94,8 +94,7 @@ class RequestGetDocumentInfoHandler(RequestHandler):
             return
 
         with Session() as session:
-            user = session.get(User, handler.username)
-            assert user is not None
+            user = User.get_existing(session, handler.username)
 
             document = session.get(Document, document_id)
 
@@ -159,12 +158,8 @@ class RequestGetDocumentAccessRulesHandler(RequestHandler):
         document_id: str = handler.data["document_id"]
 
         with Session() as session:
-            user = session.get(User, handler.username)
+            user = User.get_existing(session, handler.username)
             document = session.get(Document, document_id)
-
-            if user is None or not user.is_token_valid(handler.token):
-                handler.conclude_request(403, {}, "Invalid user or token")
-                return 401, document_id
 
             if not document:
                 handler.conclude_request(404, {}, "Document not found")
@@ -211,9 +206,8 @@ class RequestGetDocumentHandler(RequestHandler):
         document_id: str = handler.data["document_id"]
 
         with Session() as session:
-            user = session.get(User, handler.username)
+            user = User.get_existing(session, handler.username)
             document = session.get(Document, document_id)
-            assert user is not None
 
             if not document:
                 handler.conclude_request(404, {}, "Document not found")
@@ -271,8 +265,7 @@ class RequestCreateDocumentHandler(RequestHandler):
             return
 
         with Session() as session:
-            user = session.get(User, handler.username)
-            assert user is not None
+            user = User.get_existing(session, handler.username)
 
             if Permissions.CREATE_DOCUMENT not in user.all_permissions:
                 handler.conclude_request(403, {}, "Permission denied")
@@ -446,8 +439,7 @@ class RequestUploadDocumentHandler(RequestHandler):
 
         with Session() as session:
             document = session.get(Document, document_id)
-            this_user = session.get(User, handler.username)
-            assert this_user is not None
+            this_user = User.get_existing(session, handler.username)
 
             if document:
                 if not document.check_access_requirements(
@@ -516,9 +508,8 @@ class RequestDeleteDocumentHandler(RequestHandler):
         document_id = handler.data["document_id"]
 
         with Session() as session:
-            user = session.get(User, handler.username)
+            user = User.get_existing(session, handler.username)
             document = session.get(Document, document_id)
-            assert user is not None
 
             if not document:
                 handler.conclude_request(404, {}, "Document not found")
@@ -565,9 +556,8 @@ class RequestRenameDocumentHandler(RequestHandler):
         new_title: str = handler.data["new_title"]
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
+            this_user = User.get_existing(session, handler.username)
             document = session.get(Document, document_id)
-            assert this_user is not None
 
             if not document:
                 handler.conclude_request(
@@ -786,8 +776,7 @@ class RequestSetDocumentRulesHandler(RequestHandler):
             return 401, document_id
 
         with Session() as session:
-            user = session.get(User, handler.username)
-            assert user is not None
+            user = User.get_existing(session, handler.username)
 
             document = session.get(Document, document_id)
 
@@ -847,8 +836,7 @@ class RequestMoveDocumentHandler(RequestHandler):
         target_folder_id: str = handler.data.get("target_folder_id", "")
 
         with Session() as session:
-            user = session.get(User, handler.username)
-            assert user is not None
+            user = User.get_existing(session, handler.username)
 
             if Permissions.MOVE not in user.all_permissions:
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MOVE_DOCUMENT)
@@ -1018,8 +1006,7 @@ class RequestPurgeDocumentHandler(RequestHandler):
     def handle(self, handler: ConnectionHandler):
         doc_id = handler.data["document_id"]
         with Session() as session:
-            user = session.get(User, handler.username)
-            assert user is not None
+            user = User.get_existing(session, handler.username)
 
             if Permissions.PURGE not in user.all_permissions:
                 handler.conclude_request(403, {}, "No permission to permanently delete")
@@ -1078,8 +1065,7 @@ class RequestRestoreDocumentHandler(RequestHandler):
         new_title = handler.data.get("new_title")
 
         with Session() as session:
-            user = session.get(User, handler.username)
-            assert user is not None
+            user = User.get_existing(session, handler.username)
 
             if Permissions.RESTORE not in user.all_permissions:
                 handler.conclude_request(403, {}, smsg.PERMISSION_DENIED)

@@ -70,8 +70,7 @@ class RequestUploadUserKeyHandler(RequestHandler):
         target_username: str | None = handler.data.get("target_username")
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
-            assert this_user is not None
+            this_user = User.get_existing(session, handler.username)
 
             # Determine which user's keyring to write to
             if target_username and target_username != handler.username:
@@ -134,8 +133,7 @@ class RequestGetUserKeyHandler(RequestHandler):
         key_id: str = handler.data["id"]
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
-            assert this_user is not None
+            this_user = User.get_existing(session, handler.username)
 
             key = session.get(UserKey, key_id)
             if not key:
@@ -194,8 +192,7 @@ class RequestDeleteUserKeyHandler(RequestHandler):
         key_id: str = handler.data["id"]
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
-            assert this_user is not None
+            this_user = User.get_existing(session, handler.username)
 
             key = session.get(UserKey, key_id)
             if not key:
@@ -253,8 +250,7 @@ class RequestSetPreferenceDEKHandler(RequestHandler):
         key_id: str = handler.data["id"]
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
-            assert this_user is not None
+            this_user = User.get_existing(session, handler.username)
 
             key = session.get(UserKey, key_id)
             if not key:
@@ -307,8 +303,7 @@ class RequestListUserKeysHandler(RequestHandler):
 
         with Session() as session:
             target_user = session.get(User, target_username)
-            operator = session.get(User, handler.username)
-            assert operator is not None
+            operator = User.get_existing(session, handler.username)
 
             if target_username != handler.username:
                 if Permissions.MANAGE_KEYRINGS not in operator.all_permissions:

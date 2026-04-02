@@ -74,8 +74,7 @@ class RequestSearchHandler(RequestHandler):
         search_directories: bool = handler.data.get("search_directories", True)
 
         with Session() as session:
-            user = session.get(User, handler.username)
-            assert user is not None
+            user = User.get_existing(session, handler.username)
 
             now = time.time()
 

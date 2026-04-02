@@ -1,11 +1,16 @@
 __all__ = ["engine", "Session", "Base"]
 
+from typing import Any, Self
+
 from sqlalchemy import URL, create_engine, event
 from sqlalchemy.orm import (
     DeclarativeBase,
     ORMExecuteState,
     sessionmaker,
     with_loader_criteria,
+)
+from sqlalchemy.orm import (
+    Session as _Session,
 )
 
 from include.classes.enum.status import EntityStatus
@@ -73,7 +78,12 @@ def _add_filtering_criteria(execute_state: ORMExecuteState) -> None:
 
 
 class Base(DeclarativeBase):
-    pass
+    @classmethod
+    def get_existing(cls, session: _Session, ident: Any) -> Self:
+        obj = session.get(cls, ident)
+        if obj is None:
+            raise LookupError(f"{cls.__name__} with ID {ident} not found")
+        return obj
 
 
 Base.metadata.naming_convention = {

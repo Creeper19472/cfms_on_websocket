@@ -27,8 +27,7 @@ class RequestLockdownHandler(RequestHandler):
         status_to_change: bool = handler.data["status"]
 
         with Session() as session:
-            user = session.get(User, handler.username)
-            assert user is not None
+            user = User.get_existing(session, handler.username)
 
             if Permissions.APPLY_LOCKDOWN not in user.all_permissions:
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
@@ -81,8 +80,7 @@ class RequestViewAuditLogsHandler(RequestHandler):
         filtered_actions: list[str] = handler.data.get("filters", [])
 
         with Session() as session:
-            user = session.get(User, handler.username)
-            assert user is not None
+            user = User.get_existing(session, handler.username)
 
             if Permissions.VIEW_AUDIT_LOGS not in user.all_permissions:
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED)

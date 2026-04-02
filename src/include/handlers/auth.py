@@ -134,48 +134,41 @@ class RequestRefreshTokenHandler(RequestHandler):
     """
 
     data_schema = {"type": "object", "properties": {}, "additionalProperties": False}
+    require_auth = True
 
     def handle(self, handler: ConnectionHandler):
 
         # Parse the refresh token request
         old_token = handler.token
 
-        # Validate the token
-        if not old_token or not isinstance(old_token, str):
-            response = {
-                "code": 400,
-                "message": "missing or invalid token",
-                "data": {},
-            }
-        else:
-            with Session() as session:
-                user = session.get(User, handler.username)
+        with Session() as session:
+            user = User.get_existing(session, handler.username)
 
-                if user and user.is_token_valid(old_token):
-                    new_token = user.renew_token()
-                    response = {
-                        "code": 200,
-                        "message": "Token refreshed successfully",
-                        "data": {"token": new_token.raw, "exp": new_token.exp},
-                    }
-                    log_audit(
-                        "refresh_token",
-                        target=handler.username,
-                        result=0,
-                        remote_address=handler.remote_address,
-                    )
-                else:
-                    response = {
-                        "code": 400,
-                        "message": "Invalid or expired token",
-                        "data": {},
-                    }
-                    log_audit(
-                        "refresh_token",
-                        target=handler.username,
-                        result=1,
-                        remote_address=handler.remote_address,
-                    )
+            if user and user.is_token_valid(old_token):
+                new_token = user.renew_token()
+                response = {
+                    "code": 200,
+                    "message": "Token refreshed successfully",
+                    "data": {"token": new_token.raw, "exp": new_token.exp},
+                }
+                log_audit(
+                    "refresh_token",
+                    target=handler.username,
+                    result=0,
+                    remote_address=handler.remote_address,
+                )
+            else:
+                response = {
+                    "code": 400,
+                    "message": "Invalid or expired token",
+                    "data": {},
+                }
+                log_audit(
+                    "refresh_token",
+                    target=handler.username,
+                    result=1,
+                    remote_address=handler.remote_address,
+                )
 
         # Send the response back to the client
         handler.conclude_request(**response)

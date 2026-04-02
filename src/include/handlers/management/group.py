@@ -24,8 +24,7 @@ class RequestListGroupsHandler(RequestHandler):
     def handle(self, handler: ConnectionHandler):
 
         with Session() as session:
-            user = session.get(User, handler.username)  # 执行操作的用户
-            assert user is not None
+            user = User.get_existing(session, handler.username)  # 执行操作的用户
 
             if Permissions.LIST_GROUPS not in user.all_permissions:
                 handler.conclude_request(
@@ -90,8 +89,7 @@ class RequestCreateGroupHandler(RequestHandler):
         new_group_permissions = data.get("permissions", [])
 
         with Session() as session:
-            user = session.get(User, handler.username)
-            assert user is not None
+            user = User.get_existing(session, handler.username)
 
             # currently handle_create_group() will not judge whether the requesting
             # user is eligible to apply the given permissions for the new group.
@@ -134,8 +132,7 @@ class RequestDeleteGroupHandler(RequestHandler):
     def handle(self, handler: ConnectionHandler):
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
-            assert this_user is not None
+            this_user = User.get_existing(session, handler.username)
 
             if Permissions.DELETE_GROUP not in this_user.all_permissions:
                 handler.conclude_request(
@@ -209,8 +206,7 @@ class RequestRenameGroupHandler(RequestHandler):
         target_group_name: str = handler.data["group_name"]
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
-            assert this_user is not None
+            this_user = User.get_existing(session, handler.username)
 
             if Permissions.RENAME_GROUP not in this_user.all_permissions:
                 handler.conclude_request(
@@ -272,8 +268,7 @@ class RequestGetGroupInfoHandler(RequestHandler):
     def handle(self, handler: ConnectionHandler):
 
         with Session() as session:
-            user = session.get(User, handler.username)  # 执行操作的用户
-            assert user is not None
+            user = User.get_existing(session, handler.username)  # 执行操作的用户
 
             if not handler.data["group_name"]:
                 handler.conclude_request(
@@ -343,8 +338,7 @@ class RequestChangeGroupPermissionsHandler(RequestHandler):
     def handle(self, handler: ConnectionHandler):
 
         with Session() as session:
-            user = session.get(User, handler.username)
-            assert user is not None
+            user = User.get_existing(session, handler.username)
 
             if not handler.data["group_name"]:
                 handler.conclude_request(

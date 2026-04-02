@@ -40,15 +40,7 @@ class RequestSetup2FAHandler(RequestHandler):
 
     def handle(self, handler: ConnectionHandler):
         with Session() as session:
-            user = session.get(User, handler.username)
-
-            if not user:
-                handler.conclude_request(
-                    code=404,
-                    message="User not found",
-                    data={},
-                )
-                return 404, handler.username
+            user = User.get_existing(session, handler.username)
 
             # Check if user already has 2FA enabled
             if user.totp_enabled:
@@ -215,15 +207,7 @@ class RequestCancel2FASetupHandler(RequestHandler):
 
     def handle(self, handler: ConnectionHandler):
         with Session() as session:
-            user = session.get(User, handler.username)
-
-            if not user:
-                handler.conclude_request(
-                    code=404,
-                    message="User not found",
-                    data={},
-                )
-                return
+            user = User.get_existing(session, handler.username)
 
             # Check if TOTP setup exists but not enabled yet
             if not user.totp_secret or user.totp_enabled:
@@ -270,7 +254,7 @@ class RequestGet2FAStatusHandler(RequestHandler):
         target_username = handler.data.get("target") or handler.username
 
         with Session() as session:
-            user = session.get(User, handler.username)
+            user = User.get_existing(session, handler.username)
             target = session.get(User, target_username)
 
             if not target:
@@ -280,8 +264,6 @@ class RequestGet2FAStatusHandler(RequestHandler):
                     data={},
                 )
                 return
-
-            assert user is not None
 
             if (
                 target_username != handler.username

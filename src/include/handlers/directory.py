@@ -50,8 +50,7 @@ class RequestListDirectoryHandler(RequestHandler):
         folder_id: Optional[str] = handler.data.get("folder_id")
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
-            assert this_user is not None
+            this_user = User.get_existing(session, handler.username)
 
             # Determine parent folder and fetch children/documents
             if not folder_id:
@@ -169,8 +168,8 @@ class RequestGetDirectoryInfoHandler(RequestHandler):
             return
 
         with Session() as session:
-            user = session.get(User, handler.username)
-            assert user is not None  # require_auth ensures this
+            # require_auth ensures this
+            user = User.get_existing(session, handler.username)
 
             directory = session.get(Folder, directory_id)
 
@@ -225,12 +224,8 @@ class RequestGetDirectoryAccessRulesHandler(RequestHandler):
         directory_id: str = handler.data["directory_id"]
 
         with Session() as session:
-            user = session.get(User, handler.username)
+            user = User.get_existing(session, handler.username)
             directory = session.get(Folder, directory_id)
-
-            if user is None or not user.is_token_valid(handler.token):
-                handler.conclude_request(403, {}, "Invalid user or token")
-                return 401, directory_id
 
             if not directory:
                 handler.conclude_request(404, {}, "Document not found")
@@ -305,8 +300,7 @@ class RequestCreateDirectoryHandler(RequestHandler):
             return
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
-            assert this_user is not None  # require_auth ensures this
+            this_user = User.get_existing(session, handler.username)
 
             if Permissions.CREATE_DIRECTORY not in this_user.all_permissions:
                 handler.conclude_request(
@@ -423,6 +417,8 @@ class RequestDeleteDirectoryHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
 
         # Parse the directory deletion request
@@ -433,16 +429,7 @@ class RequestDeleteDirectoryHandler(RequestHandler):
             return 404, folder_id, handler.username
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
-            if not this_user or not this_user.is_token_valid(handler.token):
-                handler.conclude_request(
-                    **{
-                        "code": 403,
-                        "message": "Invalid user or token",
-                        "data": {},
-                    }
-                )
-                return 401, folder_id
+            this_user = User.get_existing(session, handler.username)
             folder = session.get(Folder, folder_id)
             if not folder:
                 handler.conclude_request(
@@ -569,8 +556,7 @@ class RequestRenameDirectoryHandler(RequestHandler):
             return 404, folder_id, handler.username
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
-            assert this_user is not None  # require_auth ensures this
+            this_user = User.get_existing(session, handler.username)
 
             folder = session.get(Folder, folder_id)
             if not folder:
@@ -685,8 +671,7 @@ class RequestMoveDirectoryHandler(RequestHandler):
             return 404, folder_id, handler.username
 
         with Session() as session:
-            user = session.get(User, handler.username)
-            assert user is not None  # require_auth ensures this
+            user = User.get_existing(session, handler.username)
 
             if Permissions.MOVE not in user.all_permissions:
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MOVE_DIRECTORY)
@@ -848,8 +833,7 @@ class RequestSetDirectoryRulesHandler(RequestHandler):
             return 401, directory_id
 
         with Session() as session:
-            user = session.get(User, handler.username)
-            assert user is not None  # require_auth ensures this
+            user = User.get_existing(session, handler.username)
 
             directory = session.get(Folder, directory_id)
 
@@ -912,8 +896,7 @@ class RequestPurgeDirectoryHandler(RequestHandler):
             return 403, folder_id, handler.username
 
         with Session() as session:
-            user = session.get(User, handler.username)
-            assert user is not None
+            user = User.get_existing(session, handler.username)
 
             if Permissions.PURGE not in user.all_permissions:
                 handler.conclude_request(
@@ -1013,8 +996,7 @@ class RequestRestoreDirectoryHandler(RequestHandler):
             return 400, folder_id, handler.username
 
         with Session() as session:
-            user = session.get(User, handler.username)
-            assert user is not None
+            user = User.get_existing(session, handler.username)
 
             if Permissions.RESTORE not in user.all_permissions:
                 handler.conclude_request(403, {}, "No permission to restore data")
@@ -1142,8 +1124,7 @@ class RequestListDeletedItemsHandler(RequestHandler):
         parent_id = handler.data["folder_id"]
 
         with Session() as session:
-            user = session.get(User, handler.username)
-            assert user is not None
+            user = User.get_existing(session, handler.username)
 
             if Permissions.LIST_DELETED_ITEMS not in user.all_permissions:
                 handler.conclude_request(403, {}, smsg.PERMISSION_DENIED)
