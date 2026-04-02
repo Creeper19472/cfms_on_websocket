@@ -1,3 +1,7 @@
+__all__ = ["get_client_ip", "is_v6_address"]
+
+import ipaddress
+
 from websockets.sync.server import ServerConnection
 
 from include.constants import TRUSTED_PROXY_IPS
@@ -21,3 +25,11 @@ def get_client_ip(websocket: ServerConnection) -> str:
 
     # Fallback to the peer IP when no trusted proxy is involved or no headers are present.
     return peer_ip
+
+
+def is_v6_address(address):
+    try:
+        ip = ipaddress.ip_address(address)
+        return ip.version == 6
+    except ValueError:
+        return False

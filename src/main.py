@@ -47,6 +47,7 @@ from include.database.models.entity import Document, DocumentRevision, Folder
 from include.database.models.file import File
 from include.handlers.debugging.throw import RequestThrowExceptionHandler
 from include.system.ext_manager import load_extensions_from_directory, pm
+from include.util.address import is_v6_address
 from include.util.entrance import global_process_request
 from include.util.rule.applying import set_access_rules
 
@@ -407,17 +408,21 @@ def main():
     # DO NOT MODIFY socket family setting unless you know what you are doing
     socket_family = socket.AF_INET6
 
+    host = global_config["server"]["host"]
+    port = global_config["server"]["port"]
+    host_address = f"[{host}]" if is_v6_address(host) else host
+
     with serve(
         handle_connection,
-        global_config["server"]["host"],
-        global_config["server"]["port"],
+        host,
+        port,
         ssl=ssl_context,
         family=socket_family,
         dualstack_ipv6=global_config["server"]["dualstack_ipv6"],
         process_request=global_process_request,
     ) as server:
         logger.info(
-            f"CFMS WebSocket server started at wss://{global_config['server']['host']}:{global_config['server']['port']}"
+            f"CFMS WebSocket server started at wss://{host_address}:{port}"
         )  # TODO
         server.serve_forever()
 
