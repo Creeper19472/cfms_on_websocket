@@ -1,6 +1,5 @@
 import base64
 import hashlib
-import orjson
 import mmap
 import os
 import time
@@ -8,11 +7,12 @@ import traceback
 from typing import Optional
 
 import jsonschema
+import orjson
 import websockets
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
-from websockets.typing import Data
 from loguru import logger as log
+from websockets.typing import Data
 
 from include.classes.multiplexer import FrameType, MultiplexConnection, Stream
 from include.conf_loader import global_config
@@ -377,7 +377,7 @@ class ConnectionHandler:
                     except (
                         websockets.ConnectionClosed,
                         websockets.exceptions.ConnectionClosedOK,
-                    ) as exc:
+                    ):
                         raise
 
                 # 校验文件大小

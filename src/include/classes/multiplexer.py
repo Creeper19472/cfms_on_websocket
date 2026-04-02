@@ -4,10 +4,11 @@ import threading
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import Optional
+
 import websockets
-from websockets.typing import Data
-from websockets.sync.server import ServerConnection
 from loguru import logger as log
+from websockets.sync.server import ServerConnection
+from websockets.typing import Data
 
 HEADER_FORMAT = "!IB"  # 4 bytes for frame_id, 1 byte for frame_type
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)

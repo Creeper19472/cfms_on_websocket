@@ -15,41 +15,40 @@ __all__ = [
 ]
 
 import time
-import filetype
-from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHashError
 from typing import Optional
 
-from include.classes.enum.status import UserStatus
-from include.classes.exceptions import UserNotActiveError
+import filetype
+from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 
-# Module-level PasswordHasher instance — reused across all calls to avoid
-# repeated construction overhead.
-_password_hasher = PasswordHasher()
-
-from include.classes.enum.permissions import Permissions
-from include.constants import AVAILABLE_BLOCK_TYPES
+import include.system.messages as smsg
 from include.classes.connection_handler import ConnectionHandler
+from include.classes.enum.permissions import Permissions
+from include.classes.enum.status import UserStatus
 from include.classes.request_handler import RequestHandler
 from include.conf_loader import global_config
+from include.constants import AVAILABLE_BLOCK_TYPES
 from include.database.handler import Session
-from include.database.models.classic import (
-    User,
-    UserGroup,
-)
 from include.database.models.blocking import (
     UserBlockEntry,
     UserBlockSubEntry,
 )
+from include.database.models.classic import (
+    User,
+    UserGroup,
+)
 from include.database.models.entity import Document
 from include.handlers.document import create_file_task
-from include.util.user import create_user
 from include.util.pwd import (
     InvaildPasswordLengthError,
     MissingComponentsError,
     check_passwd_requirements,
 )
-import include.system.messages as smsg
+from include.util.user import create_user
+
+# Module-level PasswordHasher instance — reused across all calls to avoid
+# repeated construction overhead.
+_password_hasher = PasswordHasher()
 
 
 class RequestListUsersHandler(RequestHandler):
@@ -94,7 +93,6 @@ class RequestListUsersHandler(RequestHandler):
 
 
 class RequestCreateUserHandler(RequestHandler):
-
     data_schema = {
         "type": "object",
         "properties": {
@@ -881,7 +879,6 @@ class RequestSetPasswdHandler(RequestHandler):
                 operator_user = None
 
             if old_passwd:  # 如果指定了旧密码，说明是用户更改自己的密码
-
                 # Disallow these elevated flags when a user is changing their own password
                 _flags_set = []
                 if bypass_passwd_requirements:
@@ -908,9 +905,7 @@ class RequestSetPasswdHandler(RequestHandler):
                     )
                     return
                 if user.status != UserStatus.ACTIVE:
-                    handler.conclude_request(
-                        403, {}, "Account is not active"
-                    )
+                    handler.conclude_request(403, {}, "Account is not active")
                     return
 
                 if not (
@@ -936,7 +931,7 @@ class RequestSetPasswdHandler(RequestHandler):
                         }
                     )
                     return
-                if not Permissions.SUPER_SET_PASSWD in operator_user.all_permissions:
+                if Permissions.SUPER_SET_PASSWD not in operator_user.all_permissions:
                     handler.conclude_request(
                         **{
                             "code": 403,

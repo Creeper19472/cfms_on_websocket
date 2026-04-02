@@ -3,9 +3,7 @@ import time
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import VARCHAR, Float, ForeignKey, Text
-from sqlalchemy.orm import Mapped
-from sqlalchemy.orm import mapped_column
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from include.database.handler import Base
 
@@ -49,6 +47,5 @@ class UserKey(Base):
 
     def __repr__(self) -> str:
         return (
-            f"UserKey(id={self.id!r}, username={self.username!r}, "
-            f"label={self.label!r})"
+            f"UserKey(id={self.id!r}, username={self.username!r}, label={self.label!r})"
         )

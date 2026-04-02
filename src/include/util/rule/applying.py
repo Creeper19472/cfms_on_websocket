@@ -44,13 +44,13 @@ def set_access_rules(
 
         for each_rule in this_type_rules:
             if each_rule:
-                if type(target) == Document:
+                if isinstance(target, Document):
                     this_new_rule = DocumentAccessRule(
                         document_id=target.id,
                         access_type=access_type,
                         rule_data=each_rule,
                     )
-                elif type(target) == Folder:
+                elif isinstance(target, Folder):
                     this_new_rule = FolderAccessRule(
                         folder_id=target.id,
                         access_type=access_type,

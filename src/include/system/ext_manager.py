@@ -1,16 +1,17 @@
 __all__ = ["pm", "load_extensions_from_directory"]
 
-from pathlib import Path
-from typing import Dict, Type, Optional, Set, Union, TYPE_CHECKING
-import os
 import importlib.util
+import os
+from pathlib import Path
+from typing import TYPE_CHECKING, Dict, Optional, Set, Type, Union
+
 import pluggy
 import websockets.sync.server
 from loguru import logger as log
 
 if TYPE_CHECKING:
-    from include.classes.request_handler import RequestHandler
     from include.classes.connection_handler import ConnectionHandler
+    from include.classes.request_handler import RequestHandler
 
 hookspec = pluggy.HookspecMarker("cfms")
 hookimpl = pluggy.HookimplMarker("cfms")

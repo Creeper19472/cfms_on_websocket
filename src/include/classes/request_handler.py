@@ -1,7 +1,7 @@
 __all__ = ["RequestHandler"]
 
-from typing import Optional, Union
 from abc import ABC, abstractmethod
+from typing import Optional, Union
 
 from include.classes.connection_handler import ConnectionHandler
 
@@ -35,7 +35,9 @@ class RequestHandler(ABC):
     require_auth: bool = False
 
     @abstractmethod
-    def handle(self, handler: ConnectionHandler) -> Union[
+    def handle(
+        self, handler: ConnectionHandler
+    ) -> Union[
         int,
         tuple[int, Optional[str]],
         tuple[int, Optional[str], dict],

@@ -17,13 +17,13 @@ import time
 
 import jsonschema
 
+import include.system.messages as smsg
 from include.classes.connection_handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
 from include.classes.enum.status import EntityStatus
 from include.classes.request_handler import RequestHandler
 from include.conf_loader import global_config
-from include.constants import FILE_TASK_DEFAULT_DURATION_SECONDS
-from include.constants import ROOT_DIRECTORY_ID
+from include.constants import FILE_TASK_DEFAULT_DURATION_SECONDS, ROOT_DIRECTORY_ID
 from include.database.handler import Session
 from include.database.models.classic import User
 from include.database.models.entity import (
@@ -34,7 +34,6 @@ from include.database.models.entity import (
 )
 from include.database.models.file import File, FileTask
 from include.util.rule.applying import apply_access_rules
-import include.system.messages as smsg
 
 
 def create_file_task(file: File, transfer_mode: int = 0):
@@ -173,7 +172,7 @@ class RequestGetDocumentAccessRulesHandler(RequestHandler):
 
             if (
                 not document.check_access_requirements(user, access_type="read")
-                or not Permissions.VIEW_ACCESS_RULES in user.all_permissions
+                or Permissions.VIEW_ACCESS_RULES not in user.all_permissions
             ):
                 handler.conclude_request(403, {}, "Permission denied")
                 return 403, document_id, handler.username

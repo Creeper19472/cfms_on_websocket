@@ -1,7 +1,7 @@
 from typing import Optional
 
 from include.database.handler import Session
-from include.database.models.classic import User, AuditEntry
+from include.database.models.classic import AuditEntry
 
 
 def log_audit(

@@ -2,9 +2,9 @@ from typing import Literal
 
 from sqlalchemy import or_
 
+from include.constants import AVAILABLE_BLOCK_TYPES
 from include.database.models.blocking import UserBlockEntry, UserBlockSubEntry
 from include.database.models.classic import ObjectAccessEntry, User
-from include.constants import AVAILABLE_BLOCK_TYPES
 
 
 def prefetch_user_blocks(

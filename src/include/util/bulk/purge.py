@@ -1,5 +1,6 @@
 from itertools import batched
 from typing import List
+
 from sqlalchemy.orm import Session
 
 from include.constants import QUERY_CHUNK_SIZE

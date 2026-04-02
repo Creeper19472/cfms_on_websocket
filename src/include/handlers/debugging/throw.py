@@ -1,5 +1,5 @@
-from include.classes.request_handler import RequestHandler
 from include.classes.connection_handler import ConnectionHandler
+from include.classes.request_handler import RequestHandler
 from include.database.handler import Session
 from include.database.models.classic import User
 
@@ -8,7 +8,7 @@ class RequestThrowExceptionHandler(RequestHandler):
     """A request handler that always throws an exception for testing purposes."""
 
     require_auth = True
-    
+
     def handle(self, handler: "ConnectionHandler"):
         """Handle the request by throwing an exception."""
 
@@ -19,4 +19,6 @@ class RequestThrowExceptionHandler(RequestHandler):
                 handler.conclude_request(403, {}, "User lacks debugging permission.")
                 return 403, None, handler.username
 
-        raise Exception("This is a test exception thrown by RequestThrowExceptionHandler.")
+        raise Exception(
+            "This is a test exception thrown by RequestThrowExceptionHandler."
+        )

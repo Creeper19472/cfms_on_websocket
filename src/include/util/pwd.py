@@ -4,8 +4,7 @@ __all__ = [
     "check_passwd_requirements",
 ]
 
-from typing import List
-from typing import Optional
+from typing import List, Optional
 
 
 class MissingComponentsError(ValueError):
@@ -14,7 +13,7 @@ class MissingComponentsError(ValueError):
 
     def __str__(self) -> str:
         return (
-            f"Password is missing the necessary characters: {", ".join(self.missing)}"
+            f"Password is missing the necessary characters: {', '.join(self.missing)}"
         )
 
 
@@ -37,7 +36,7 @@ class InvaildPasswordLengthError(ValueError):
         if self.min_length and self.max_length:
             return f"Password does not meet the length requirement ({self.min_length} ~ {self.max_length})"
         else:
-            return f"Password does not meet the length requirement"
+            return "Password does not meet the length requirement"
 
 
 def check_passwd_requirements(

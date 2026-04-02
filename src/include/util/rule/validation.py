@@ -1,8 +1,8 @@
 __all__ = ["validate_access_rules"]
 
 from typing import Any
-import jsonschema
 
+import jsonschema
 
 schema = {
     "type": "array",  # 'rules' is an array.

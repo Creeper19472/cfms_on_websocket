@@ -22,7 +22,6 @@ import secrets
 import string
 import sys
 
-
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, parent_dir)
 
@@ -69,16 +68,12 @@ def main() -> None:
     # forward references (e.g. "File", "UserKey", etc.).
     from include.database.handler import Session  # noqa: F401
     from include.database.models.classic import User  # noqa: F401
-    from include.database.models.blocking import (
-        UserBlockEntry,
-        UserBlockSubEntry,
-    )  # noqa: F401
-    from include.database.models.file import File, FileTask  # noqa: F401
     from include.database.models.entity import (  # noqa: F401
         Document,
         DocumentRevision,
         Folder,
     )
+    from include.database.models.file import File, FileTask  # noqa: F401
     from include.database.models.keyring import UserKey  # noqa: F401
 
     with Session() as session:

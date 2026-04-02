@@ -3,15 +3,15 @@ __all__ = [
     "search_folders_with_access",
 ]
 
+import time
 from collections import defaultdict
 from typing import Optional
-import time
 
-from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import text
+from sqlalchemy.orm import Session, joinedload
 
-from include.database.models.entity import Document, Folder
 from include.database.models.classic import ObjectAccessEntry
+from include.database.models.entity import Document, Folder
 
 
 # ── 内部辅助：给定起始 folder_id 集合和需要查OAE的目标ID集合，
@@ -44,8 +44,7 @@ def _fetch_ancestors_and_oae(
         placeholders = ", ".join(f":fid_{i}" for i in range(len(seed_folder_ids)))
         params = {f"fid_{i}": fid for i, fid in enumerate(seed_folder_ids)}
 
-        ancestor_sql = text(
-            f"""
+        ancestor_sql = text(f"""
             WITH RECURSIVE anc(id, parent_id, inherit) AS (
                 SELECT id, parent_id, inherit
                 FROM folders
@@ -58,8 +57,7 @@ def _fetch_ancestors_and_oae(
                 INNER JOIN anc ON f.id = anc.parent_id
             )
             SELECT DISTINCT id FROM anc
-        """
-        )
+        """)
 
         all_ancestor_ids = [
             row[0] for row in session.execute(ancestor_sql, params).fetchall()

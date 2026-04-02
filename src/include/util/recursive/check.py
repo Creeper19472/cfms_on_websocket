@@ -1,8 +1,9 @@
 from enum import IntEnum
-from include.database.models.entity import Document, Folder
-from include.database.models.classic import User, ObjectAccessEntry
+
 from include.classes.access_rule import AccessRuleBase
 from include.constants import AVAILABLE_ACCESS_TYPES
+from include.database.models.classic import ObjectAccessEntry, User
+from include.database.models.entity import Document, Folder
 
 
 class SingleNodeCheckResult(IntEnum):
@@ -118,7 +119,7 @@ def check_access_for_object(
             return False  # explicit denial, no need to check further
         case _:
             raise RuntimeError("Unexpected SingleNodeCheckResult value")
-        
+
     # if not recursive or the object does not inherit permissions, stop here
     if not recursive or not obj.inherit:
         return True

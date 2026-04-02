@@ -1,6 +1,7 @@
 import time
-from include.database.models.classic import UserGroup, UserGroupPermission
+
 from include.database.handler import Session
+from include.database.models.classic import UserGroup, UserGroupPermission
 
 
 def create_group(**kwargs) -> None:
@@ -16,7 +17,7 @@ def create_group(**kwargs) -> None:
                 permission=i["permission"],
                 granted=i.get("granted", True),
                 start_time=i.get("start_time", time.time()),
-                end_time=i.get("end_time", None)
+                end_time=i.get("end_time", None),
             )
             group.permissions.append(permission)
 

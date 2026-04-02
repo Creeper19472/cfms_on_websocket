@@ -1,16 +1,15 @@
-from collections import defaultdict
-from collections import deque
-from typing import Optional
-from itertools import batched
 import time
+from collections import defaultdict, deque
+from itertools import batched
+from typing import Optional
 
-from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import text
+from sqlalchemy.orm import Session, joinedload
 
 from include.classes.enum.status import EntityStatus
 from include.constants import QUERY_CHUNK_SIZE
-from include.database.models.entity import Document, Folder, DocumentRevision
-from include.database.models.classic import User, ObjectAccessEntry
+from include.database.models.classic import ObjectAccessEntry, User
+from include.database.models.entity import Document, DocumentRevision, Folder
 from include.util.fetch.fetch import prefetch_user_blocks
 from include.util.recursive.check import check_access_for_object
 
@@ -45,8 +44,7 @@ def fetch_subtree_for_deletion(
     exec_opts = {"include_deleted": True} if include_deleted else {}
     status_filter = "" if include_deleted else f"AND f.status = {EntityStatus.OK.value}"
 
-    subtree_sql = text(
-        f"""
+    subtree_sql = text(f"""
         WITH RECURSIVE subtree(id, parent_id, status) AS (
             SELECT id, parent_id, status
             FROM folders
@@ -60,8 +58,7 @@ def fetch_subtree_for_deletion(
             WHERE 1=1 {status_filter}
         )
         SELECT id FROM subtree WHERE id != :root_id
-        """
-    )
+        """)
     # 注意：root_id 本身的可删性由调用方（handler）已检查，这里只分析"内容"
     # 如果需要连 root 本身也纳入分析，去掉 WHERE id != :root_id 即可
 
@@ -198,9 +195,9 @@ def fetch_subtree_for_deletion(
         )
         folder_self_deletable[folder.id] = can_delete
         if not can_delete:
-            assert (
-                folder.parent_id is not None
-            ), "Root folder should have been handled separately"
+            assert folder.parent_id is not None, (
+                "Root folder should have been handled separately"
+            )
             if check_access_for_object(
                 folder_map[folder.parent_id],
                 user,

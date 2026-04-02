@@ -1,77 +1,61 @@
-import orjson
 import threading
 import time
 from typing import Optional, Union
+
 import jsonschema
+import orjson
 import websockets
 import websockets.sync.server
 from loguru import logger as log
-from include.classes.enum.permissions import Permissions
-from include.classes.multiplexer import FrameType, MultiplexConnection, Stream
-from include.classes.misc.guard import LoginGuard
-from include.classes.request_handler import RequestHandler
+
 from include.classes.connection_handler import ConnectionHandler
+from include.classes.enum.permissions import Permissions
+from include.classes.misc.guard import LoginGuard
+from include.classes.multiplexer import FrameType, MultiplexConnection, Stream
+from include.classes.request_handler import RequestHandler
+from include.constants import NONCE_MIN_LENGTH
 from include.database.handler import Session
 from include.database.models.classic import User
-from include.system.ext_manager import pm
-from include.util.address import get_client_ip
-from include.util.audit import log_audit
 from include.handlers.auth import RequestLoginHandler, RequestRefreshTokenHandler
-from include.handlers.two_factor import (
-    RequestCancel2FASetupHandler,
-    RequestSetup2FAHandler,
-    RequestValidate2FAHandler,
-    RequestDisable2FAHandler,
-    RequestGet2FAStatusHandler,
+from include.handlers.directory import (
+    RequestCreateDirectoryHandler,
+    RequestDeleteDirectoryHandler,
+    RequestGetDirectoryAccessRulesHandler,
+    RequestGetDirectoryInfoHandler,
+    RequestListDeletedItemsHandler,
+    RequestListDirectoryHandler,
+    RequestMoveDirectoryHandler,
+    RequestPurgeDirectoryHandler,
+    RequestRenameDirectoryHandler,
+    RequestRestoreDirectoryHandler,
+    RequestSetDirectoryRulesHandler,
 )
 from include.handlers.document import (
     RequestCreateDocumentHandler,
     RequestDeleteDocumentHandler,
     RequestDownloadFileHandler,
+    RequestGetDocumentAccessRulesHandler,
     RequestGetDocumentHandler,
     RequestGetDocumentInfoHandler,
-    RequestGetDocumentAccessRulesHandler,
     RequestMoveDocumentHandler,
+    RequestPurgeDocumentHandler,
     RequestRenameDocumentHandler,
     RequestRestoreDocumentHandler,
     RequestSetDocumentRulesHandler,
     RequestUploadDocumentHandler,
     RequestUploadFileHandler,
-    RequestPurgeDocumentHandler,
 )
-from include.handlers.directory import (
-    RequestListDeletedItemsHandler,
-    RequestListDirectoryHandler,
-    RequestCreateDirectoryHandler,
-    RequestDeleteDirectoryHandler,
-    RequestGetDirectoryInfoHandler,
-    RequestGetDirectoryAccessRulesHandler,
-    RequestMoveDirectoryHandler,
-    RequestRenameDirectoryHandler,
-    RequestRestoreDirectoryHandler,
-    RequestSetDirectoryRulesHandler,
-    RequestPurgeDirectoryHandler,
+from include.handlers.keyring import (
+    RequestDeleteUserKeyHandler,
+    RequestGetUserKeyHandler,
+    RequestListUserKeysHandler,
+    RequestSetPreferenceDEKHandler,
+    RequestUploadUserKeyHandler,
 )
-from include.handlers.revision import (
-    RequestDeleteRevisionHandler,
-    RequestListRevisionsHandler,
-    RequestGetRevisionHandler,
-    RequestSetDocumentRevisionHandler,
-)
-from include.handlers.management.user import (
-    RequestChangeUserGroupsHandler,
-    RequestCreateUserHandler,
-    RequestDeleteUserHandler,
-    RequestBlockUserHandler,
-    RequestListUserBlocksHandler,
-    RequestGetUserAvatarHandler,
-    RequestManageUserStatusHandler,
-    RequestSetUserAvatarHandler,
-    RequestUnblockUserHandler,
-    RequestListUsersHandler,
-    RequestGetUserInfoHandler,
-    RequestRenameUserHandler,
-    RequestSetPasswdHandler,
+from include.handlers.management.access import (
+    RequestGrantAccessHandler,
+    RequestRevokeAccessHandler,
+    RequestViewAccessEntriesHandler,
 )
 from include.handlers.management.group import (
     RequestChangeGroupPermissionsHandler,
@@ -81,27 +65,44 @@ from include.handlers.management.group import (
     RequestListGroupsHandler,
     RequestRenameGroupHandler,
 )
-from include.handlers.management.access import (
-    RequestGrantAccessHandler,
-    RequestRevokeAccessHandler,
-    RequestViewAccessEntriesHandler,
-)
 from include.handlers.management.system import (
     RequestLockdownHandler,
     RequestViewAuditLogsHandler,
 )
-from include.handlers.search import RequestSearchHandler
-from include.handlers.keyring import (
-    RequestUploadUserKeyHandler,
-    RequestGetUserKeyHandler,
-    RequestDeleteUserKeyHandler,
-    RequestSetPreferenceDEKHandler,
-    RequestListUserKeysHandler,
+from include.handlers.management.user import (
+    RequestBlockUserHandler,
+    RequestChangeUserGroupsHandler,
+    RequestCreateUserHandler,
+    RequestDeleteUserHandler,
+    RequestGetUserAvatarHandler,
+    RequestGetUserInfoHandler,
+    RequestListUserBlocksHandler,
+    RequestListUsersHandler,
+    RequestManageUserStatusHandler,
+    RequestRenameUserHandler,
+    RequestSetPasswdHandler,
+    RequestSetUserAvatarHandler,
+    RequestUnblockUserHandler,
 )
-
-from include.constants import NONCE_MIN_LENGTH
+from include.handlers.revision import (
+    RequestDeleteRevisionHandler,
+    RequestGetRevisionHandler,
+    RequestListRevisionsHandler,
+    RequestSetDocumentRevisionHandler,
+)
+from include.handlers.search import RequestSearchHandler
+from include.handlers.two_factor import (
+    RequestCancel2FASetupHandler,
+    RequestDisable2FAHandler,
+    RequestGet2FAStatusHandler,
+    RequestSetup2FAHandler,
+    RequestValidate2FAHandler,
+)
 from include.nonce_store import nonce_store
-from include.shared import lockdown_enabled, clients, clients_lock
+from include.shared import clients, clients_lock, lockdown_enabled
+from include.system.ext_manager import pm
+from include.util.address import get_client_ip
+from include.util.audit import log_audit
 from include.util.cert import get_client_cert_subject
 
 logger = log.bind(name="connection_handler")

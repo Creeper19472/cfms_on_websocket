@@ -4,9 +4,7 @@ import os
 import secrets
 import tomllib
 
-from tomlkit import dumps
-from tomlkit import parse
-
+from tomlkit import dumps, parse
 
 # include/conf_loader.py
 

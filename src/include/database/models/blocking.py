@@ -1,10 +1,10 @@
 import secrets
 from typing import TYPE_CHECKING
+
 from sqlalchemy import VARCHAR, Float, ForeignKey, Integer
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from include.database.handler import Base
-from sqlalchemy.orm import Mapped
-from sqlalchemy.orm import mapped_column
-from sqlalchemy.orm import relationship
 
 if TYPE_CHECKING:
     from include.database.models.classic import User

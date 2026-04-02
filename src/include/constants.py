@@ -18,8 +18,8 @@ __all__ = [
 ]
 
 from pathlib import Path
-from include.classes.version import Version
 
+from include.classes.version import Version
 
 CORE_VERSION = Version("0.2.0.260401_alpha")
 PROTOCOL_VERSION = 11

@@ -1,23 +1,23 @@
 import secrets
 import time
-from typing import Optional
 from itertools import batched
+from typing import Optional
 
 import jsonschema
 
+import include.system.messages as smsg
 from include.classes.connection_handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
 from include.classes.enum.status import EntityStatus
 from include.classes.request_handler import RequestHandler
 from include.conf_loader import global_config
-from include.constants import ROOT_DIRECTORY_ID, QUERY_CHUNK_SIZE
+from include.constants import QUERY_CHUNK_SIZE, ROOT_DIRECTORY_ID
 from include.database.handler import Session
 from include.database.models.classic import User
-from include.database.models.entity import Folder, Document
+from include.database.models.entity import Document, Folder
 from include.util.bulk.purge import purge_documents_bulk
-from include.util.rule.applying import apply_access_rules
 from include.util.recursive.subtree import fetch_subtree_for_deletion
-import include.system.messages as smsg
+from include.util.rule.applying import apply_access_rules
 
 
 class RequestListDirectoryHandler(RequestHandler):
@@ -238,7 +238,7 @@ class RequestGetDirectoryAccessRulesHandler(RequestHandler):
 
             if (
                 not directory.check_access_requirements(user, access_type="read")
-                or not Permissions.VIEW_ACCESS_RULES in user.all_permissions
+                or Permissions.VIEW_ACCESS_RULES not in user.all_permissions
             ):
                 handler.conclude_request(403, {}, "Permission denied")
                 return 403, directory_id, handler.username
@@ -647,7 +647,6 @@ class RequestRenameDirectoryHandler(RequestHandler):
 
 
 class RequestMoveDirectoryHandler(RequestHandler):
-
     data_schema = {
         "type": "object",
         "properties": {
@@ -838,7 +837,7 @@ class RequestSetDirectoryRulesHandler(RequestHandler):
                 handler.conclude_request(404, {}, "Directory not found")
                 return 404, directory_id, handler.username
 
-            if not Permissions.SET_ACCESS_RULES in user.all_permissions:
+            if Permissions.SET_ACCESS_RULES not in user.all_permissions:
                 handler.conclude_request(403, {}, "Access denied to set access rules")
                 return 403, directory_id, handler.username
 

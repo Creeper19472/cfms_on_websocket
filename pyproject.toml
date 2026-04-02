@@ -41,5 +41,19 @@ skip = ["src/alembic", "src/certtools"]
 
 [tool.ruff]
 line-length = 88
-lint.extend-select = ["I"]
 exclude = ["src/alembic", "src/certtools"]
+
+[tool.ruff.lint]
+ignore = [
+    "E711", # allow `== None`
+    "E712", # allow `== True`
+    # "E402",
+]
+extend-select = ["I"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401", "F403"]  # allow `import *` in `__init__.py` for better package structuring
+"src/include/database/models/*" = ["E711", "E712"] # allow `== None` and `== True` in database models
+
+[tool.ruff.lint.isort]
+known-first-party = ["include"]

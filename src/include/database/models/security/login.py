@@ -1,9 +1,9 @@
+from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Column, String, Integer, DateTime, func
-from datetime import datetime, timedelta
-
+from sqlalchemy import DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
+
 from include.database.handler import Base
 
 

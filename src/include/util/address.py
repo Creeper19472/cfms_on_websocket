@@ -1,4 +1,5 @@
 from websockets.sync.server import ServerConnection
+
 from include.constants import TRUSTED_PROXY_IPS
 
 

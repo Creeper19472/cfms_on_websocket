@@ -21,33 +21,34 @@ Constants:
 """
 
 import os
-import sys
 import socket
 import ssl
-from websockets.sync.server import serve
+import sys
+
 from loguru import logger
+from websockets.sync.server import serve
 
 from include.classes.enum.permissions import Permissions
-from include.handlers.debugging.throw import RequestThrowExceptionHandler
-from include.util.entrance import global_process_request
+from include.classes.misc.guard import LoginGuard
 from include.conf_loader import global_config
 from include.connection_handler import (
-    handle_connection,
     available_functions,
+    handle_connection,
     whitelisted_functions,
 )
-from include.constants import CORE_VERSION
-from include.constants import DEFAULT_SSL_CERT_VALIDITY_DAYS
-from include.constants import ROOT_DIRECTORY_ID
-from include.constants import ROOT_ABSPATH
-from include.database.handler import Base
-from include.database.handler import Session
-from include.database.handler import engine
+from include.constants import (
+    CORE_VERSION,
+    DEFAULT_SSL_CERT_VALIDITY_DAYS,
+    ROOT_ABSPATH,
+    ROOT_DIRECTORY_ID,
+)
+from include.database.handler import Base, Session, engine
 from include.database.models.entity import Document, DocumentRevision, Folder
 from include.database.models.file import File
-from include.util.rule.applying import set_access_rules
-from include.classes.misc.guard import LoginGuard
+from include.handlers.debugging.throw import RequestThrowExceptionHandler
 from include.system.ext_manager import load_extensions_from_directory, pm
+from include.util.entrance import global_process_request
+from include.util.rule.applying import set_access_rules
 
 # fix
 os.makedirs(ROOT_ABSPATH / "content" / "logs", exist_ok=True)
@@ -176,9 +177,10 @@ def server_init():
         session.add(init_document_revision)
         session.commit()
 
-    from include.util.user import create_user
     import secrets
     import string
+
+    from include.util.user import create_user
 
     alphabet = string.ascii_letters + string.digits + "!@#$%^&*()-_=+[]{};:,.<>?/"
     password = "".join(secrets.choice(alphabet) for _ in range(16))
@@ -208,19 +210,19 @@ def server_init():
 
     os.makedirs(ROOT_ABSPATH / "content", exist_ok=True)
 
+    import datetime
+
     from cryptography import x509
-    from cryptography.x509.oid import NameOID
+    from cryptography.hazmat.backends import default_backend
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import ec
-    from cryptography.hazmat.backends import default_backend
-    import datetime
+    from cryptography.x509.oid import NameOID
 
     cert_path = global_config["server"]["ssl_certfile"]
     key_path = global_config["server"]["ssl_keyfile"]
 
     # 使用python包 cryptography 生成自签名证书和私钥
     if not (os.path.exists(cert_path) and os.path.exists(key_path)):
-
         # 生成 ECC 私钥
         private_key = ec.generate_private_key(ec.SECP256R1(), default_backend())
 

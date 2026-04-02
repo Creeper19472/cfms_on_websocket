@@ -1,28 +1,24 @@
-from typing import Iterable, List, Literal, Union, cast
-from typing import Optional
-
 import secrets
-from sqlalchemy import VARCHAR, Boolean, Float, ForeignKey, Integer, func
+import time
+from itertools import batched
+from typing import Iterable, List, Literal, Optional, Union, cast
+
+from sqlalchemy import JSON, VARCHAR, Boolean, Float, ForeignKey, Integer, func
+from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
+from sqlalchemy.orm.session import object_session
+
+from include.classes.access_rule import AccessRuleBase
 from include.classes.enum.status import DocumentRevisionStatus, EntityStatus
 from include.classes.exceptions import NoActiveRevisionsError
 from include.conf_loader import global_config
 from include.constants import AVAILABLE_ACCESS_TYPES, MAX_PARAM_SIZE, QUERY_CHUNK_SIZE
 from include.database.handler import Base
-from include.classes.access_rule import AccessRuleBase
-from sqlalchemy.orm import Mapped, Session
-from sqlalchemy.orm import mapped_column
-from sqlalchemy.orm import relationship
-import time
-from sqlalchemy.orm.session import object_session
-from sqlalchemy import JSON
-from itertools import batched
-
+from include.database.models.classic import User
 from include.database.models.file import (
     File,
     FileTask,
     _queue_deferred_file_deletion,
 )
-from include.database.models.classic import User
 from include.util.fetch.fetch import batch_prefetch_granted_ids, prefetch_user_blocks
 
 
@@ -240,9 +236,9 @@ class BaseObject(Base):
         ):
             # check all parent folders' access rules
             parent = None
-            if type(self) == Document:
+            if isinstance(self, Document):
                 parent = self.folder
-            elif type(self) == Folder:
+            elif isinstance(self, Folder):
                 parent = self.parent
 
             visited_folder_ids = set()

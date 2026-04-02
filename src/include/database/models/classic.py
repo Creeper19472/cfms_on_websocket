@@ -1,23 +1,26 @@
-from functools import cached_property
 import hashlib
-import jwt
 import os
-import orjson
-import pyotp
 import secrets
 import time
-from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHashError
-from typing import TYPE_CHECKING, cast
-from typing import List
-from typing import Optional
-from typing import Set
+from functools import cached_property
+from typing import TYPE_CHECKING, List, Optional, Set, cast
 
-from sqlalchemy import VARCHAR, Boolean, Enum, Float, ForeignKey, Integer, JSON, Text
-from sqlalchemy import event
-from sqlalchemy.orm import Mapped
-from sqlalchemy.orm import mapped_column
-from sqlalchemy.orm import relationship
+import jwt
+import orjson
+import pyotp
+from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
+from sqlalchemy import (
+    JSON,
+    VARCHAR,
+    Boolean,
+    Float,
+    ForeignKey,
+    Integer,
+    Text,
+    event,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.orm.session import object_session
 
 from include.classes.auth import Token

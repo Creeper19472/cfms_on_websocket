@@ -60,7 +60,7 @@ def _add_filtering_criteria(execute_state: ORMExecuteState) -> None:
         and not execute_state.is_column_load
         and not execute_state.execution_options.get("include_deleted", False)
     ):
-        from include.database.models.entity import Folder, Document
+        from include.database.models.entity import Document, Folder
 
         execute_state.statement = execute_state.statement.options(
             with_loader_criteria(

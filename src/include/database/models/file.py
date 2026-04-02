@@ -2,15 +2,12 @@ import os
 import secrets
 import sys
 import time
-from typing import List
-from typing import Optional
+from typing import List, Optional
 
-from sqlalchemy import VARCHAR, Float, ForeignKey, Integer, Text, Boolean, event
-from sqlalchemy.orm import Mapped, Session
-from sqlalchemy.orm import mapped_column
-from sqlalchemy.orm import relationship
-from sqlalchemy.orm.session import object_session
 from loguru import logger as log
+from sqlalchemy import VARCHAR, Boolean, Float, ForeignKey, Integer, Text, event
+from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
+from sqlalchemy.orm.session import object_session
 
 from include.database.handler import Base
 
@@ -88,7 +85,8 @@ class File(Base):
     @property
     def writeable(self):
         if sys.platform == "win32":
-            import win32file, pywintypes
+            import pywintypes
+            import win32file
 
             hFile = None
             try:

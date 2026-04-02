@@ -8,7 +8,7 @@ with permission filtering, result limiting, and sorting capabilities.
 __all__ = ["RequestSearchHandler"]
 
 import time
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 from include.classes.connection_handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
@@ -17,12 +17,12 @@ from include.conf_loader import global_config
 from include.database.handler import Session
 from include.database.models.classic import User
 from include.database.models.entity import NoActiveRevisionsError
+from include.util.fetch.fetch import batch_prefetch_granted_ids, prefetch_user_blocks
 from include.util.recursive.ancestors import (
     search_documents_with_access,
     search_folders_with_access,
 )
 from include.util.recursive.check import check_access_for_object
-from include.util.fetch.fetch import prefetch_user_blocks, batch_prefetch_granted_ids
 
 
 class RequestSearchHandler(RequestHandler):

@@ -1,18 +1,19 @@
 import re
 from functools import total_ordering
 
+
 @total_ordering
 class Version:
     def __init__(self, version_str):
         self.original = version_str
         # Match: major.minor.patch[.build][_type][type_num]
         version_pattern = (
-            r"(\d+)"              # major
-            r"\.(\d+)"            # minor
-            r"\.(\d+)"            # patch
-            r"(?:\.(\d+))?"       # optional .build
-            r"(?:_([a-zA-Z]+)"    # optional _type
-            r"(\d*)?)?"           # optional type_num
+            r"(\d+)"  # major
+            r"\.(\d+)"  # minor
+            r"\.(\d+)"  # patch
+            r"(?:\.(\d+))?"  # optional .build
+            r"(?:_([a-zA-Z]+)"  # optional _type
+            r"(\d*)?)?"  # optional type_num
         )
         # 版本号正则说明：
         # (\d+)         匹配主版本号
@@ -32,10 +33,8 @@ class Version:
 
         # type_order 字典用于定义版本类型的优先级，数值越小优先级越高。
         # 优先级分配如下：release 和未指定类型优先级最高（0），
-        self.type_order = {
-            "release": 0, "": 0, "rc": 1, "beta": 2, "alpha": 3
-        }
-    
+        self.type_order = {"release": 0, "": 0, "rc": 1, "beta": 2, "alpha": 3}
+
     def _cmp_tuple(self):
         return (
             self.major,
@@ -43,7 +42,7 @@ class Version:
             self.patch,
             self.build,
             self.type_order.get(self.type.lower(), 0),
-            self.type_num
+            self.type_num,
         )
 
     def __eq__(self, other):

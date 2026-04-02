@@ -1,5 +1,6 @@
 __all__ = ["RequestGrantAccessHandler", "RequestRevokeAccessHandler"]
 
+import include.system.messages as smsg
 from include.classes.connection_handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
 from include.classes.request_handler import RequestHandler
@@ -13,14 +14,12 @@ from include.database.models.entity import (
     Document,
     Folder,
 )
-import include.system.messages as smsg
 
 ENTITY_TYPE_MAPPING = {"user": User, "group": UserGroup}
 TARGET_TYPE_MAPPING = {"document": Document, "directory": Folder}
 
 
 class RequestGrantAccessHandler(RequestHandler):
-
     data_schema = {
         "type": "object",
         "properties": {
@@ -69,7 +68,6 @@ class RequestGrantAccessHandler(RequestHandler):
         end_time: float | None = handler.data.get("end_time")
 
         with Session() as session:
-
             if end_time and not start_time <= end_time:
                 handler.conclude_request(
                     400, {}, "The start time should be before the end time"
@@ -112,7 +110,6 @@ class RequestGrantAccessHandler(RequestHandler):
                 )
 
             for access_type in access_types:
-
                 if not target.check_access_requirements(operator, access_type):
                     handler.conclude_request(403, {}, "access denied")
                     return (
@@ -140,7 +137,6 @@ class RequestGrantAccessHandler(RequestHandler):
 
 
 class RequestViewAccessEntriesHandler(RequestHandler):
-
     data_schema = {
         "type": "object",
         "properties": {
@@ -165,7 +161,6 @@ class RequestViewAccessEntriesHandler(RequestHandler):
         object_identifier: str = handler.data["object_identifier"]
 
         with Session() as session:
-
             operator = session.get(User, handler.username)
             assert operator is not None
 
@@ -220,7 +215,6 @@ class RequestViewAccessEntriesHandler(RequestHandler):
 
 
 class RequestRevokeAccessHandler(RequestHandler):
-
     data_schema = {
         "type": "object",
         "properties": {
@@ -239,7 +233,6 @@ class RequestRevokeAccessHandler(RequestHandler):
         entry_id: int = handler.data["entry_id"]
 
         with Session() as session:
-
             operator = session.get(User, handler.username)
             assert operator is not None
 
