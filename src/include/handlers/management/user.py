@@ -199,20 +199,12 @@ class RequestDeleteUserHandler(RequestHandler):
         "additionalProperties": False,
     }
 
+    require_auth = True
+
     def handle(self, handler: ConnectionHandler):
 
         with Session() as session:
             this_user = User.get_existing(session, handler.username)
-
-            if not this_user or not this_user.is_token_valid(handler.token):
-                handler.conclude_request(
-                    **{
-                        "code": 403,
-                        "message": "Invalid user or token",
-                        "data": {},
-                    }
-                )
-                return
 
             if Permissions.DELETE_USER not in this_user.all_permissions:
                 handler.conclude_request(
