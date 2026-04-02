@@ -261,8 +261,6 @@ def handle_connection(websocket: websockets.sync.server.ServerConnection):
 
             threading.Thread(target=handle_request, args=(stream,), daemon=True).start()
 
-    except Exception as e:
-        logger.exception(f"Error handling WebSocket connection: {e}")
     finally:
         multiplexer.close()
         websocket.close()
@@ -324,7 +322,7 @@ def handle_request(stream: Stream):
     authenticated = False
     if this_handler.username and this_handler.token:
         with Session() as session:
-            user = session.get(User, this_handler.username)
+            user = User.get_existing(session, this_handler.username)
             if user and user.is_token_valid(this_handler.token):
                 authenticated = True
                 user_permissions = user.all_permissions
@@ -405,7 +403,8 @@ def handle_request(stream: Stream):
             websockets.exceptions.ConnectionClosedOK,
             websockets.exceptions.ConnectionClosedError,
         ):
-            raise
+            logger.info("WebSocket connection closed during request handling")
+            return
         except Exception as e:
             this_handler.report_error(e)
             return
