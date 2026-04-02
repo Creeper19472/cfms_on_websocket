@@ -95,7 +95,6 @@ class RequestGetDocumentInfoHandler(RequestHandler):
 
         with Session() as session:
             user = User.get_existing(session, handler.username)
-            assert user is not None
 
             document = session.get(Document, document_id)
 
@@ -213,7 +212,6 @@ class RequestGetDocumentHandler(RequestHandler):
         with Session() as session:
             user = User.get_existing(session, handler.username)
             document = session.get(Document, document_id)
-            assert user is not None
 
             if not document:
                 handler.conclude_request(404, {}, "Document not found")
@@ -272,7 +270,6 @@ class RequestCreateDocumentHandler(RequestHandler):
 
         with Session() as session:
             user = User.get_existing(session, handler.username)
-            assert user is not None
 
             if Permissions.CREATE_DOCUMENT not in user.all_permissions:
                 handler.conclude_request(403, {}, "Permission denied")
@@ -518,7 +515,6 @@ class RequestDeleteDocumentHandler(RequestHandler):
         with Session() as session:
             user = User.get_existing(session, handler.username)
             document = session.get(Document, document_id)
-            assert user is not None
 
             if not document:
                 handler.conclude_request(404, {}, "Document not found")
@@ -787,7 +783,6 @@ class RequestSetDocumentRulesHandler(RequestHandler):
 
         with Session() as session:
             user = User.get_existing(session, handler.username)
-            assert user is not None
 
             document = session.get(Document, document_id)
 
@@ -848,7 +843,6 @@ class RequestMoveDocumentHandler(RequestHandler):
 
         with Session() as session:
             user = User.get_existing(session, handler.username)
-            assert user is not None
 
             if Permissions.MOVE not in user.all_permissions:
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MOVE_DOCUMENT)
@@ -1019,7 +1013,6 @@ class RequestPurgeDocumentHandler(RequestHandler):
         doc_id = handler.data["document_id"]
         with Session() as session:
             user = User.get_existing(session, handler.username)
-            assert user is not None
 
             if Permissions.PURGE not in user.all_permissions:
                 handler.conclude_request(403, {}, "No permission to permanently delete")
@@ -1079,7 +1072,6 @@ class RequestRestoreDocumentHandler(RequestHandler):
 
         with Session() as session:
             user = User.get_existing(session, handler.username)
-            assert user is not None
 
             if Permissions.RESTORE not in user.all_permissions:
                 handler.conclude_request(403, {}, smsg.PERMISSION_DENIED)

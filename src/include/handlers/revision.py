@@ -31,7 +31,6 @@ class RequestListRevisionsHandler(RequestHandler):
                 handler.conclude_request(404, {}, "Document not found")
                 return 404, document_id, handler.username
 
-            assert user is not None  # due to require_auth being True
             if (
                 Permissions.LIST_REVISIONS not in user.all_permissions
                 or not document.check_access_requirements(user, "read")
@@ -78,7 +77,6 @@ class RequestGetRevisionHandler(RequestHandler):
                 handler.conclude_request(404, {}, "Revision not found")
                 return 404, revision_id, handler.username
 
-            assert user is not None  # due to require_auth being True
             if (
                 Permissions.VIEW_REVISION not in user.all_permissions
                 or not revision.document.check_access_requirements(user, "read")
@@ -122,7 +120,6 @@ class RequestSetDocumentRevisionHandler(RequestHandler):
                 handler.conclude_request(404, {}, "Document or Revision not found")
                 return 404, document_id, handler.username
 
-            assert user is not None  # due to require_auth being True
             if (
                 Permissions.SET_CURRENT_REVISION not in user.all_permissions
                 or not document.check_access_requirements(user, "write")
@@ -170,7 +167,6 @@ class RequestDeleteRevisionHandler(RequestHandler):
                 handler.conclude_request(400, {}, "Cannot delete the current revision")
                 return 400, revision_id, handler.username
 
-            assert user is not None
             if (
                 Permissions.DELETE_REVISION not in user.all_permissions
                 or document.check_access_requirements(user, "write") is False

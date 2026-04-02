@@ -14,7 +14,7 @@ class RequestThrowExceptionHandler(RequestHandler):
 
         with Session() as session:
             user = User.get_existing(session, handler.username)
-            assert user is not None
+
             if "debugging" not in user.all_permissions:
                 handler.conclude_request(403, {}, "User lacks debugging permission.")
                 return 403, None, handler.username

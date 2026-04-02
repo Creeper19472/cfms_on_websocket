@@ -281,8 +281,6 @@ class RequestGet2FAStatusHandler(RequestHandler):
                 )
                 return
 
-            assert user is not None
-
             if (
                 target_username != handler.username
                 and Permissions.MANAGE_2FA not in user.all_permissions

@@ -169,8 +169,8 @@ class RequestGetDirectoryInfoHandler(RequestHandler):
             return
 
         with Session() as session:
+            # require_auth ensures this
             user = User.get_existing(session, handler.username)
-            assert user is not None  # require_auth ensures this
 
             directory = session.get(Folder, directory_id)
 
@@ -686,7 +686,6 @@ class RequestMoveDirectoryHandler(RequestHandler):
 
         with Session() as session:
             user = User.get_existing(session, handler.username)
-            assert user is not None  # require_auth ensures this
 
             if Permissions.MOVE not in user.all_permissions:
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MOVE_DIRECTORY)
@@ -849,7 +848,6 @@ class RequestSetDirectoryRulesHandler(RequestHandler):
 
         with Session() as session:
             user = User.get_existing(session, handler.username)
-            assert user is not None  # require_auth ensures this
 
             directory = session.get(Folder, directory_id)
 
@@ -913,7 +911,6 @@ class RequestPurgeDirectoryHandler(RequestHandler):
 
         with Session() as session:
             user = User.get_existing(session, handler.username)
-            assert user is not None
 
             if Permissions.PURGE not in user.all_permissions:
                 handler.conclude_request(
@@ -1014,7 +1011,6 @@ class RequestRestoreDirectoryHandler(RequestHandler):
 
         with Session() as session:
             user = User.get_existing(session, handler.username)
-            assert user is not None
 
             if Permissions.RESTORE not in user.all_permissions:
                 handler.conclude_request(403, {}, "No permission to restore data")
@@ -1143,7 +1139,6 @@ class RequestListDeletedItemsHandler(RequestHandler):
 
         with Session() as session:
             user = User.get_existing(session, handler.username)
-            assert user is not None
 
             if Permissions.LIST_DELETED_ITEMS not in user.all_permissions:
                 handler.conclude_request(403, {}, smsg.PERMISSION_DENIED)

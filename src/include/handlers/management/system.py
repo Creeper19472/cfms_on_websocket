@@ -28,7 +28,6 @@ class RequestLockdownHandler(RequestHandler):
 
         with Session() as session:
             user = User.get_existing(session, handler.username)
-            assert user is not None
 
             if Permissions.APPLY_LOCKDOWN not in user.all_permissions:
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
@@ -82,7 +81,6 @@ class RequestViewAuditLogsHandler(RequestHandler):
 
         with Session() as session:
             user = User.get_existing(session, handler.username)
-            assert user is not None
 
             if Permissions.VIEW_AUDIT_LOGS not in user.all_permissions:
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED)

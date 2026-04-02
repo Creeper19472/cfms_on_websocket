@@ -75,7 +75,6 @@ class RequestSearchHandler(RequestHandler):
 
         with Session() as session:
             user = User.get_existing(session, handler.username)
-            assert user is not None
 
             now = time.time()
 

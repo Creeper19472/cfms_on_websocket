@@ -25,7 +25,6 @@ class RequestListGroupsHandler(RequestHandler):
 
         with Session() as session:
             user = User.get_existing(session, handler.username)  # 执行操作的用户
-            assert user is not None
 
             if Permissions.LIST_GROUPS not in user.all_permissions:
                 handler.conclude_request(
@@ -91,7 +90,6 @@ class RequestCreateGroupHandler(RequestHandler):
 
         with Session() as session:
             user = User.get_existing(session, handler.username)
-            assert user is not None
 
             # currently handle_create_group() will not judge whether the requesting
             # user is eligible to apply the given permissions for the new group.
@@ -273,7 +271,6 @@ class RequestGetGroupInfoHandler(RequestHandler):
 
         with Session() as session:
             user = User.get_existing(session, handler.username)  # 执行操作的用户
-            assert user is not None
 
             if not handler.data["group_name"]:
                 handler.conclude_request(
@@ -344,7 +341,6 @@ class RequestChangeGroupPermissionsHandler(RequestHandler):
 
         with Session() as session:
             user = User.get_existing(session, handler.username)
-            assert user is not None
 
             if not handler.data["group_name"]:
                 handler.conclude_request(
