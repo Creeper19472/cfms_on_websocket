@@ -42,6 +42,18 @@ source .venv/bin/activate
 python main.py # DO NOT use `-O`!
 ```
 
+## Development
+
+Consider using pre-commit to provide an automated code standardization experience.
+
+```bash
+# Install development dependencies
+uv sync --dev
+
+# Install pre-commit hooks
+uv run pre-commit install
+```
+
 ## Testing
 
 This repository includes an automated test suite built with pytest. Note that

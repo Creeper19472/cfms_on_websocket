@@ -27,4 +27,19 @@ dev = [
     "pytest-asyncio>=0.21.0",
     "pytest-timeout>=2.4.0",
     "alembic>=1.18.4",
+    "pre-commit>=4.5.1",
 ]
+
+[tool.black]
+line-length = 88
+exclude = '''(?x)(^|/|\\)src/alembic(/|$)'''
+
+[tool.isort]
+profile = "black"
+line_length = 88
+skip = ["src/alembic", "src/certtools"]
+
+[tool.ruff]
+line-length = 88
+extend-select = ["I"]
+exclude = ["src/alembic", "src/certtools"]
