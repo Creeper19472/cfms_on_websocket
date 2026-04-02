@@ -227,10 +227,6 @@ class RequestGetDirectoryAccessRulesHandler(RequestHandler):
             user = User.get_existing(session, handler.username)
             directory = session.get(Folder, directory_id)
 
-            if user is None or not user.is_token_valid(handler.token):
-                handler.conclude_request(403, {}, "Invalid user or token")
-                return 401, directory_id
-
             if not directory:
                 handler.conclude_request(404, {}, "Document not found")
                 return 404, directory_id, handler.username

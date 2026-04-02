@@ -427,10 +427,6 @@ class RequestBlockUserHandler(RequestHandler):
         with Session() as session:
             this_user = User.get_existing(session, handler.username)
 
-            if not this_user or not this_user.is_token_valid(handler.token):
-                handler.conclude_request(401, {}, "Invaild user or token")
-                return 401, target_username
-
             if Permissions.BLOCK not in this_user.all_permissions:
                 handler.conclude_request(
                     403, {}, "You do not have permission to block users"

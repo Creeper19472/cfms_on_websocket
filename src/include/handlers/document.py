@@ -161,10 +161,6 @@ class RequestGetDocumentAccessRulesHandler(RequestHandler):
             user = User.get_existing(session, handler.username)
             document = session.get(Document, document_id)
 
-            if user is None or not user.is_token_valid(handler.token):
-                handler.conclude_request(403, {}, "Invalid user or token")
-                return 401, document_id
-
             if not document:
                 handler.conclude_request(404, {}, "Document not found")
                 return 404, document_id, handler.username
