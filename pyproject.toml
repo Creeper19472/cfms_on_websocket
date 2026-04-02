@@ -41,5 +41,5 @@ skip = ["src/alembic", "src/certtools"]
 
 [tool.ruff]
 line-length = 88
-extend-select = ["I"]
+lint.extend-select = ["I"]
 exclude = ["src/alembic", "src/certtools"]
