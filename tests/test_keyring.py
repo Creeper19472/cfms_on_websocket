@@ -3,6 +3,7 @@ Tests for keyring operations.
 """
 
 import pytest
+
 from tests.test_client import CFMSTestClient
 
 
@@ -103,13 +104,17 @@ class TestKeyringOperations:
 
         list_resp = await authenticated_client.list_keyrings()
         keys = {k["id"]: k for k in list_resp["data"]["keys"]}
-        assert keys[key_id]["is_preference_dek"] == True, "Key should be marked as preference DEK"
+        assert keys[key_id]["is_preference_dek"] == True, (
+            "Key should be marked as preference DEK"
+        )
 
         # Cleanup
         await authenticated_client.delete_keyring(key_id)
 
     @pytest.mark.asyncio
-    async def test_set_preference_dek_replaces_previous(self, authenticated_client: CFMSTestClient):
+    async def test_set_preference_dek_replaces_previous(
+        self, authenticated_client: CFMSTestClient
+    ):
         """Setting a new preference DEK must replace the previous one."""
         first_resp = await authenticated_client.upload_keyring(
             key_content="first_dek",
@@ -130,8 +135,12 @@ class TestKeyringOperations:
         list_resp = await authenticated_client.list_keyrings()
         keys = {k["id"]: k for k in list_resp["data"]["keys"]}
 
-        assert keys[first_id]["is_preference_dek"] == False, "Previous preference DEK should be demoted"
-        assert keys[second_id]["is_preference_dek"] == True, "New preference DEK should be set"
+        assert keys[first_id]["is_preference_dek"] == False, (
+            "Previous preference DEK should be demoted"
+        )
+        assert keys[second_id]["is_preference_dek"] == True, (
+            "New preference DEK should be set"
+        )
 
         # Cleanup
         await authenticated_client.delete_keyring(first_id)
@@ -161,7 +170,9 @@ class TestKeyringOperations:
         )
         assert login_resp.get("code") == 200
         data = login_resp.get("data", {})
-        assert "preference_dek" in data, "Login response must include preference_dek when set"
+        assert "preference_dek" in data, (
+            "Login response must include preference_dek when set"
+        )
         assert data["preference_dek"]["key_id"] == key_id
         assert data["preference_dek"]["key_content"] == "login_dek_content"
 

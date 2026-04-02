@@ -571,7 +571,11 @@ class RequestRenameDocumentHandler(RequestHandler):
 
             if not document:
                 handler.conclude_request(
-                    **{"code": 404, "message": "Document not found", "data": {}}
+                    **{
+                        "code": 404,
+                        "message": "Document not found",
+                        "data": {},
+                    }
                 )
                 return 404, document_id, handler.username
             if (
@@ -579,7 +583,11 @@ class RequestRenameDocumentHandler(RequestHandler):
                 or not document.check_access_requirements(this_user, "write")
             ):
                 handler.conclude_request(
-                    **{"code": 403, "message": "Access denied", "data": {}}
+                    **{
+                        "code": 403,
+                        "message": "Access denied",
+                        "data": {},
+                    }
                 )
                 return 403, document_id, handler.username
 
@@ -769,7 +777,11 @@ class RequestSetDocumentRulesHandler(RequestHandler):
 
         if not handler.username:
             handler.conclude_request(
-                **{"code": 401, "message": "Authentication is required", "data": {}}
+                **{
+                    "code": 401,
+                    "message": "Authentication is required",
+                    "data": {},
+                }
             )
             return 401, document_id
 

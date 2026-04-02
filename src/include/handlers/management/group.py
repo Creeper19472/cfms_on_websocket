@@ -152,7 +152,11 @@ class RequestDeleteGroupHandler(RequestHandler):
 
             if not group_to_delete:
                 handler.conclude_request(
-                    **{"code": 404, "message": "Group does not exist", "data": {}}
+                    **{
+                        "code": 404,
+                        "message": "Group does not exist",
+                        "data": {},
+                    }
                 )
                 return 404, group_to_delete_name, handler.username
 
@@ -232,7 +236,11 @@ class RequestRenameGroupHandler(RequestHandler):
             group_to_rename = session.get(UserGroup, target_group_name)
             if not group_to_rename:
                 handler.conclude_request(
-                    **{"code": 400, "message": "Group does not exist", "data": {}}
+                    **{
+                        "code": 400,
+                        "message": "Group does not exist",
+                        "data": {},
+                    }
                 )
                 return
 
@@ -269,7 +277,11 @@ class RequestGetGroupInfoHandler(RequestHandler):
 
             if not handler.data["group_name"]:
                 handler.conclude_request(
-                    **{"code": 400, "message": "Group name is required", "data": {}}
+                    **{
+                        "code": 400,
+                        "message": "Group name is required",
+                        "data": {},
+                    }
                 )
                 return
 
@@ -286,7 +298,11 @@ class RequestGetGroupInfoHandler(RequestHandler):
             group = session.get(UserGroup, handler.data["group_name"])
             if not group:
                 handler.conclude_request(
-                    **{"code": 404, "message": "Group does not exist", "data": {}}
+                    **{
+                        "code": 404,
+                        "message": "Group does not exist",
+                        "data": {},
+                    }
                 )
                 return 404, handler.data["group_name"], handler.username
 
@@ -332,7 +348,11 @@ class RequestChangeGroupPermissionsHandler(RequestHandler):
 
             if not handler.data["group_name"]:
                 handler.conclude_request(
-                    **{"code": 400, "message": "Group name is required", "data": {}}
+                    **{
+                        "code": 400,
+                        "message": "Group name is required",
+                        "data": {},
+                    }
                 )
                 return
 
@@ -349,7 +369,11 @@ class RequestChangeGroupPermissionsHandler(RequestHandler):
             group = session.get(UserGroup, handler.data["group_name"])
             if not group:
                 handler.conclude_request(
-                    **{"code": 404, "message": "Group does not exist", "data": {}}
+                    **{
+                        "code": 404,
+                        "message": "Group does not exist",
+                        "data": {},
+                    }
                 )
                 return 404, handler.data["group_name"], handler.username
 

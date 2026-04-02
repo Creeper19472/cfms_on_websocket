@@ -12,6 +12,7 @@ import secrets
 import time
 
 import pytest
+
 from tests.test_client import CFMSTestClient
 
 
@@ -29,9 +30,7 @@ class TestReplayProtection:
         )
 
     @pytest.mark.asyncio
-    async def test_replay_attack_rejected(
-        self, authenticated_client: CFMSTestClient
-    ):
+    async def test_replay_attack_rejected(self, authenticated_client: CFMSTestClient):
         """Test that replaying an identical request (same nonce) is rejected."""
 
         nonce = secrets.token_hex(16)
@@ -55,9 +54,10 @@ class TestReplayProtection:
         assert response2["code"] == 1001, (
             f"Replayed request should be rejected with 1001, got: {response2}"
         )
-        assert "nonce" in response2["message"].lower() or "replay" in response2["message"].lower(), (
-            f"Error message should mention nonce or replay: {response2['message']}"
-        )
+        assert (
+            "nonce" in response2["message"].lower()
+            or "replay" in response2["message"].lower()
+        ), f"Error message should mention nonce or replay: {response2['message']}"
 
     @pytest.mark.asyncio
     async def test_expired_timestamp_rejected(
@@ -77,9 +77,10 @@ class TestReplayProtection:
         assert response["code"] == 1001, (
             f"Expired timestamp should be rejected with 1001, got: {response}"
         )
-        assert "timestamp" in response["message"].lower() or "time" in response["message"].lower(), (
-            f"Error message should mention timestamp: {response['message']}"
-        )
+        assert (
+            "timestamp" in response["message"].lower()
+            or "time" in response["message"].lower()
+        ), f"Error message should mention timestamp: {response['message']}"
 
     @pytest.mark.asyncio
     async def test_future_timestamp_rejected(
@@ -101,9 +102,7 @@ class TestReplayProtection:
         )
 
     @pytest.mark.asyncio
-    async def test_missing_nonce_rejected(
-        self, authenticated_client: CFMSTestClient
-    ):
+    async def test_missing_nonce_rejected(self, authenticated_client: CFMSTestClient):
         """Test that an authenticated request without a nonce is rejected."""
 
         request = {
@@ -120,9 +119,7 @@ class TestReplayProtection:
         )
 
     @pytest.mark.asyncio
-    async def test_short_nonce_rejected(
-        self, authenticated_client: CFMSTestClient
-    ):
+    async def test_short_nonce_rejected(self, authenticated_client: CFMSTestClient):
         """Test that a nonce that is too short is rejected."""
 
         request = {
@@ -171,9 +168,7 @@ class TestReplayProtection:
         assert response2["code"] == 200
 
     @pytest.mark.asyncio
-    async def test_unique_nonces_succeed(
-        self, authenticated_client: CFMSTestClient
-    ):
+    async def test_unique_nonces_succeed(self, authenticated_client: CFMSTestClient):
         """Test that multiple requests with unique nonces all succeed."""
         for _ in range(5):
             response = await authenticated_client.send_request("list_users", {})

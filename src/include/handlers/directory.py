@@ -436,13 +436,21 @@ class RequestDeleteDirectoryHandler(RequestHandler):
             this_user = session.get(User, handler.username)
             if not this_user or not this_user.is_token_valid(handler.token):
                 handler.conclude_request(
-                    **{"code": 403, "message": "Invalid user or token", "data": {}}
+                    **{
+                        "code": 403,
+                        "message": "Invalid user or token",
+                        "data": {},
+                    }
                 )
                 return 401, folder_id
             folder = session.get(Folder, folder_id)
             if not folder:
                 handler.conclude_request(
-                    **{"code": 404, "message": "Directory not found", "data": {}}
+                    **{
+                        "code": 404,
+                        "message": "Directory not found",
+                        "data": {},
+                    }
                 )
                 return 404, folder_id, handler.username
             if (
@@ -450,7 +458,11 @@ class RequestDeleteDirectoryHandler(RequestHandler):
                 or not folder.check_access_requirements(this_user, "write")
             ):
                 handler.conclude_request(
-                    **{"code": 403, "message": "Access denied", "data": {}}
+                    **{
+                        "code": 403,
+                        "message": "Access denied",
+                        "data": {},
+                    }
                 )
                 return 403, folder_id, handler.username
 
@@ -569,7 +581,11 @@ class RequestRenameDirectoryHandler(RequestHandler):
                 or not folder.check_access_requirements(this_user, "write")
             ):
                 handler.conclude_request(
-                    **{"code": 403, "message": "Access denied", "data": {}}
+                    **{
+                        "code": 403,
+                        "message": "Access denied",
+                        "data": {},
+                    }
                 )
                 return 403, folder_id, handler.username
 
@@ -823,7 +839,11 @@ class RequestSetDirectoryRulesHandler(RequestHandler):
 
         if not handler.username:
             handler.conclude_request(
-                **{"code": 401, "message": "Authentication is required", "data": {}}
+                **{
+                    "code": 401,
+                    "message": "Authentication is required",
+                    "data": {},
+                }
             )
             return 401, directory_id
 

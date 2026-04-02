@@ -208,7 +208,11 @@ class RequestDeleteUserHandler(RequestHandler):
 
             if not this_user or not this_user.is_token_valid(handler.token):
                 handler.conclude_request(
-                    **{"code": 403, "message": "Invalid user or token", "data": {}}
+                    **{
+                        "code": 403,
+                        "message": "Invalid user or token",
+                        "data": {},
+                    }
                 )
                 return
 
@@ -225,20 +229,32 @@ class RequestDeleteUserHandler(RequestHandler):
             user_to_delete_username = handler.data["username"]
             if not user_to_delete_username:
                 handler.conclude_request(
-                    **{"code": 400, "message": "Username is required", "data": {}}
+                    **{
+                        "code": 400,
+                        "message": "Username is required",
+                        "data": {},
+                    }
                 )
                 return
 
             user_to_delete = session.get(User, user_to_delete_username)
             if not user_to_delete:
                 handler.conclude_request(
-                    **{"code": 404, "message": "User does not exist", "data": {}}
+                    **{
+                        "code": 404,
+                        "message": "User does not exist",
+                        "data": {},
+                    }
                 )
                 return
 
             if user_to_delete.username == this_user.username:
                 handler.conclude_request(
-                    **{"code": 400, "message": "Cannot delete yourself", "data": {}}
+                    **{
+                        "code": 400,
+                        "message": "Cannot delete yourself",
+                        "data": {},
+                    }
                 )
                 return
 
@@ -301,7 +317,11 @@ class RequestRenameUserHandler(RequestHandler):
 
             if not this_user or not this_user.is_token_valid(handler.token):
                 handler.conclude_request(
-                    **{"code": 403, "message": "Invalid user or token", "data": {}}
+                    **{
+                        "code": 403,
+                        "message": "Invalid user or token",
+                        "data": {},
+                    }
                 )
                 return
 
@@ -323,7 +343,11 @@ class RequestRenameUserHandler(RequestHandler):
             user_to_rename = session.get(User, target_username)
             if not user_to_rename:
                 handler.conclude_request(
-                    **{"code": 400, "message": "User does not exist", "data": {}}
+                    **{
+                        "code": 400,
+                        "message": "User does not exist",
+                        "data": {},
+                    }
                 )
                 return
 
@@ -578,7 +602,11 @@ class RequestGetUserInfoHandler(RequestHandler):
         user_to_get_username = handler.data["username"]
         if not user_to_get_username:
             handler.conclude_request(
-                **{"code": 400, "message": "Username is required", "data": {}}
+                **{
+                    "code": 400,
+                    "message": "Username is required",
+                    "data": {},
+                }
             )
             return
 
@@ -589,7 +617,11 @@ class RequestGetUserInfoHandler(RequestHandler):
             user_to_get = session.get(User, user_to_get_username)
             if not user_to_get:
                 handler.conclude_request(
-                    **{"code": 404, "message": "User does not exist", "data": {}}
+                    **{
+                        "code": 404,
+                        "message": "User does not exist",
+                        "data": {},
+                    }
                 )
                 return
 
@@ -617,7 +649,11 @@ class RequestGetUserInfoHandler(RequestHandler):
             }
 
             handler.conclude_request(
-                **{"code": 200, "message": "OK", "data": user_info}
+                **{
+                    "code": 200,
+                    "message": "OK",
+                    "data": user_info,
+                }
             )
 
 
@@ -645,7 +681,11 @@ class RequestGetUserAvatarHandler(RequestHandler):
         user_to_get_username = handler.data["username"]
         if not user_to_get_username:
             handler.conclude_request(
-                **{"code": 400, "message": "Username is required", "data": {}}
+                **{
+                    "code": 400,
+                    "message": "Username is required",
+                    "data": {},
+                }
             )
             return
 
@@ -657,7 +697,11 @@ class RequestGetUserAvatarHandler(RequestHandler):
             user_to_get = session.get(User, user_to_get_username)
             if not user_to_get:
                 handler.conclude_request(
-                    **{"code": 404, "message": "User does not exist", "data": {}}
+                    **{
+                        "code": 404,
+                        "message": "User does not exist",
+                        "data": {},
+                    }
                 )
                 return
 
@@ -790,14 +834,22 @@ class RequestChangeUserGroupsHandler(RequestHandler):
             user_to_change_username = handler.data["username"]
             if not user_to_change_username:
                 handler.conclude_request(
-                    **{"code": 400, "message": "Username is required", "data": {}}
+                    **{
+                        "code": 400,
+                        "message": "Username is required",
+                        "data": {},
+                    }
                 )
                 return
 
             user_to_change = session.get(User, user_to_change_username)
             if not user_to_change:
                 handler.conclude_request(
-                    **{"code": 404, "message": "User does not exist", "data": {}}
+                    **{
+                        "code": 404,
+                        "message": "User does not exist",
+                        "data": {},
+                    }
                 )
                 return
 
@@ -849,7 +901,11 @@ class RequestSetPasswdHandler(RequestHandler):
             user = session.get(User, target_username)
             if not user:
                 handler.conclude_request(
-                    **{"code": 401, "message": "Invalid credentials", "data": {}}
+                    **{
+                        "code": 401,
+                        "message": "Invalid credentials",
+                        "data": {},
+                    }
                 )
                 return
 
