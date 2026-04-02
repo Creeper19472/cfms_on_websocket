@@ -4,21 +4,22 @@ Test client for CFMS WebSocket Server.
 This module provides a reusable WebSocket client for testing the CFMS server.
 """
 
+import asyncio
 import hashlib
-import orjson
 import mmap
 import os
+import queue
 import secrets
 import ssl
-import asyncio
-import time
 import struct
-import queue
 import threading
+import time
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import Any, Dict, Optional
-from websockets.asyncio.client import connect, ClientConnection
+
+import orjson
+from websockets.asyncio.client import ClientConnection, connect
 
 HEADER_FORMAT = "!IB"
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
