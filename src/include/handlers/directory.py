@@ -51,7 +51,6 @@ class RequestListDirectoryHandler(RequestHandler):
 
         with Session() as session:
             this_user = User.get_existing(session, handler.username)
-            assert this_user is not None
 
             # Determine parent folder and fetch children/documents
             if not folder_id:
@@ -306,7 +305,6 @@ class RequestCreateDirectoryHandler(RequestHandler):
 
         with Session() as session:
             this_user = User.get_existing(session, handler.username)
-            assert this_user is not None  # require_auth ensures this
 
             if Permissions.CREATE_DIRECTORY not in this_user.all_permissions:
                 handler.conclude_request(
@@ -570,7 +568,6 @@ class RequestRenameDirectoryHandler(RequestHandler):
 
         with Session() as session:
             this_user = User.get_existing(session, handler.username)
-            assert this_user is not None  # require_auth ensures this
 
             folder = session.get(Folder, folder_id)
             if not folder:

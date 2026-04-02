@@ -62,7 +62,6 @@ class RequestListUsersHandler(RequestHandler):
     def handle(self, handler: ConnectionHandler):
         with Session() as session:
             this_user = User.get_existing(session, handler.username)
-            assert this_user is not None
 
             if Permissions.LIST_USERS not in this_user.all_permissions:
                 handler.conclude_request(
@@ -142,7 +141,6 @@ class RequestCreateUserHandler(RequestHandler):
 
         with Session() as session:
             this_user = User.get_existing(session, handler.username)
-            assert this_user is not None
 
             # currently handle_create_user() will not judge whether the requesting
             # user is eligible to apply the given permissions for the new user.
@@ -612,7 +610,6 @@ class RequestGetUserInfoHandler(RequestHandler):
 
         with Session() as session:
             this_user = User.get_existing(session, handler.username)
-            assert this_user is not None
 
             user_to_get = session.get(User, user_to_get_username)
             if not user_to_get:
@@ -692,7 +689,6 @@ class RequestGetUserAvatarHandler(RequestHandler):
         with Session() as session:
             # when require_auth is True, user authentication has been verified
             this_user = User.get_existing(session, handler.username)
-            assert this_user is not None
 
             user_to_get = session.get(User, user_to_get_username)
             if not user_to_get:
@@ -758,7 +754,6 @@ class RequestSetUserAvatarHandler(RequestHandler):
 
         with Session() as session:
             this_user = User.get_existing(session, handler.username)
-            assert this_user is not None
 
             if (
                 target_username != this_user.username
@@ -819,7 +814,6 @@ class RequestChangeUserGroupsHandler(RequestHandler):
 
         with Session() as session:
             this_user = User.get_existing(session, handler.username)
-            assert this_user is not None
 
             if Permissions.CHANGE_USER_GROUPS not in this_user.all_permissions:
                 handler.conclude_request(
@@ -1062,7 +1056,6 @@ class RequestManageUserStatusHandler(RequestHandler):
 
         with Session() as session:
             this_user = User.get_existing(session, handler.username)
-            assert this_user is not None
 
             if Permissions.MANAGE_USER_STATUS not in this_user.all_permissions:
                 handler.conclude_request(

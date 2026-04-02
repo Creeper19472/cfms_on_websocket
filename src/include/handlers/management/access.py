@@ -75,7 +75,6 @@ class RequestGrantAccessHandler(RequestHandler):
                 return 400, None, handler.data, handler.username
 
             operator = User.get_existing(session, handler.username)
-            assert operator is not None
 
             if Permissions.MANAGE_ACCESS not in operator.all_permissions:
                 handler.conclude_request(
@@ -162,7 +161,6 @@ class RequestViewAccessEntriesHandler(RequestHandler):
 
         with Session() as session:
             operator = User.get_existing(session, handler.username)
-            assert operator is not None
 
             if Permissions.VIEW_ACCESS_ENTRIES not in operator.all_permissions:
                 handler.conclude_request(
@@ -234,7 +232,6 @@ class RequestRevokeAccessHandler(RequestHandler):
 
         with Session() as session:
             operator = User.get_existing(session, handler.username)
-            assert operator is not None
 
             if Permissions.MANAGE_ACCESS not in operator.all_permissions:
                 handler.conclude_request(

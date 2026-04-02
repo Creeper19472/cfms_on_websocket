@@ -71,7 +71,6 @@ class RequestUploadUserKeyHandler(RequestHandler):
 
         with Session() as session:
             this_user = User.get_existing(session, handler.username)
-            assert this_user is not None
 
             # Determine which user's keyring to write to
             if target_username and target_username != handler.username:
@@ -135,7 +134,6 @@ class RequestGetUserKeyHandler(RequestHandler):
 
         with Session() as session:
             this_user = User.get_existing(session, handler.username)
-            assert this_user is not None
 
             key = session.get(UserKey, key_id)
             if not key:
@@ -195,7 +193,6 @@ class RequestDeleteUserKeyHandler(RequestHandler):
 
         with Session() as session:
             this_user = User.get_existing(session, handler.username)
-            assert this_user is not None
 
             key = session.get(UserKey, key_id)
             if not key:
@@ -254,7 +251,6 @@ class RequestSetPreferenceDEKHandler(RequestHandler):
 
         with Session() as session:
             this_user = User.get_existing(session, handler.username)
-            assert this_user is not None
 
             key = session.get(UserKey, key_id)
             if not key:
@@ -308,7 +304,6 @@ class RequestListUserKeysHandler(RequestHandler):
         with Session() as session:
             target_user = session.get(User, target_username)
             operator = User.get_existing(session, handler.username)
-            assert operator is not None
 
             if target_username != handler.username:
                 if Permissions.MANAGE_KEYRINGS not in operator.all_permissions:

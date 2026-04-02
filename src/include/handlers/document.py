@@ -444,7 +444,6 @@ class RequestUploadDocumentHandler(RequestHandler):
         with Session() as session:
             document = session.get(Document, document_id)
             this_user = User.get_existing(session, handler.username)
-            assert this_user is not None
 
             if document:
                 if not document.check_access_requirements(
@@ -563,7 +562,6 @@ class RequestRenameDocumentHandler(RequestHandler):
         with Session() as session:
             this_user = User.get_existing(session, handler.username)
             document = session.get(Document, document_id)
-            assert this_user is not None
 
             if not document:
                 handler.conclude_request(

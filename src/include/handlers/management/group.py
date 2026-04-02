@@ -133,7 +133,6 @@ class RequestDeleteGroupHandler(RequestHandler):
 
         with Session() as session:
             this_user = User.get_existing(session, handler.username)
-            assert this_user is not None
 
             if Permissions.DELETE_GROUP not in this_user.all_permissions:
                 handler.conclude_request(
@@ -208,7 +207,6 @@ class RequestRenameGroupHandler(RequestHandler):
 
         with Session() as session:
             this_user = User.get_existing(session, handler.username)
-            assert this_user is not None
 
             if Permissions.RENAME_GROUP not in this_user.all_permissions:
                 handler.conclude_request(
