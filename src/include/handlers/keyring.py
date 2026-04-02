@@ -70,7 +70,7 @@ class RequestUploadUserKeyHandler(RequestHandler):
         target_username: str | None = handler.data.get("target_username")
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
+            this_user = User.get_existing(session, handler.username)
             assert this_user is not None
 
             # Determine which user's keyring to write to
@@ -134,7 +134,7 @@ class RequestGetUserKeyHandler(RequestHandler):
         key_id: str = handler.data["id"]
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
+            this_user = User.get_existing(session, handler.username)
             assert this_user is not None
 
             key = session.get(UserKey, key_id)
@@ -194,7 +194,7 @@ class RequestDeleteUserKeyHandler(RequestHandler):
         key_id: str = handler.data["id"]
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
+            this_user = User.get_existing(session, handler.username)
             assert this_user is not None
 
             key = session.get(UserKey, key_id)
@@ -253,7 +253,7 @@ class RequestSetPreferenceDEKHandler(RequestHandler):
         key_id: str = handler.data["id"]
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
+            this_user = User.get_existing(session, handler.username)
             assert this_user is not None
 
             key = session.get(UserKey, key_id)
@@ -307,7 +307,7 @@ class RequestListUserKeysHandler(RequestHandler):
 
         with Session() as session:
             target_user = session.get(User, target_username)
-            operator = session.get(User, handler.username)
+            operator = User.get_existing(session, handler.username)
             assert operator is not None
 
             if target_username != handler.username:

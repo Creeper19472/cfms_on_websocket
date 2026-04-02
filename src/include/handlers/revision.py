@@ -24,7 +24,7 @@ class RequestListRevisionsHandler(RequestHandler):
         document_id = handler.data["document_id"]
 
         with Session() as session:
-            user = session.get(User, handler.username)
+            user = User.get_existing(session, handler.username)
             document = session.get(Document, document_id)
 
             if document is None:
@@ -71,7 +71,7 @@ class RequestGetRevisionHandler(RequestHandler):
         revision_id = handler.data["id"]
 
         with Session() as session:
-            user = session.get(User, handler.username)
+            user = User.get_existing(session, handler.username)
             revision = session.get(DocumentRevision, revision_id)
 
             if revision is None:
@@ -110,7 +110,7 @@ class RequestSetDocumentRevisionHandler(RequestHandler):
         revision_id = handler.data["revision_id"]
 
         with Session() as session:
-            user = session.get(User, handler.username)
+            user = User.get_existing(session, handler.username)
             document = session.get(Document, document_id)
             revision = session.get(DocumentRevision, revision_id)
 
@@ -155,7 +155,7 @@ class RequestDeleteRevisionHandler(RequestHandler):
         revision_id = handler.data["id"]
 
         with Session() as session:
-            user = session.get(User, handler.username)
+            user = User.get_existing(session, handler.username)
             revision = session.get(DocumentRevision, revision_id)
 
             if revision is None:

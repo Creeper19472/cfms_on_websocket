@@ -50,7 +50,7 @@ class RequestListDirectoryHandler(RequestHandler):
         folder_id: Optional[str] = handler.data.get("folder_id")
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
+            this_user = User.get_existing(session, handler.username)
             assert this_user is not None
 
             # Determine parent folder and fetch children/documents
@@ -169,7 +169,7 @@ class RequestGetDirectoryInfoHandler(RequestHandler):
             return
 
         with Session() as session:
-            user = session.get(User, handler.username)
+            user = User.get_existing(session, handler.username)
             assert user is not None  # require_auth ensures this
 
             directory = session.get(Folder, directory_id)
@@ -225,7 +225,7 @@ class RequestGetDirectoryAccessRulesHandler(RequestHandler):
         directory_id: str = handler.data["directory_id"]
 
         with Session() as session:
-            user = session.get(User, handler.username)
+            user = User.get_existing(session, handler.username)
             directory = session.get(Folder, directory_id)
 
             if user is None or not user.is_token_valid(handler.token):
@@ -305,7 +305,7 @@ class RequestCreateDirectoryHandler(RequestHandler):
             return
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
+            this_user = User.get_existing(session, handler.username)
             assert this_user is not None  # require_auth ensures this
 
             if Permissions.CREATE_DIRECTORY not in this_user.all_permissions:
@@ -433,7 +433,7 @@ class RequestDeleteDirectoryHandler(RequestHandler):
             return 404, folder_id, handler.username
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
+            this_user = User.get_existing(session, handler.username)
             if not this_user or not this_user.is_token_valid(handler.token):
                 handler.conclude_request(
                     **{
@@ -569,7 +569,7 @@ class RequestRenameDirectoryHandler(RequestHandler):
             return 404, folder_id, handler.username
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
+            this_user = User.get_existing(session, handler.username)
             assert this_user is not None  # require_auth ensures this
 
             folder = session.get(Folder, folder_id)
@@ -685,7 +685,7 @@ class RequestMoveDirectoryHandler(RequestHandler):
             return 404, folder_id, handler.username
 
         with Session() as session:
-            user = session.get(User, handler.username)
+            user = User.get_existing(session, handler.username)
             assert user is not None  # require_auth ensures this
 
             if Permissions.MOVE not in user.all_permissions:
@@ -848,7 +848,7 @@ class RequestSetDirectoryRulesHandler(RequestHandler):
             return 401, directory_id
 
         with Session() as session:
-            user = session.get(User, handler.username)
+            user = User.get_existing(session, handler.username)
             assert user is not None  # require_auth ensures this
 
             directory = session.get(Folder, directory_id)
@@ -912,7 +912,7 @@ class RequestPurgeDirectoryHandler(RequestHandler):
             return 403, folder_id, handler.username
 
         with Session() as session:
-            user = session.get(User, handler.username)
+            user = User.get_existing(session, handler.username)
             assert user is not None
 
             if Permissions.PURGE not in user.all_permissions:
@@ -1013,7 +1013,7 @@ class RequestRestoreDirectoryHandler(RequestHandler):
             return 400, folder_id, handler.username
 
         with Session() as session:
-            user = session.get(User, handler.username)
+            user = User.get_existing(session, handler.username)
             assert user is not None
 
             if Permissions.RESTORE not in user.all_permissions:
@@ -1142,7 +1142,7 @@ class RequestListDeletedItemsHandler(RequestHandler):
         parent_id = handler.data["folder_id"]
 
         with Session() as session:
-            user = session.get(User, handler.username)
+            user = User.get_existing(session, handler.username)
             assert user is not None
 
             if Permissions.LIST_DELETED_ITEMS not in user.all_permissions:

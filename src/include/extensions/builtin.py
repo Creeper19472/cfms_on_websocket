@@ -57,7 +57,7 @@ class RequestShutdownHandler(RequestHandler):
     def handle(self, handler: ConnectionHandler):
 
         with Session() as session:
-            user = session.get(User, handler.username)
+            user = User.get_existing(session, handler.username)
             assert user is not None
 
             if Permissions.SHUTDOWN not in user.all_permissions:

@@ -61,7 +61,7 @@ class RequestListUsersHandler(RequestHandler):
 
     def handle(self, handler: ConnectionHandler):
         with Session() as session:
-            this_user = session.get(User, handler.username)
+            this_user = User.get_existing(session, handler.username)
             assert this_user is not None
 
             if Permissions.LIST_USERS not in this_user.all_permissions:
@@ -141,7 +141,7 @@ class RequestCreateUserHandler(RequestHandler):
         new_user_groups = data.get("groups", [])
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
+            this_user = User.get_existing(session, handler.username)
             assert this_user is not None
 
             # currently handle_create_user() will not judge whether the requesting
@@ -204,7 +204,7 @@ class RequestDeleteUserHandler(RequestHandler):
     def handle(self, handler: ConnectionHandler):
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
+            this_user = User.get_existing(session, handler.username)
 
             if not this_user or not this_user.is_token_valid(handler.token):
                 handler.conclude_request(
@@ -313,7 +313,7 @@ class RequestRenameUserHandler(RequestHandler):
         target_username: str = handler.data["username"]
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
+            this_user = User.get_existing(session, handler.username)
 
             if not this_user or not this_user.is_token_valid(handler.token):
                 handler.conclude_request(
@@ -427,7 +427,7 @@ class RequestBlockUserHandler(RequestHandler):
             return 400, target_username
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
+            this_user = User.get_existing(session, handler.username)
 
             if not this_user or not this_user.is_token_valid(handler.token):
                 handler.conclude_request(401, {}, "Invaild user or token")
@@ -489,7 +489,7 @@ class RequestUnblockUserHandler(RequestHandler):
         block_id: str = handler.data["block_id"]
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
+            this_user = User.get_existing(session, handler.username)
 
             if not this_user or not this_user.is_token_valid(handler.token):
                 handler.conclude_request(401, {}, "Invaild user or token")
@@ -540,7 +540,7 @@ class RequestListUserBlocksHandler(RequestHandler):
         target_username: str = handler.data["username"]
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
+            this_user = User.get_existing(session, handler.username)
 
             if not this_user or not this_user.is_token_valid(handler.token):
                 handler.conclude_request(401, {}, "Invaild user or token")
@@ -611,7 +611,7 @@ class RequestGetUserInfoHandler(RequestHandler):
             return
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
+            this_user = User.get_existing(session, handler.username)
             assert this_user is not None
 
             user_to_get = session.get(User, user_to_get_username)
@@ -691,7 +691,7 @@ class RequestGetUserAvatarHandler(RequestHandler):
 
         with Session() as session:
             # when require_auth is True, user authentication has been verified
-            this_user = session.get(User, handler.username)
+            this_user = User.get_existing(session, handler.username)
             assert this_user is not None
 
             user_to_get = session.get(User, user_to_get_username)
@@ -757,7 +757,7 @@ class RequestSetUserAvatarHandler(RequestHandler):
         document_id: Optional[str] = handler.data["document_id"]
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
+            this_user = User.get_existing(session, handler.username)
             assert this_user is not None
 
             if (
@@ -818,7 +818,7 @@ class RequestChangeUserGroupsHandler(RequestHandler):
     def handle(self, handler: ConnectionHandler):
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
+            this_user = User.get_existing(session, handler.username)
             assert this_user is not None
 
             if Permissions.CHANGE_USER_GROUPS not in this_user.all_permissions:
@@ -1061,7 +1061,7 @@ class RequestManageUserStatusHandler(RequestHandler):
         username: str = handler.data["username"]
 
         with Session() as session:
-            this_user = session.get(User, handler.username)
+            this_user = User.get_existing(session, handler.username)
             assert this_user is not None
 
             if Permissions.MANAGE_USER_STATUS not in this_user.all_permissions:

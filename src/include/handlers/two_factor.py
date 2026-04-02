@@ -40,7 +40,7 @@ class RequestSetup2FAHandler(RequestHandler):
 
     def handle(self, handler: ConnectionHandler):
         with Session() as session:
-            user = session.get(User, handler.username)
+            user = User.get_existing(session, handler.username)
 
             if not user:
                 handler.conclude_request(
@@ -215,7 +215,7 @@ class RequestCancel2FASetupHandler(RequestHandler):
 
     def handle(self, handler: ConnectionHandler):
         with Session() as session:
-            user = session.get(User, handler.username)
+            user = User.get_existing(session, handler.username)
 
             if not user:
                 handler.conclude_request(
@@ -270,7 +270,7 @@ class RequestGet2FAStatusHandler(RequestHandler):
         target_username = handler.data.get("target") or handler.username
 
         with Session() as session:
-            user = session.get(User, handler.username)
+            user = User.get_existing(session, handler.username)
             target = session.get(User, target_username)
 
             if not target:

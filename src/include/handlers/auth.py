@@ -149,7 +149,7 @@ class RequestRefreshTokenHandler(RequestHandler):
             }
         else:
             with Session() as session:
-                user = session.get(User, handler.username)
+                user = User.get_existing(session, handler.username)
 
                 if user and user.is_token_valid(old_token):
                     new_token = user.renew_token()
