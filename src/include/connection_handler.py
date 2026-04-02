@@ -322,7 +322,7 @@ def handle_request(stream: Stream):
     authenticated = False
     if this_handler.username and this_handler.token:
         with Session() as session:
-            user = User.get_existing(session, this_handler.username)
+            user = session.get(User, this_handler.username)
             if user and user.is_token_valid(this_handler.token):
                 authenticated = True
                 user_permissions = user.all_permissions
