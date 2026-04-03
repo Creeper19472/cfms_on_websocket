@@ -262,8 +262,7 @@ class RequestSetPreferenceDEKHandler(RequestHandler):
                     handler.conclude_request(403, {}, "Permission denied")
                     return 403, key_id, handler.username
 
-            key_owner = session.get(User, key.username)
-            assert key_owner is not None
+            key_owner = User.get_existing(session, key.username)
             key_owner.preference_dek = key
             session.add(key)
             session.commit()
