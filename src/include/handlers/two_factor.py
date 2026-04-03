@@ -154,7 +154,7 @@ class RequestDisable2FAHandler(RequestHandler):
             "username": {"type": "string", "minLength": 1},
             "password": {"type": "string", "minLength": 1},
         },
-        "oneOf": [
+        "anyOf": [
             {"required": ["username"]},
             {"required": ["password"]},
         ],
@@ -166,9 +166,14 @@ class RequestDisable2FAHandler(RequestHandler):
     def handle(self, handler: ConnectionHandler):
         password = handler.data.get("password")
         username = handler.data.get("username") or handler.username
-        assert xor(password is not None, username != handler.username), (
-            "Must provide either password or target username, but not both"
-        )
+        if not xor(password is not None, username != handler.username):
+            handler.conclude_request(
+                400,
+                {},
+                "Must provide either password for self-disable or "
+                "username for targeted disable, but not both",
+            )
+            return 400, username
 
         success = False
 
