@@ -5,6 +5,8 @@ This module provides handlers for setting up, validating, and canceling
 two-factor authentication using Time-based One-Time Passwords (TOTP).
 """
 
+from operator import xor
+
 import orjson
 
 from include.classes.connection_handler import ConnectionHandler
@@ -146,40 +148,64 @@ class RequestDisable2FAHandler(RequestHandler):
     The user must provide their password for verification.
     """
 
-    # TODO: Allow sysops to disable 2FA for users who lost access
-
     data_schema = {
         "type": "object",
         "properties": {
+            "username": {"type": "string", "minLength": 1},
             "password": {"type": "string", "minLength": 1},
         },
-        "required": ["password"],
+        "oneOf": [
+            {"required": ["username"]},
+            {"required": ["password"]},
+        ],
         "additionalProperties": False,
     }
 
     require_auth = True
 
     def handle(self, handler: ConnectionHandler):
-        password = handler.data["password"]
-        username = handler.username
+        password = handler.data.get("password")
+        username = handler.data.get("username") or handler.username
+        assert xor(password is not None, username != handler.username), (
+            "Must provide either password or target username, but not both"
+        )
 
         success = False
 
         with Session() as session:
-            user = session.get(User, username)
-            if not user or not user.totp_enabled:
-                handler.conclude_request(400, {}, "2FA not enabled or user not found")
-                return
+            if password:
+                user = session.get(User, username)
+                if not user or not user.totp_enabled:
+                    handler.conclude_request(
+                        400, {}, "2FA not enabled or user not found"
+                    )
+                    return
 
-            try:
-                if user.verify_password(password):
-                    if user.status != UserStatus.ACTIVE:
-                        raise UserNotActiveError
-                    user.disable_totp()
-                    success = True
-            except UserNotActiveError:
-                handler.conclude_request(4003, {}, "User account is not active")
-                return 4003, username
+                try:
+                    if user.verify_password(password):
+                        if user.status != UserStatus.ACTIVE:
+                            raise UserNotActiveError
+                        user.disable_totp()
+                        success = True
+                except UserNotActiveError:
+                    handler.conclude_request(4003, {}, "User account is not active")
+                    return 4003, username
+            else:
+                # Targeted 2FA disable by sysop
+                user = session.get(User, username)
+                if not user or not user.totp_enabled:
+                    handler.conclude_request(
+                        400, {}, "2FA not enabled or user not found"
+                    )
+                    return
+
+                requester = User.get_existing(session, handler.username)
+                if Permissions.MANAGE_2FA not in requester.all_permissions:
+                    handler.conclude_request(403, {}, "Permission denied")
+                    return 403, username, handler.username
+
+                user.disable_totp()
+                success = True
 
         if success:
             handler.conclude_request(200, {}, "2FA disabled successfully")
