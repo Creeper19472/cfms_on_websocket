@@ -5,12 +5,13 @@ This module provides handlers for setting up, validating, and canceling
 two-factor authentication using Time-based One-Time Passwords (TOTP).
 """
 
+from operator import xor
+
 import orjson
 
 from include.classes.connection_handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
 from include.classes.enum.status import UserStatus
-from include.classes.exceptions import UserNotActiveError
 from include.classes.request_handler import RequestHandler
 from include.database.handler import Session
 from include.database.models.classic import User
@@ -146,47 +147,62 @@ class RequestDisable2FAHandler(RequestHandler):
     The user must provide their password for verification.
     """
 
-    # TODO: Allow sysops to disable 2FA for users who lost access
-
     data_schema = {
         "type": "object",
         "properties": {
+            "username": {"type": "string", "minLength": 1},
             "password": {"type": "string", "minLength": 1},
         },
-        "required": ["password"],
+        "anyOf": [
+            {"required": ["username"]},
+            {"required": ["password"]},
+        ],
         "additionalProperties": False,
     }
 
     require_auth = True
 
     def handle(self, handler: ConnectionHandler):
-        password = handler.data["password"]
-        username = handler.username
+        password = handler.data.get("password")
+        target_username = handler.data.get("username") or handler.username
+        requester_username = handler.username
 
-        success = False
+        is_self = target_username == requester_username
+        has_password = bool(password)
+
+        if xor(is_self, has_password):
+            error_msg = (
+                "Password is required when disabling your own 2FA"
+                if is_self
+                else "Password should not be provided when disabling 2FA for another user"
+            )
+            handler.conclude_request(400, {}, error_msg)
+            return 400, target_username, requester_username
 
         with Session() as session:
-            user = session.get(User, username)
+            user = session.get(User, target_username)
             if not user or not user.totp_enabled:
                 handler.conclude_request(400, {}, "2FA not enabled or user not found")
-                return
+                return 400, target_username, requester_username
 
-            try:
-                if user.verify_password(password):
-                    if user.status != UserStatus.ACTIVE:
-                        raise UserNotActiveError
-                    user.disable_totp()
-                    success = True
-            except UserNotActiveError:
-                handler.conclude_request(4003, {}, "User account is not active")
-                return 4003, username
+            if password:
+                if not user.verify_password(password):
+                    handler.conclude_request(401, {}, "Invalid password")
+                    return 401, target_username, requester_username
 
-        if success:
-            handler.conclude_request(200, {}, "2FA disabled successfully")
-        else:
-            handler.conclude_request(401, {}, "Invalid password")
+                if user.status != UserStatus.ACTIVE:
+                    handler.conclude_request(4003, {}, "User account is not active")
+                    return 4003, target_username, requester_username
+            else:
+                requester = User.get_existing(session, requester_username)
+                if Permissions.MANAGE_2FA not in requester.all_permissions:
+                    handler.conclude_request(403, {}, "Permission denied")
+                    return 403, target_username, requester_username
 
-        return (0 if success else 401), username
+            user.disable_totp()
+
+        handler.conclude_request(200, {}, "2FA disabled successfully")
+        return 0, target_username, requester_username
 
 
 class RequestCancel2FASetupHandler(RequestHandler):
