@@ -5,6 +5,8 @@ This module provides handlers for setting up, validating, and canceling
 two-factor authentication using Time-based One-Time Passwords (TOTP).
 """
 
+from operator import xor
+
 import orjson
 
 from include.classes.connection_handler import ConnectionHandler
@@ -165,12 +167,16 @@ class RequestDisable2FAHandler(RequestHandler):
         target_username = handler.data.get("username") or handler.username
         requester_username = handler.username
 
-        if target_username != requester_username and password:
-            handler.conclude_request(
-                400,
-                {},
-                "Password should not be provided when disabling 2FA for another user",
+        is_self = target_username == requester_username
+        has_password = bool(password)
+
+        if xor(is_self, has_password):
+            error_msg = (
+                "Password is required when disabling your own 2FA"
+                if is_self
+                else "Password should not be provided when disabling 2FA for another user"
             )
+            handler.conclude_request(400, {}, error_msg)
             return 400, target_username, requester_username
 
         with Session() as session:
