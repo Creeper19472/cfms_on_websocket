@@ -5,14 +5,11 @@ This module provides handlers for setting up, validating, and canceling
 two-factor authentication using Time-based One-Time Passwords (TOTP).
 """
 
-from operator import xor
-
 import orjson
 
 from include.classes.connection_handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
 from include.classes.enum.status import UserStatus
-from include.classes.exceptions import UserNotActiveError
 from include.classes.request_handler import RequestHandler
 from include.database.handler import Session
 from include.database.models.classic import User
@@ -165,59 +162,41 @@ class RequestDisable2FAHandler(RequestHandler):
 
     def handle(self, handler: ConnectionHandler):
         password = handler.data.get("password")
-        username = handler.data.get("username") or handler.username
-        if not xor(password is not None, username != handler.username):
+        target_username = handler.data.get("username") or handler.username
+        requester_username = handler.username
+
+        if target_username != requester_username and password:
             handler.conclude_request(
                 400,
                 {},
-                "Must provide either password for self-disable or "
-                "username for targeted disable, but not both",
+                "Password should not be provided when disabling 2FA for another user",
             )
-            return 400, username
-
-        success = False
+            return 400, target_username, requester_username
 
         with Session() as session:
+            user = session.get(User, target_username)
+            if not user or not user.totp_enabled:
+                handler.conclude_request(400, {}, "2FA not enabled or user not found")
+                return 400, target_username, requester_username
+
             if password:
-                user = session.get(User, username)
-                if not user or not user.totp_enabled:
-                    handler.conclude_request(
-                        400, {}, "2FA not enabled or user not found"
-                    )
-                    return
+                if not user.verify_password(password):
+                    handler.conclude_request(401, {}, "Invalid password")
+                    return 401, target_username, requester_username
 
-                try:
-                    if user.verify_password(password):
-                        if user.status != UserStatus.ACTIVE:
-                            raise UserNotActiveError
-                        user.disable_totp()
-                        success = True
-                except UserNotActiveError:
+                if user.status != UserStatus.ACTIVE:
                     handler.conclude_request(4003, {}, "User account is not active")
-                    return 4003, username
+                    return 4003, target_username, requester_username
             else:
-                # Targeted 2FA disable by sysop
-                user = session.get(User, username)
-                if not user or not user.totp_enabled:
-                    handler.conclude_request(
-                        400, {}, "2FA not enabled or user not found"
-                    )
-                    return
-
-                requester = User.get_existing(session, handler.username)
+                requester = User.get_existing(session, requester_username)
                 if Permissions.MANAGE_2FA not in requester.all_permissions:
                     handler.conclude_request(403, {}, "Permission denied")
-                    return 403, username, handler.username
+                    return 403, target_username, requester_username
 
-                user.disable_totp()
-                success = True
+            user.disable_totp()
 
-        if success:
-            handler.conclude_request(200, {}, "2FA disabled successfully")
-        else:
-            handler.conclude_request(401, {}, "Invalid password")
-
-        return (0 if success else 401), username
+        handler.conclude_request(200, {}, "2FA disabled successfully")
+        return 0, target_username, requester_username
 
 
 class RequestCancel2FASetupHandler(RequestHandler):
