@@ -20,12 +20,14 @@ def purge_documents_bulk(session: Session, document_ids: List[str]):
     if not document_ids:
         return
 
-    # 1. 批量获取所有受影响的修订版本 ID 和文件 ID
-    revision_data = (
-        session.query(DocumentRevision.id, DocumentRevision.file_id)
-        .filter(DocumentRevision.document_id.in_(document_ids))
-        .all()
-    )
+    # 1. 批量获取所有受影响的修订版本 ID 和文件 ID（分块查询以避免超出绑定变量限制）
+    revision_data = []
+    for chunk in batched(document_ids, QUERY_CHUNK_SIZE):
+        revision_data.extend(
+            session.query(DocumentRevision.id, DocumentRevision.file_id)
+            .filter(DocumentRevision.document_id.in_(list(chunk)))
+            .all()
+        )
 
     if not revision_data:
         # 如果这些文档都没有修订版本，直接删除文档记录即可

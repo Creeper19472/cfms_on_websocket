@@ -11,7 +11,7 @@ from include.classes.access_rule import AccessRuleBase
 from include.classes.enum.status import DocumentRevisionStatus, EntityStatus
 from include.classes.exceptions import NoActiveRevisionsError
 from include.conf_loader import global_config
-from include.constants import AVAILABLE_ACCESS_TYPES, QUERY_CHUNK_SIZE
+from include.constants import AVAILABLE_ACCESS_TYPES, MAX_PARAM_SIZE, QUERY_CHUNK_SIZE
 from include.database.handler import Base
 from include.database.models.classic import User
 from include.database.models.file import (
@@ -38,33 +38,41 @@ def _batch_count_other_revisions(
     # Return total references to each file EXCLUDING references that come
     # from the provided exclude_doc_ids set. This centralizes counting via
     # `count_file_references` so new FK references are automatically handled.
-    counts: dict[str, int] = {}
-    if not file_ids:
-        return counts
+
+    # Materialize iterables so they can be safely iterated multiple times.
+    file_ids_list = list(file_ids)
+    if not file_ids_list:
+        return {}
 
     if isinstance(exclude_doc_ids, str):
-        exclude_doc_ids = [exclude_doc_ids]
+        exclude_doc_ids_list = [exclude_doc_ids]
     else:
-        exclude_doc_ids = list(exclude_doc_ids)
+        exclude_doc_ids_list = list(exclude_doc_ids)
 
     # Get total references across all tables (uses reflected FKs).
-    total_refs = count_file_references(session, list(file_ids))
+    total_refs = count_file_references(session, file_ids_list)
 
     # Count references coming from the excluded documents (DocumentRevision only).
+    # The query combines `file_id IN (...)` and `document_id IN (...)`, so both
+    # dimensions must be chunked to keep total bind variables under MAX_PARAM_SIZE.
+    exclude_chunk_size = max(1, MAX_PARAM_SIZE - QUERY_CHUNK_SIZE)
     excluded_counts: dict[str, int] = {}
-    for f_chunk in batched(file_ids, QUERY_CHUNK_SIZE):
-        q = (
-            session.query(DocumentRevision.file_id, func.count(DocumentRevision.id))
-            .filter(DocumentRevision.file_id.in_(list(f_chunk)))
-            .filter(DocumentRevision.document_id.in_(list(exclude_doc_ids)))
-            .group_by(DocumentRevision.file_id)
-        )
-        rows = q.all()
-        excluded_counts.update({file_id: count for file_id, count in rows})
+    for f_chunk in batched(file_ids_list, QUERY_CHUNK_SIZE):
+        for e_chunk in batched(exclude_doc_ids_list, exclude_chunk_size):
+            rows = (
+                session.query(DocumentRevision.file_id, func.count(DocumentRevision.id))
+                .filter(DocumentRevision.file_id.in_(list(f_chunk)))
+                .filter(DocumentRevision.document_id.in_(list(e_chunk)))
+                .group_by(DocumentRevision.file_id)
+                .all()
+            )
+            for file_id, count in rows:
+                excluded_counts[file_id] = excluded_counts.get(file_id, 0) + count
 
-    for fid in file_ids:
+    counts: dict[str, int] = {}
+    for fid in file_ids_list:
         total = total_refs.get(fid, 0)
-        excluded = int(excluded_counts.get(fid, 0))
+        excluded = excluded_counts.get(fid, 0)
         counts[fid] = max(0, total - excluded)
 
     return counts
@@ -582,10 +590,7 @@ class DocumentRevision(Base):
         other_refs = max(0, total - 1)
 
         if other_refs == 0:
-            try:
-                self.file.delete()
-            except PermissionError:
-                raise
+            self.file.delete()
             session.delete(self.file)
 
     def __repr__(self) -> str:

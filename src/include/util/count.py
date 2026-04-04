@@ -1,4 +1,4 @@
-__all__ = ["count_file_references"]
+__all__ = ["count_file_references", "_clear_file_references_cache"]
 
 from itertools import islice
 from typing import Any, Sequence, cast
