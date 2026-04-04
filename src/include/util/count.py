@@ -1,7 +1,7 @@
 __all__ = ["count_file_references"]
 
 from itertools import islice
-from typing import Any, Iterable, cast
+from typing import Any, Sequence, cast
 
 from sqlalchemy import MetaData, Table, func, select, union_all
 from sqlalchemy.engine import Engine
@@ -9,40 +9,74 @@ from sqlalchemy.orm import Session
 
 from include.constants import QUERY_CHUNK_SIZE
 
-_CACHED_REFS = None
+# Cache keyed by engine URL so that different engines (e.g. in tests) each
+# get their own reflected FK list.  Call ``_clear_file_references_cache()``
+# to force a re-reflection.
+_CACHED_REFS: dict[str, list[tuple[Table, str]]] = {}
+
+
+def _clear_file_references_cache() -> None:
+    """Reset the cached FK reflection data.
+
+    Useful in test fixtures or after schema migrations.
+    """
+    _CACHED_REFS.clear()
 
 
 def _get_file_references(engine: Engine) -> list[tuple[Table, str]]:
-    global _CACHED_REFS
-    if _CACHED_REFS is not None:
-        return _CACHED_REFS
+    """Return ``(table, column_name)`` pairs for every FK that points to the
+    ``files`` table, **excluding** cascade-dependent relationships.
+
+    Foreign keys declared with ``ondelete="CASCADE"`` represent operational
+    metadata (e.g. ``file_tasks``) that is automatically removed when the
+    parent file row is deleted — they are not independent "usage" references
+    and must not block file deletion.
+    """
+    cache_key = str(engine.url)
+    if cache_key in _CACHED_REFS:
+        return _CACHED_REFS[cache_key]
 
     meta = MetaData()
     meta.reflect(bind=engine)
 
-    refs = []
+    refs: list[tuple[Table, str]] = []
     files_table_name = "files"
     for table in meta.sorted_tables:
         for col in table.columns:
             for fk in col.foreign_keys:
-                if fk.column.table.name == files_table_name:
-                    refs.append((table, col.name))
+                if fk.column.table.name != files_table_name:
+                    continue
+                # Skip FK relationships with CASCADE delete — those rows are
+                # dependent metadata, not independent references.
+                ondelete = (fk.ondelete or "").upper()
+                if ondelete == "CASCADE":
+                    continue
+                refs.append((table, col.name))
 
-    _CACHED_REFS = refs
+    _CACHED_REFS[cache_key] = refs
     return refs
 
 
-def count_file_references(session: Session, file_ids: Iterable[Any] | None = None):
-    """
-    Count references to files in the database.
+def count_file_references(
+    session: Session,
+    file_ids: Sequence[Any] | None = None,
+) -> dict[Any, int]:
+    """Count independent usage references to files across the database.
+
+    Uses SQLAlchemy metadata reflection to discover every foreign key that
+    points to the ``files`` table (excluding cascade-dependent tables like
+    ``file_tasks``), then aggregates the reference counts.
 
     Args:
-        session (Session): The SQLAlchemy session to use for the query.
-        file_ids (Iterable[Any] | None): An optional iterable of file IDs to filter
-        by. If None, counts references for all files.
-    """
+        session: The SQLAlchemy session to use for the query.
+        file_ids: An optional sequence of file IDs to filter by.  If *None*,
+            counts references for **all** files.
 
-    if file_ids is not None and not file_ids:
+    Returns:
+        A mapping of ``{file_id: total_reference_count}``.  File IDs with
+        zero references are omitted.
+    """
+    if file_ids is not None and len(file_ids) == 0:
         return {}
 
     engine = cast(Engine, session.get_bind())
@@ -51,7 +85,7 @@ def count_file_references(session: Session, file_ids: Iterable[Any] | None = Non
     if not refs:
         return {}
 
-    def _execute_query(chunk_ids):
+    def _execute_query(chunk_ids: Sequence[Any] | None) -> dict[Any, int]:
         subqueries = []
         for table, colname in refs:
             col = table.c[colname]
@@ -60,7 +94,7 @@ def count_file_references(session: Session, file_ids: Iterable[Any] | None = Non
             )
 
             if chunk_ids is not None:
-                stmt = stmt.where(col.in_(chunk_ids))
+                stmt = stmt.where(col.in_(list(chunk_ids)))
 
             stmt = stmt.group_by(col)
             subqueries.append(stmt)
@@ -71,12 +105,12 @@ def count_file_references(session: Session, file_ids: Iterable[Any] | None = Non
         )
 
         rows = session.execute(final).all()
-        return {row.file_id: row.total for row in rows}
+        return {row.file_id: int(row.total) for row in rows}
 
     if file_ids is None:
         return _execute_query(None)
 
-    result = {}
+    result: dict[Any, int] = {}
     iterator = iter(file_ids)
     while chunk := tuple(islice(iterator, QUERY_CHUNK_SIZE)):
         chunk_result = _execute_query(chunk)

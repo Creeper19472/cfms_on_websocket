@@ -63,29 +63,10 @@ def _batch_count_other_revisions(
         excluded_counts.update({file_id: count for file_id, count in rows})
 
     for fid in file_ids:
-        total = int(total_refs.get(fid, 0))
+        total = total_refs.get(fid, 0)
         excluded = int(excluded_counts.get(fid, 0))
         counts[fid] = max(0, total - excluded)
 
-    return counts
-
-
-def _batch_count_avatar_usages(session: Session, file_ids) -> dict:
-    """Count User records using any of the given ``file_ids`` as their avatar.
-
-    Queries are chunked to stay within SQLite's bind-variable limit.
-    """
-    counts: dict = {}
-    if not file_ids:
-        return counts
-    for chunk in batched(file_ids, QUERY_CHUNK_SIZE):
-        rows = (
-            session.query(User.avatar_id, func.count())
-            .filter(User.avatar_id.in_(list(chunk)))
-            .group_by(User.avatar_id)
-            .all()
-        )
-        counts.update({file_id: count for file_id, count in rows})
     return counts
 
 
@@ -593,10 +574,12 @@ class DocumentRevision(Base):
         session = object_session(self)
         if not session:
             raise Exception("The object is not associated with a session")
+        if not self.file_id:
+            return
         # Use centralized reference counting across all FK references.
         total = count_file_references(session, [self.file_id]).get(self.file_id, 0)
-        # subtract this revision's own reference
-        other_refs = max(0, int(total) - 1)
+        # Subtract this revision's own reference.
+        other_refs = max(0, total - 1)
 
         if other_refs == 0:
             try:
