@@ -20,6 +20,7 @@ from include.constants import FILE_TRANSFER_MAX_CHUNK_SIZE, FILE_TRANSFER_MIN_CH
 from include.database.handler import Session
 from include.database.models.file import File, FileTask
 from include.shared import clients, clients_lock
+from include.system import messages as smsg
 from include.system.ext_manager import pm
 from include.util.log import log_exception_with_id
 
@@ -78,13 +79,9 @@ class ConnectionHandler:
         self.request_timestamp: float = self.request.get("timestamp", 0.0)
 
     def deny_permission(self) -> None:
-        from include.system import messages as smsg
-
         self.conclude_request(403, {}, smsg.PERMISSION_DENIED)
 
     def deny_access(self) -> None:
-        from include.system import messages as smsg
-
         self.conclude_request(403, {}, smsg.ACCESS_DENIED)
 
     def conclude_request(
