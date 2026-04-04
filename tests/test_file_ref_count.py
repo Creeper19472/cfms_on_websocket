@@ -23,7 +23,7 @@ being counted were committed in earlier transactions.
 import sys
 from itertools import batched
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 
 import pytest
 from sqlalchemy import (
@@ -165,7 +165,7 @@ def _rev(doc_id: str, file_id: str) -> MDocumentRevision:
     return MDocumentRevision(document_id=doc_id, file_id=file_id)
 
 
-def _user(name: str, avatar_id: str = None) -> MUser:
+def _user(name: str, avatar_id: Optional[str] = None) -> MUser:
     return MUser(username=name, avatar_id=avatar_id)
 
 
@@ -325,7 +325,7 @@ class TestCountFileReferences:
         """
         n = QUERY_CHUNK_SIZE + 50  # spans 2 chunks
 
-        objs = [_doc("d_bulk")]
+        objs: list[Any] = [_doc("d_bulk")]
         file_ids = []
         for i in range(n):
             fid = f"file_{i:04d}"
@@ -504,7 +504,7 @@ class TestBatchCountOtherRevisionsPattern:
         with a mix of deletable and non-deletable files."""
         n = QUERY_CHUNK_SIZE + 20
 
-        objs = [_doc("d_excluded"), _doc("d_other")]
+        objs: list[Any] = [_doc("d_excluded"), _doc("d_other")]
 
         # First half: referenced only by excluded doc → should be deletable
         deletable_ids = [f"del_{i:04d}" for i in range(n // 2)]
@@ -534,7 +534,7 @@ class TestBatchCountOtherRevisionsPattern:
         exclude_chunk = MAX_PARAM_SIZE - QUERY_CHUNK_SIZE
         n_docs = exclude_chunk + 10  # force at least 2 chunks
 
-        objs = [_file("f1")]
+        objs: list[Any] = [_file("f1")]
         doc_ids = []
         for i in range(n_docs):
             did = f"d_excl_{i:04d}"
