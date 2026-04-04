@@ -5,7 +5,6 @@ from typing import Optional
 
 import jsonschema
 
-import include.system.messages as smsg
 from include.classes.connection_handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
 from include.classes.enum.status import EntityStatus
@@ -15,6 +14,7 @@ from include.constants import QUERY_CHUNK_SIZE, ROOT_DIRECTORY_ID
 from include.database.handler import Session
 from include.database.models.classic import User
 from include.database.models.entity import Document, Folder
+from include.system.messages import Messages as smsg
 from include.util.bulk.purge import purge_documents_bulk
 from include.util.recursive.subtree import fetch_subtree_for_deletion
 from include.util.rule.applying import apply_access_rules

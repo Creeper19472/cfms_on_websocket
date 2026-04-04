@@ -6,7 +6,6 @@ from loguru import logger as log
 from sqlalchemy import update
 from sqlalchemy.engine import Engine
 
-import include.system.messages as smsg
 from include.classes.connection_handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
 from include.classes.request_handler import RequestHandler
@@ -17,6 +16,7 @@ from include.database.models.classic import User
 from include.database.models.file import File
 from include.shared import lockdown_enabled
 from include.system.ext_manager import hookimpl
+from include.system.messages import Messages as smsg
 from include.util.count import _get_file_references
 
 logger = log.bind(name="builtin")

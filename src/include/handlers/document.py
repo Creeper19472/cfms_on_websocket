@@ -17,7 +17,6 @@ import time
 
 import jsonschema
 
-import include.system.messages as smsg
 from include.classes.connection_handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
 from include.classes.enum.status import EntityStatus
@@ -33,6 +32,7 @@ from include.database.models.entity import (
     NoActiveRevisionsError,
 )
 from include.database.models.file import File, FileTask
+from include.system.messages import Messages as smsg
 from include.util.rule.applying import apply_access_rules
 
 

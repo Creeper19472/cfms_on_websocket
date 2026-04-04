@@ -3,7 +3,6 @@ __all__ = [
     # ...
 ]
 
-import include.system.messages as smsg
 from include.classes.connection_handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
 from include.classes.request_handler import RequestHandler
@@ -14,6 +13,7 @@ from include.database.models.classic import (
     UserGroupPermission,
     UserMembership,
 )
+from include.system.messages import Messages as smsg
 from include.util.group import create_group
 
 

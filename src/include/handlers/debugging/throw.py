@@ -1,9 +1,9 @@
-import include.system.messages as smsg
 from include.classes.connection_handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
 from include.classes.request_handler import RequestHandler
 from include.database.handler import Session
 from include.database.models.classic import User
+from include.system.messages import Messages as smsg
 
 
 class RequestThrowExceptionHandler(RequestHandler):

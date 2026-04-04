@@ -21,7 +21,6 @@ import filetype
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 
-import include.system.messages as smsg
 from include.classes.connection_handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
 from include.classes.enum.status import UserStatus
@@ -39,6 +38,7 @@ from include.database.models.classic import (
 )
 from include.database.models.entity import Document
 from include.handlers.document import create_file_task
+from include.system.messages import Messages as smsg
 from include.util.pwd import (
     InvaildPasswordLengthError,
     MissingComponentsError,
