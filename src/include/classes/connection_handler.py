@@ -14,13 +14,13 @@ from Crypto.Random import get_random_bytes
 from loguru import logger as log
 from websockets.typing import Data
 
+import include.system.messages as smsg
 from include.classes.multiplexer import FrameType, MultiplexConnection, Stream
 from include.conf_loader import global_config
 from include.constants import FILE_TRANSFER_MAX_CHUNK_SIZE, FILE_TRANSFER_MIN_CHUNK_SIZE
 from include.database.handler import Session
 from include.database.models.file import File, FileTask
 from include.shared import clients, clients_lock
-from include.system import messages as smsg
 from include.system.ext_manager import pm
 from include.util.log import log_exception_with_id
 
