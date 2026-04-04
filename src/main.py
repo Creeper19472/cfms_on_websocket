@@ -31,11 +31,6 @@ from websockets.sync.server import serve
 from include.classes.enum.permissions import Permissions
 from include.classes.misc.guard import LoginGuard
 from include.conf_loader import global_config
-from include.connection_handler import (
-    available_functions,
-    handle_connection,
-    whitelisted_functions,
-)
 from include.constants import (
     CORE_VERSION,
     DEFAULT_SSL_CERT_VALIDITY_DAYS,
@@ -46,6 +41,11 @@ from include.database.handler import Base, Session, engine
 from include.database.models.entity import Document, DocumentRevision, Folder
 from include.database.models.file import File
 from include.handlers.debugging.throw import RequestThrowExceptionHandler
+from include.router import (
+    available_functions,
+    handle_connection,
+    whitelisted_functions,
+)
 from include.system.ext_manager import load_extensions_from_directory, pm
 from include.util.address import is_v6_address
 from include.util.entrance import global_process_request
@@ -421,9 +421,7 @@ def main():
         dualstack_ipv6=global_config["server"]["dualstack_ipv6"],
         process_request=global_process_request,
     ) as server:
-        logger.info(
-            f"CFMS WebSocket server started at wss://{host_address}:{port}"
-        )  # TODO
+        logger.info(f"CFMS WebSocket server started at wss://{host_address}:{port}")
         server.serve_forever()
 
 
