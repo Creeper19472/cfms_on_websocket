@@ -79,7 +79,7 @@ class RequestGrantAccessHandler(RequestHandler):
             if Permissions.MANAGE_ACCESS not in operator.all_permissions:
                 handler.conclude_request(
                     code=403,
-                    message="You do not have permission to manage object access",
+                    message=smsg.ACCESS_DENIED_SET_ACCESS_RULES,
                     data={},
                 )
                 return 403, handler.username
@@ -88,7 +88,7 @@ class RequestGrantAccessHandler(RequestHandler):
                 ENTITY_TYPE_MAPPING[entity_type], entity_identifier
             )
             if not entity:
-                handler.conclude_request(404, {}, "entity not found")
+                handler.conclude_request(404, {}, smsg.ENTITY_NOT_FOUND)
                 return (
                     404,
                     None,
@@ -100,7 +100,7 @@ class RequestGrantAccessHandler(RequestHandler):
                 TARGET_TYPE_MAPPING[target_type], target_identifier
             )
             if not target:
-                handler.conclude_request(404, {}, "target not found")
+                handler.conclude_request(404, {}, smsg.TARGET_NOT_FOUND)
                 return (
                     404,
                     None,
@@ -110,7 +110,7 @@ class RequestGrantAccessHandler(RequestHandler):
 
             for access_type in access_types:
                 if not target.check_access_requirements(operator, access_type):
-                    handler.conclude_request(403, {}, "access denied")
+                    handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                     return (
                         403,
                         None,
@@ -236,7 +236,7 @@ class RequestRevokeAccessHandler(RequestHandler):
             if Permissions.MANAGE_ACCESS not in operator.all_permissions:
                 handler.conclude_request(
                     code=403,
-                    message="You do not have permission to manage object access",
+                    message=smsg.ACCESS_DENIED_SET_ACCESS_RULES,
                     data={},
                 )
                 return 403, None, handler.username
@@ -244,7 +244,7 @@ class RequestRevokeAccessHandler(RequestHandler):
             # Get the access entry
             entry = session.get(ObjectAccessEntry, entry_id)
             if not entry:
-                handler.conclude_request(404, {}, "Access entry not found")
+                handler.conclude_request(404, {}, smsg.ACCESS_ENTRY_NOT_FOUND)
                 return (
                     404,
                     None,

@@ -6,6 +6,7 @@ from loguru import logger as log
 from sqlalchemy import update
 from sqlalchemy.engine import Engine
 
+import include.system.messages as smsg
 from include.classes.connection_handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
 from include.classes.request_handler import RequestHandler
@@ -62,7 +63,7 @@ class RequestShutdownHandler(RequestHandler):
             user = User.get_existing(session, handler.username)
 
             if Permissions.SHUTDOWN not in user.all_permissions:
-                handler.conclude_request(403, {}, "Permission denied")
+                handler.conclude_request(403, {}, smsg.PERMISSION_DENIED)
                 return
 
         # Shutdown the server

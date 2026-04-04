@@ -3,6 +3,7 @@ __all__ = [
     # ...
 ]
 
+import include.system.messages as smsg
 from include.classes.connection_handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
 from include.classes.request_handler import RequestHandler
@@ -98,13 +99,11 @@ class RequestCreateGroupHandler(RequestHandler):
             # be held by administrators.
 
             if Permissions.CREATE_GROUP not in user.all_permissions:
-                handler.conclude_request(
-                    403, {}, "You do not have permission to create groups"
-                )
+                handler.conclude_request(403, {}, smsg.PERMISSION_DENIED)
                 return
 
             if session.get(UserGroup, new_group_name):
-                handler.conclude_request(400, {}, "Group already exists")
+                handler.conclude_request(400, {}, smsg.GROUP_ALREADY_EXISTS)
                 return
 
             create_group(
