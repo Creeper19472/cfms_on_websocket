@@ -198,6 +198,29 @@ class TestCountFileReferences:
         result = count_file_references(session, ["f_orphan"])
         assert "f_orphan" not in result
 
+    def test_nonexistent_file_ids_returns_empty(self, session):
+        """IDs that don't exist in any table should yield an empty result."""
+        _seed(session, _file("f_real"), _doc("d1"), _rev("d1", "f_real"))
+
+        result = count_file_references(session, ["missing1", "missing2"])
+        assert result == {}
+
+    def test_mix_of_existing_and_nonexistent_ids(self, session):
+        """Only existing *referenced* IDs should appear in the result;
+        non-existent IDs must be silently omitted."""
+        _seed(
+            session,
+            _file("f_exists"),
+            _doc("d1"),
+            _rev("d1", "f_exists"),
+            _file("f_no_refs"),
+        )
+
+        result = count_file_references(
+            session, ["f_exists", "f_no_refs", "totally_missing"]
+        )
+        assert result == {"f_exists": 1}
+
     def test_single_revision_reference(self, session):
         """A file referenced by one DocumentRevision should have count=1."""
         _seed(session, _file("f1"), _doc("d1"), _rev("d1", "f1"))
