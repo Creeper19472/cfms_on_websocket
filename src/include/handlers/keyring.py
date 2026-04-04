@@ -79,7 +79,7 @@ class RequestUploadUserKeyHandler(RequestHandler):
                     return 403, target_username, handler.username
                 owner = session.get(User, target_username)
                 if not owner:
-                    handler.conclude_request(404, {}, smsg.TARGET_OBJECT_NOT_FOUND)
+                    handler.conclude_request(404, {}, smsg.USER_DOES_NOT_EXIST)
                     return 404, target_username, handler.username
             else:
                 target_username = handler.username
@@ -310,7 +310,7 @@ class RequestListUserKeysHandler(RequestHandler):
                     return 403, target_username, handler.username
 
             if not target_user:
-                handler.conclude_request(404, {}, smsg.TARGET_OBJECT_NOT_FOUND)
+                handler.conclude_request(404, {}, smsg.USER_DOES_NOT_EXIST)
                 return 404, target_username, handler.username
 
             keys = (

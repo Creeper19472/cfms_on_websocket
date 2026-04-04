@@ -710,7 +710,7 @@ class RequestGetUserAvatarHandler(RequestHandler):
                     200, {"task_data": avatar_task_data}, smsg.SUCCESS
                 )
             else:
-                handler.conclude_request(404, {}, smsg.TARGET_OBJECT_NOT_FOUND)
+                handler.conclude_request(404, {}, smsg.TARGET_NOT_FOUND)
 
 
 class RequestSetUserAvatarHandler(RequestHandler):
