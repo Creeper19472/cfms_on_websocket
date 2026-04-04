@@ -19,6 +19,7 @@ from include.database.models.file import (
     FileTask,
     _queue_deferred_file_deletion,
 )
+from include.util.count import count_file_references
 from include.util.fetch.fetch import batch_prefetch_granted_ids, prefetch_user_blocks
 
 
@@ -34,51 +35,46 @@ def _batch_count_other_revisions(
         file_ids: 待检查的文件 ID 列表。
         exclude_doc_ids: 单个文档 ID 或文档 ID 集合。这些文档对文件的引用将不被计入。
     """
-    counts: dict[str, int] = {}
-    if not file_ids:
-        return counts
+    # Return total references to each file EXCLUDING references that come
+    # from the provided exclude_doc_ids set. This centralizes counting via
+    # `count_file_references` so new FK references are automatically handled.
+
+    # Materialize iterables so they can be safely iterated multiple times.
+    file_ids_list = list(file_ids)
+    if not file_ids_list:
+        return {}
 
     if isinstance(exclude_doc_ids, str):
-        exclude_doc_ids = [exclude_doc_ids]
+        exclude_doc_ids_list = [exclude_doc_ids]
     else:
-        exclude_doc_ids = list(exclude_doc_ids)
+        exclude_doc_ids_list = list(exclude_doc_ids)
 
-    EXCLUDE_CHUNK_SIZE = MAX_PARAM_SIZE - QUERY_CHUNK_SIZE
+    # Get total references across all tables (uses reflected FKs).
+    total_refs = count_file_references(session, file_ids_list)
 
-    for f_chunk in batched(file_ids, QUERY_CHUNK_SIZE):
-        query = session.query(
-            DocumentRevision.file_id, func.count(DocumentRevision.id)
-        ).filter(DocumentRevision.file_id.in_(list(f_chunk)))
+    # Count references coming from the excluded documents (DocumentRevision only).
+    # The query combines `file_id IN (...)` and `document_id IN (...)`, so both
+    # dimensions must be chunked to keep total bind variables under MAX_PARAM_SIZE.
+    exclude_chunk_size = max(1, MAX_PARAM_SIZE - QUERY_CHUNK_SIZE)
+    excluded_counts: dict[str, int] = {}
+    for f_chunk in batched(file_ids_list, QUERY_CHUNK_SIZE):
+        for e_chunk in batched(exclude_doc_ids_list, exclude_chunk_size):
+            rows = (
+                session.query(DocumentRevision.file_id, func.count(DocumentRevision.id))
+                .filter(DocumentRevision.file_id.in_(list(f_chunk)))
+                .filter(DocumentRevision.document_id.in_(list(e_chunk)))
+                .group_by(DocumentRevision.file_id)
+                .all()
+            )
+            for file_id, count in rows:
+                excluded_counts[file_id] = excluded_counts.get(file_id, 0) + count
 
-        for e_chunk in batched(exclude_doc_ids, EXCLUDE_CHUNK_SIZE):
-            query = query.filter(DocumentRevision.document_id.not_in(list(e_chunk)))
+    counts: dict[str, int] = {}
+    for fid in file_ids_list:
+        total = total_refs.get(fid, 0)
+        excluded = excluded_counts.get(fid, 0)
+        counts[fid] = max(0, total - excluded)
 
-        rows = query.group_by(DocumentRevision.file_id).all()
-        counts.update({file_id: count for file_id, count in rows})
-
-    for fid in file_ids:
-        if fid not in counts:
-            counts[fid] = 0
-
-    return counts
-
-
-def _batch_count_avatar_usages(session: Session, file_ids) -> dict:
-    """Count User records using any of the given ``file_ids`` as their avatar.
-
-    Queries are chunked to stay within SQLite's bind-variable limit.
-    """
-    counts: dict = {}
-    if not file_ids:
-        return counts
-    for chunk in batched(file_ids, QUERY_CHUNK_SIZE):
-        rows = (
-            session.query(User.avatar_id, func.count())
-            .filter(User.avatar_id.in_(list(chunk)))
-            .group_by(User.avatar_id)
-            .all()
-        )
-        counts.update({file_id: count for file_id, count in rows})
     return counts
 
 
@@ -470,14 +466,11 @@ class Document(BaseObject):
         all_file_ids = {row[1] for row in revision_tuples if row[1]}
 
         # Task 3: Chunked batch reference count queries to avoid variable limit.
-        other_rev_counts = _batch_count_other_revisions(session, all_file_ids, self.id)
-        avatar_counts = _batch_count_avatar_usages(session, all_file_ids)
+        other_counts = _batch_count_other_revisions(session, all_file_ids, self.id)
 
         # Determine which files are exclusively referenced by this document's revisions.
         deletable_file_ids = {
-            fid
-            for fid in all_file_ids
-            if other_rev_counts.get(fid, 0) + avatar_counts.get(fid, 0) == 0
+            fid for fid in all_file_ids if other_counts.get(fid, 0) == 0
         }
 
         # Load File ORM objects needed for deletion (chunked to stay within SQLite limits).
@@ -589,22 +582,15 @@ class DocumentRevision(Base):
         session = object_session(self)
         if not session:
             raise Exception("The object is not associated with a session")
-
-        other_refs = (
-            session.query(DocumentRevision)
-            .filter(DocumentRevision.file_id == self.file_id)
-            .filter(DocumentRevision.id != self.id)
-            .count()
-            +
-            # Check if file is not used as any avatar property
-            session.query(User).filter(User.avatar_id == self.file_id).count()
-        )
+        if not self.file_id:
+            return
+        # Use centralized reference counting across all FK references.
+        total = count_file_references(session, [self.file_id]).get(self.file_id, 0)
+        # Subtract this revision's own reference.
+        other_refs = max(0, total - 1)
 
         if other_refs == 0:
-            try:
-                self.file.delete()
-            except PermissionError:
-                raise
+            self.file.delete()
             session.delete(self.file)
 
     def __repr__(self) -> str:
