@@ -100,6 +100,7 @@ class RequestCreateGroupHandler(RequestHandler):
 
             if Permissions.CREATE_GROUP not in user.all_permissions:
                 handler.conclude_request(403, {}, smsg.PERMISSION_DENIED_CREATE_GROUP)
+                return 403, new_group_name, handler.username
 
             if session.get(UserGroup, new_group_name):
                 handler.conclude_request(400, {}, smsg.GROUP_ALREADY_EXISTS)
