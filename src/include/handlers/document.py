@@ -272,7 +272,12 @@ class RequestCreateDocumentHandler(RequestHandler):
                 return 403, folder_id, {"title": title}, handler.username
 
             if folder_id:
-                folder = session.get(Folder, folder_id)
+                folder = (
+                    session.query(Folder)
+                    .with_for_update()
+                    .filter_by(id=folder_id)
+                    .first()
+                )
                 if not folder or folder.id == ROOT_DIRECTORY_ID:
                     handler.conclude_request(404, {}, smsg.FOLDER_NOT_FOUND)
                     return 404, folder_id, {"title": title}, handler.username
@@ -284,7 +289,12 @@ class RequestCreateDocumentHandler(RequestHandler):
                     handler.conclude_access_denial()
                     return 403, folder_id, {"title": title}, handler.username
             else:
-                root_folder = session.get(Folder, ROOT_DIRECTORY_ID)
+                root_folder = (
+                    session.query(Folder)
+                    .with_for_update()
+                    .filter_by(id=ROOT_DIRECTORY_ID)
+                    .first()
+                )
                 if (
                     root_folder is not None
                     and not root_folder.check_access_requirements(
@@ -560,6 +570,15 @@ class RequestRenameDocumentHandler(RequestHandler):
             if not document:
                 handler.conclude_request(404, {}, smsg.DOCUMENT_NOT_FOUND)
                 return 404, document_id, handler.username
+
+            parent_id = document.folder_id
+            if parent_id:
+                session.query(Folder).with_for_update().filter_by(id=parent_id).first()
+            else:
+                session.query(Folder).with_for_update().filter_by(
+                    id=ROOT_DIRECTORY_ID
+                ).first()
+
             if (
                 Permissions.RENAME_DOCUMENT not in this_user.all_permissions
                 or not document.check_access_requirements(this_user, "write")
@@ -859,6 +878,63 @@ class RequestMoveDocumentHandler(RequestHandler):
                     handler.username,
                 )
 
+            if target_folder_id:
+                target_folder = (
+                    session.query(Folder)
+                    .with_for_update()
+                    .filter_by(id=target_folder_id)
+                    .first()
+                )
+                if not target_folder or target_folder.id == ROOT_DIRECTORY_ID:
+                    handler.conclude_request(
+                        **{
+                            "code": 404,
+                            "message": smsg.TARGET_DIRECTORY_NOT_FOUND,
+                            "data": {},
+                        }
+                    )
+                    return (
+                        404,
+                        document_id,
+                        {"target_folder_id": target_folder_id},
+                        handler.username,
+                    )
+
+                if not target_folder.check_access_requirements(
+                    user, "write"
+                ):  # 对于目标文件夹，移动可视为一种写操作
+                    handler.conclude_request(
+                        403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY
+                    )
+                    return (
+                        403,
+                        document_id,
+                        {"target_folder_id": target_folder_id},
+                        handler.username,
+                    )
+            else:
+                target_folder = None
+                root_folder = (
+                    session.query(Folder)
+                    .with_for_update()
+                    .filter_by(id=ROOT_DIRECTORY_ID)
+                    .first()
+                )
+                if (
+                    root_folder is not None
+                    and not root_folder.check_access_requirements(user, "write")
+                    and Permissions.SUPER_CREATE_DOCUMENT not in user.all_permissions
+                ):
+                    handler.conclude_request(
+                        403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY
+                    )
+                    return (
+                        403,
+                        document_id,
+                        {"target_folder_id": target_folder_id},
+                        handler.username,
+                    )
+
             if not global_config["document"]["allow_name_duplicate"]:
                 # 检查是否有同名文件或文件夹
 
@@ -908,54 +984,7 @@ class RequestMoveDocumentHandler(RequestHandler):
                     handler.conclude_request(400, {}, smsg.DIRECTORY_NAME_DUPLICATE)
                     return
 
-            if target_folder_id:
-                target_folder = session.get(Folder, target_folder_id)
-                if not target_folder or target_folder.id == ROOT_DIRECTORY_ID:
-                    handler.conclude_request(
-                        **{
-                            "code": 404,
-                            "message": smsg.TARGET_DIRECTORY_NOT_FOUND,
-                            "data": {},
-                        }
-                    )
-                    return (
-                        404,
-                        document_id,
-                        {"target_folder_id": target_folder_id},
-                        handler.username,
-                    )
-
-                if not target_folder.check_access_requirements(
-                    user, "write"
-                ):  # 对于目标文件夹，移动可视为一种写操作
-                    handler.conclude_request(
-                        403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY
-                    )
-                    return (
-                        403,
-                        document_id,
-                        {"target_folder_id": target_folder_id},
-                        handler.username,
-                    )
-
-                document.folder = target_folder
-            else:
-                root_folder = session.get(Folder, ROOT_DIRECTORY_ID)
-                if (
-                    root_folder is not None
-                    and not root_folder.check_access_requirements(user, "write")
-                    and Permissions.SUPER_CREATE_DOCUMENT not in user.all_permissions
-                ):
-                    handler.conclude_request(
-                        403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY
-                    )
-                    return (
-                        403,
-                        document_id,
-                        {"target_folder_id": target_folder_id},
-                        handler.username,
-                    )
-                document.folder = None
+            document.folder = target_folder
 
             session.commit()
 

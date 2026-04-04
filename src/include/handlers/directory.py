@@ -310,7 +310,12 @@ class RequestCreateDirectoryHandler(RequestHandler):
 
             parent = None
             if parent_id:
-                parent = session.get(Folder, parent_id)
+                parent = (
+                    session.query(Folder)
+                    .with_for_update()
+                    .filter_by(id=parent_id)
+                    .first()
+                )
                 if not parent:
                     handler.conclude_request(404, {}, smsg.DIRECTORY_NOT_FOUND)
                     return 404, parent_id, handler.username
@@ -318,7 +323,12 @@ class RequestCreateDirectoryHandler(RequestHandler):
                     handler.conclude_access_denial()
                     return 403, parent_id, handler.username
             else:
-                root_folder = session.get(Folder, ROOT_DIRECTORY_ID)
+                root_folder = (
+                    session.query(Folder)
+                    .with_for_update()
+                    .filter_by(id=ROOT_DIRECTORY_ID)
+                    .first()
+                )
                 has_root_write = (
                     root_folder.check_access_requirements(this_user, "write")
                     if root_folder
@@ -546,6 +556,16 @@ class RequestRenameDirectoryHandler(RequestHandler):
             if not folder:
                 handler.conclude_request(404, {}, smsg.DIRECTORY_NOT_FOUND)
                 return 404, folder_id, handler.username
+
+            parent_id = folder.parent_id
+
+            if parent_id:
+                session.query(Folder).with_for_update().filter_by(id=parent_id).first()
+            else:
+                session.query(Folder).with_for_update().filter_by(
+                    id=ROOT_DIRECTORY_ID
+                ).first()
+
             if (
                 Permissions.RENAME_DIRECTORY not in this_user.all_permissions
                 or not folder.check_access_requirements(this_user, "write")
@@ -671,6 +691,57 @@ class RequestMoveDirectoryHandler(RequestHandler):
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MOVE_DIRECTORY)
                 return 403, folder_id, handler.username
 
+            if target_folder_id:
+                target_folder = (
+                    session.query(Folder)
+                    .with_for_update()
+                    .filter_by(id=target_folder_id)
+                    .first()
+                )
+                if not target_folder:
+                    handler.conclude_request(
+                        **{
+                            "code": 404,
+                            "message": smsg.TARGET_DIRECTORY_NOT_FOUND,
+                            "data": {},
+                        }
+                    )
+                    return 404, folder_id, handler.username
+
+                if not target_folder.check_access_requirements(
+                    user, "write"
+                ):  # 对于目标文件夹，移动可视为一种写操作
+                    handler.conclude_request(
+                        403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY
+                    )
+                    return 403, folder_id, handler.username
+
+                # Check if target folder is a descendant of the folder being moved
+                if target_folder.id == folder.id or target_folder.is_descendant_of(
+                    folder
+                ):
+                    handler.conclude_request(
+                        400, {}, smsg.CANNOT_MOVE_DIRECTORY_INTO_SUBDIRECTORY
+                    )
+                    return 400, folder_id, handler.username
+            else:
+                target_folder = None
+                root_folder = (
+                    session.query(Folder)
+                    .with_for_update()
+                    .filter_by(id=ROOT_DIRECTORY_ID)
+                    .first()
+                )
+                if (
+                    root_folder is not None
+                    and not root_folder.check_access_requirements(user, "write")
+                    and Permissions.SUPER_CREATE_DIRECTORY not in user.all_permissions
+                ):
+                    handler.conclude_request(
+                        403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY
+                    )
+                    return 403, folder_id, handler.username
+
             if not global_config["document"]["allow_name_duplicate"]:
                 existing_folder = (
                     session.query(Folder)
@@ -721,48 +792,7 @@ class RequestMoveDirectoryHandler(RequestHandler):
                     )
                     return
 
-            if target_folder_id:
-                target_folder = session.get(Folder, target_folder_id)
-                if not target_folder:
-                    handler.conclude_request(
-                        **{
-                            "code": 404,
-                            "message": smsg.TARGET_DIRECTORY_NOT_FOUND,
-                            "data": {},
-                        }
-                    )
-                    return 404, folder_id, handler.username
-
-                if not target_folder.check_access_requirements(
-                    user, "write"
-                ):  # 对于目标文件夹，移动可视为一种写操作
-                    handler.conclude_request(
-                        403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY
-                    )
-                    return 403, folder_id, handler.username
-
-                # Check if target folder is a descendant of the folder being moved
-                if target_folder.id == folder.id or target_folder.is_descendant_of(
-                    folder
-                ):
-                    handler.conclude_request(
-                        400, {}, smsg.CANNOT_MOVE_DIRECTORY_INTO_SUBDIRECTORY
-                    )
-                    return 400, folder_id, handler.username
-
-                folder.parent = target_folder
-            else:
-                root_folder = session.get(Folder, ROOT_DIRECTORY_ID)
-                if (
-                    root_folder is not None
-                    and not root_folder.check_access_requirements(user, "write")
-                    and Permissions.SUPER_CREATE_DIRECTORY not in user.all_permissions
-                ):
-                    handler.conclude_request(
-                        403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY
-                    )
-                    return 403, folder_id, handler.username
-                folder.parent = None
+            folder.parent = target_folder
 
             session.commit()
 
@@ -992,13 +1022,22 @@ class RequestRestoreDirectoryHandler(RequestHandler):
             final_name = new_name if new_name else folder.name
 
             if db_parent_id is None:
-                root_obj = session.get(Folder, ROOT_DIRECTORY_ID)
+                root_obj = (
+                    session.query(Folder)
+                    .with_for_update()
+                    .filter_by(id=ROOT_DIRECTORY_ID)
+                    .first()
+                )
                 if root_obj and not root_obj.check_access_requirements(user, "write"):
                     handler.conclude_access_denial()
                     return 403, ROOT_DIRECTORY_ID, handler.username
             else:
-                target_parent = session.get(
-                    Folder, db_parent_id, execution_options={"include_deleted": True}
+                target_parent = (
+                    session.query(Folder)
+                    .execution_options(include_deleted=True)
+                    .with_for_update()
+                    .filter_by(id=db_parent_id)
+                    .first()
                 )
                 if not target_parent or target_parent.status != EntityStatus.OK:
                     handler.conclude_request(409, {}, smsg.TARGET_DIRECTORY_NOT_ACTIVE)
