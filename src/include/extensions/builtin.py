@@ -1,8 +1,10 @@
 import os
 import threading
-from typing import Optional, Union
+from typing import Optional, Union, cast
 
 from loguru import logger as log
+from sqlalchemy import update
+from sqlalchemy.engine import Engine
 
 from include.classes.connection_handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
@@ -11,10 +13,10 @@ from include.conf_loader import global_config
 from include.constants import CORE_VERSION, PROTOCOL_VERSION
 from include.database.handler import Session
 from include.database.models.classic import User
-from include.database.models.entity import DocumentRevision
 from include.database.models.file import File
 from include.shared import lockdown_enabled
 from include.system.ext_manager import hookimpl
+from include.util.count import _get_file_references
 
 logger = log.bind(name="builtin")
 
@@ -93,7 +95,6 @@ def ext_post_request(
 
 @hookimpl
 def ext_on_file_uploaded(id: str, path: str, sha256: str):
-    # TODO: use a unified file reference counter
     with Session() as session:
         try:
             if not sha256:
@@ -120,13 +121,14 @@ def ext_on_file_uploaded(id: str, path: str, sha256: str):
             if not existing:
                 return
 
-            session.query(DocumentRevision).filter(
-                DocumentRevision.file_id == uploaded.id
-            ).update({"file_id": existing.id}, synchronize_session=False)
-
-            session.query(User).filter(User.avatar_id == uploaded.id).update(
-                {"avatar_id": existing.id}, synchronize_session=False
-            )
+            engine = cast(Engine, session.get_bind())
+            for table, colname in _get_file_references(engine):
+                stmt = (
+                    update(table)
+                    .where(table.c[colname] == uploaded.id)
+                    .values({colname: existing.id})
+                )
+                session.execute(stmt)
 
             uploaded.delete()
             session.delete(uploaded)
