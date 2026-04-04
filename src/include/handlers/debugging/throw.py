@@ -3,6 +3,7 @@ from include.classes.enum.permissions import Permissions
 from include.classes.request_handler import RequestHandler
 from include.database.handler import Session
 from include.database.models.classic import User
+from include.system.messages import Messages as smsg
 
 
 class RequestThrowExceptionHandler(RequestHandler):
@@ -17,7 +18,7 @@ class RequestThrowExceptionHandler(RequestHandler):
             user = User.get_existing(session, handler.username)
 
             if Permissions.DEBUGGING not in user.all_permissions:
-                handler.conclude_request(403, {}, "User lacks debugging permission.")
+                handler.conclude_request(403, {}, smsg.USER_LACKS_DEBUGGING_PERMISSION)
                 return 403, None, handler.username
 
         raise Exception(

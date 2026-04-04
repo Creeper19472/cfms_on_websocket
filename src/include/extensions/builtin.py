@@ -16,6 +16,7 @@ from include.database.models.classic import User
 from include.database.models.file import File
 from include.shared import lockdown_enabled
 from include.system.ext_manager import hookimpl
+from include.system.messages import Messages as smsg
 from include.util.count import _get_file_references
 
 logger = log.bind(name="builtin")
@@ -62,7 +63,7 @@ class RequestShutdownHandler(RequestHandler):
             user = User.get_existing(session, handler.username)
 
             if Permissions.SHUTDOWN not in user.all_permissions:
-                handler.conclude_request(403, {}, "Permission denied")
+                handler.conclude_request(403, {}, smsg.PERMISSION_DENIED)
                 return
 
         # Shutdown the server

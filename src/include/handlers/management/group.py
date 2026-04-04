@@ -13,6 +13,7 @@ from include.database.models.classic import (
     UserGroupPermission,
     UserMembership,
 )
+from include.system.messages import Messages as smsg
 from include.util.group import create_group
 
 
@@ -98,13 +99,11 @@ class RequestCreateGroupHandler(RequestHandler):
             # be held by administrators.
 
             if Permissions.CREATE_GROUP not in user.all_permissions:
-                handler.conclude_request(
-                    403, {}, "You do not have permission to create groups"
-                )
-                return
+                handler.conclude_request(403, {}, smsg.PERMISSION_DENIED_CREATE_GROUP)
+                return 403, new_group_name, handler.username
 
             if session.get(UserGroup, new_group_name):
-                handler.conclude_request(400, {}, "Group already exists")
+                handler.conclude_request(400, {}, smsg.GROUP_ALREADY_EXISTS)
                 return
 
             create_group(

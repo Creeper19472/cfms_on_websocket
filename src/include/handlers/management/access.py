@@ -1,6 +1,5 @@
 __all__ = ["RequestGrantAccessHandler", "RequestRevokeAccessHandler"]
 
-import include.system.messages as smsg
 from include.classes.connection_handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
 from include.classes.request_handler import RequestHandler
@@ -14,6 +13,7 @@ from include.database.models.entity import (
     Document,
     Folder,
 )
+from include.system.messages import Messages as smsg
 
 ENTITY_TYPE_MAPPING = {"user": User, "group": UserGroup}
 TARGET_TYPE_MAPPING = {"document": Document, "directory": Folder}
@@ -77,18 +77,14 @@ class RequestGrantAccessHandler(RequestHandler):
             operator = User.get_existing(session, handler.username)
 
             if Permissions.MANAGE_ACCESS not in operator.all_permissions:
-                handler.conclude_request(
-                    code=403,
-                    message="You do not have permission to manage object access",
-                    data={},
-                )
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MANAGE_ACCESS)
                 return 403, handler.username
 
             entity: User | UserGroup | None = session.get(
                 ENTITY_TYPE_MAPPING[entity_type], entity_identifier
             )
             if not entity:
-                handler.conclude_request(404, {}, "entity not found")
+                handler.conclude_request(404, {}, smsg.ENTITY_NOT_FOUND)
                 return (
                     404,
                     None,
@@ -100,7 +96,7 @@ class RequestGrantAccessHandler(RequestHandler):
                 TARGET_TYPE_MAPPING[target_type], target_identifier
             )
             if not target:
-                handler.conclude_request(404, {}, "target not found")
+                handler.conclude_request(404, {}, smsg.TARGET_NOT_FOUND)
                 return (
                     404,
                     None,
@@ -110,7 +106,7 @@ class RequestGrantAccessHandler(RequestHandler):
 
             for access_type in access_types:
                 if not target.check_access_requirements(operator, access_type):
-                    handler.conclude_request(403, {}, "access denied")
+                    handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                     return (
                         403,
                         None,
@@ -234,17 +230,13 @@ class RequestRevokeAccessHandler(RequestHandler):
             operator = User.get_existing(session, handler.username)
 
             if Permissions.MANAGE_ACCESS not in operator.all_permissions:
-                handler.conclude_request(
-                    code=403,
-                    message="You do not have permission to manage object access",
-                    data={},
-                )
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MANAGE_ACCESS)
                 return 403, None, handler.username
 
             # Get the access entry
             entry = session.get(ObjectAccessEntry, entry_id)
             if not entry:
-                handler.conclude_request(404, {}, "Access entry not found")
+                handler.conclude_request(404, {}, smsg.ACCESS_ENTRY_NOT_FOUND)
                 return (
                     404,
                     None,

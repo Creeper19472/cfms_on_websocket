@@ -21,6 +21,7 @@ from include.database.handler import Session
 from include.database.models.file import File, FileTask
 from include.shared import clients, clients_lock
 from include.system.ext_manager import pm
+from include.system.messages import Messages as smsg
 from include.util.log import log_exception_with_id
 
 logger = log.bind(name="conn")
@@ -76,6 +77,12 @@ class ConnectionHandler:
 
         self.nonce: str = self.request.get("nonce", "")
         self.request_timestamp: float = self.request.get("timestamp", 0.0)
+
+    def conclude_permission_denial(self) -> None:
+        self.conclude_request(403, {}, smsg.PERMISSION_DENIED)
+
+    def conclude_access_denial(self) -> None:
+        self.conclude_request(403, {}, smsg.ACCESS_DENIED)
 
     def conclude_request(
         self, code: int, data: Optional[dict] = None, message: str = ""
