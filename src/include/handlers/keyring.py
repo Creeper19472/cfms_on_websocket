@@ -48,7 +48,7 @@ class RequestUploadUserKeyHandler(RequestHandler):
     Response codes:
         200 - Key uploaded successfully; ``key_id`` is returned in data.
         403 - Permission denied.
-        404 - Target user not found (admin path only).
+        404 - User does not exist (admin path only).
     """
 
     data_schema = {
@@ -284,7 +284,7 @@ class RequestListUserKeysHandler(RequestHandler):
     Response codes:
         200 - List returned in ``data.keys``.
         403 - Permission denied.
-        404 - Target user not found (admin path only).
+        404 - User does not exist (admin path only).
     """
 
     data_schema = {

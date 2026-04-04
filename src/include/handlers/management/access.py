@@ -77,11 +77,7 @@ class RequestGrantAccessHandler(RequestHandler):
             operator = User.get_existing(session, handler.username)
 
             if Permissions.MANAGE_ACCESS not in operator.all_permissions:
-                handler.conclude_request(
-                    code=403,
-                    message=smsg.ACCESS_DENIED_SET_ACCESS_RULES,
-                    data={},
-                )
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MANAGE_ACCESS)
                 return 403, handler.username
 
             entity: User | UserGroup | None = session.get(
@@ -234,11 +230,7 @@ class RequestRevokeAccessHandler(RequestHandler):
             operator = User.get_existing(session, handler.username)
 
             if Permissions.MANAGE_ACCESS not in operator.all_permissions:
-                handler.conclude_request(
-                    code=403,
-                    message=smsg.ACCESS_DENIED_SET_ACCESS_RULES,
-                    data={},
-                )
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MANAGE_ACCESS)
                 return 403, None, handler.username
 
             # Get the access entry
