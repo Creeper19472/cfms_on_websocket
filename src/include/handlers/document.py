@@ -90,7 +90,7 @@ class RequestGetDocumentInfoHandler(RequestHandler):
         document_id = handler.data.get("document_id")
 
         if not document_id:
-            handler.conclude_request(400, {}, "Document ID is required")
+            handler.conclude_request(400, {}, smsg.DOCUMENT_ID_REQUIRED)
             return
 
         with Session() as session:
@@ -99,7 +99,7 @@ class RequestGetDocumentInfoHandler(RequestHandler):
             document = session.get(Document, document_id)
 
             if not document:
-                handler.conclude_request(404, {}, "Document not found")
+                handler.conclude_request(404, {}, smsg.DOCUMENT_NOT_FOUND)
                 return 404, document_id, handler.username
 
             try:
@@ -111,7 +111,7 @@ class RequestGetDocumentInfoHandler(RequestHandler):
                 return 404, document_id, handler.username
 
             if not document.check_access_requirements(user, access_type="read"):
-                handler.conclude_request(403, {}, "Permission denied")
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                 return 403, document_id, handler.username
 
             info_code = 0
@@ -162,14 +162,14 @@ class RequestGetDocumentAccessRulesHandler(RequestHandler):
             document = session.get(Document, document_id)
 
             if not document:
-                handler.conclude_request(404, {}, "Document not found")
+                handler.conclude_request(404, {}, smsg.DOCUMENT_NOT_FOUND)
                 return 404, document_id, handler.username
 
             if (
                 not document.check_access_requirements(user, access_type="read")
                 or Permissions.VIEW_ACCESS_RULES not in user.all_permissions
             ):
-                handler.conclude_request(403, {}, "Permission denied")
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                 return 403, document_id, handler.username
 
             # generate access_rules
@@ -210,11 +210,11 @@ class RequestGetDocumentHandler(RequestHandler):
             document = session.get(Document, document_id)
 
             if not document:
-                handler.conclude_request(404, {}, "Document not found")
+                handler.conclude_request(404, {}, smsg.DOCUMENT_NOT_FOUND)
                 return 404, document_id, handler.username
 
             if not document.check_access_requirements(user):
-                handler.conclude_request(403, {}, "Access denied to the document")
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                 return 403, document_id, handler.username
 
             try:
@@ -261,27 +261,27 @@ class RequestCreateDocumentHandler(RequestHandler):
         inherit_parent = handler.data.get("inherit_parent", True)
 
         if not title:
-            handler.conclude_request(400, {}, "Document title is required")
+            handler.conclude_request(400, {}, smsg.DOCUMENT_TITLE_REQUIRED)
             return
 
         with Session() as session:
             user = User.get_existing(session, handler.username)
 
             if Permissions.CREATE_DOCUMENT not in user.all_permissions:
-                handler.conclude_request(403, {}, "Permission denied")
+                handler.conclude_request(403, {}, smsg.PERMISSION_DENIED)
                 return 403, folder_id, {"title": title}, handler.username
 
             if folder_id:
                 folder = session.get(Folder, folder_id)
                 if not folder or folder.id == ROOT_DIRECTORY_ID:
-                    handler.conclude_request(404, {}, "Folder not found")
+                    handler.conclude_request(404, {}, smsg.FOLDER_NOT_FOUND)
                     return 404, folder_id, {"title": title}, handler.username
 
                 if (
                     not folder.check_access_requirements(user, access_type="write")
                     and Permissions.SUPER_CREATE_DOCUMENT not in user.all_permissions
                 ):
-                    handler.conclude_request(403, {}, "Access denied to the folder")
+                    handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                     return 403, folder_id, {"title": title}, handler.username
             else:
                 root_folder = session.get(Folder, ROOT_DIRECTORY_ID)
@@ -292,7 +292,7 @@ class RequestCreateDocumentHandler(RequestHandler):
                     )
                     and Permissions.SUPER_CREATE_DOCUMENT not in user.all_permissions
                 ):
-                    handler.conclude_request(403, {}, "Access denied to the folder")
+                    handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                     return 403, folder_id, {"title": title}, handler.username
 
             if not global_config["document"]["allow_name_duplicate"]:
@@ -445,7 +445,7 @@ class RequestUploadDocumentHandler(RequestHandler):
                 if not document.check_access_requirements(
                     this_user, access_type="write"
                 ):
-                    handler.conclude_request(403, {}, "Access denied to the document")
+                    handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                     return 403, document_id, handler.username
 
                 today = datetime.date.today()
@@ -477,7 +477,7 @@ class RequestUploadDocumentHandler(RequestHandler):
                 session.commit()
 
             else:
-                handler.conclude_request(404, {}, "Document not found")
+                handler.conclude_request(404, {}, smsg.DOCUMENT_NOT_FOUND)
                 return 404, document_id, handler.username
 
             task_data = create_file_task(new_file, 1)
@@ -512,14 +512,14 @@ class RequestDeleteDocumentHandler(RequestHandler):
             document = session.get(Document, document_id)
 
             if not document:
-                handler.conclude_request(404, {}, "Document not found")
+                handler.conclude_request(404, {}, smsg.DOCUMENT_NOT_FOUND)
                 return 404, document_id, handler.username
 
             if (
                 Permissions.DELETE_DOCUMENT not in user.all_permissions
                 or not document.check_access_requirements(user, access_type="write")
             ):
-                handler.conclude_request(403, {}, "Access denied to the document")
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                 return 403, document_id, handler.username
 
             document.status = EntityStatus.DELETED
@@ -560,25 +560,13 @@ class RequestRenameDocumentHandler(RequestHandler):
             document = session.get(Document, document_id)
 
             if not document:
-                handler.conclude_request(
-                    **{
-                        "code": 404,
-                        "message": "Document not found",
-                        "data": {},
-                    }
-                )
+                handler.conclude_request(404, {}, smsg.DOCUMENT_NOT_FOUND)
                 return 404, document_id, handler.username
             if (
                 Permissions.RENAME_DOCUMENT not in this_user.all_permissions
                 or not document.check_access_requirements(this_user, "write")
             ):
-                handler.conclude_request(
-                    **{
-                        "code": 403,
-                        "message": "Access denied",
-                        "data": {},
-                    }
-                )
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                 return 403, document_id, handler.username
 
             if document.title == new_title:
@@ -673,7 +661,7 @@ class RequestDownloadFileHandler(RequestHandler):
         with Session() as session:
             task = session.get(FileTask, task_id)
             if not task:
-                handler.conclude_request(404, {}, "Task not found")
+                handler.conclude_request(404, {}, smsg.TASK_NOT_FOUND)
                 return
 
             if task.status != 0 or task.mode != 0:
@@ -714,7 +702,7 @@ class RequestUploadFileHandler(RequestHandler):
         with Session() as session:
             task = session.get(FileTask, task_id)
             if not task:
-                handler.conclude_request(404, {}, "Task not found")
+                handler.conclude_request(404, {}, smsg.TASK_NOT_FOUND)
                 return
 
             if task.status != 0 or task.mode != 1:
@@ -766,13 +754,7 @@ class RequestSetDocumentRulesHandler(RequestHandler):
         inherit_parent: bool = handler.data.get("inherit_parent", True)
 
         if not handler.username:
-            handler.conclude_request(
-                **{
-                    "code": 401,
-                    "message": "Authentication is required",
-                    "data": {},
-                }
-            )
+            handler.conclude_request(401, {}, smsg.AUTHENTICATION_REQUIRED)
             return 401, document_id
 
         with Session() as session:
@@ -781,15 +763,15 @@ class RequestSetDocumentRulesHandler(RequestHandler):
             document = session.get(Document, document_id)
 
             if not document:
-                handler.conclude_request(404, {}, "Document not found")
+                handler.conclude_request(404, {}, smsg.DOCUMENT_NOT_FOUND)
                 return 404, document_id, handler.username
 
             if Permissions.SET_ACCESS_RULES not in user.all_permissions:
-                handler.conclude_request(403, {}, "Access denied to set access rules")
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED_SET_ACCESS_RULES)
                 return 403, document_id, handler.username
 
             if not document.check_access_requirements(user, access_type="manage"):
-                handler.conclude_request(403, {}, "Access denied to the document")
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                 return 403, document_id, handler.username
 
             try:
@@ -864,7 +846,7 @@ class RequestMoveDocumentHandler(RequestHandler):
                 )
 
             if document.folder_id == target_folder_id:
-                handler.conclude_request(400, {}, "Cannot move to the same folder")
+                handler.conclude_request(400, {}, smsg.CANNOT_MOVE_TO_SAME_FOLDER)
                 return (
                     400,
                     document_id,
@@ -1009,14 +991,14 @@ class RequestPurgeDocumentHandler(RequestHandler):
             user = User.get_existing(session, handler.username)
 
             if Permissions.PURGE not in user.all_permissions:
-                handler.conclude_request(403, {}, "No permission to permanently delete")
+                handler.conclude_request(403, {}, smsg.PERMISSION_DENIED)
                 return
 
             document = session.get(
                 Document, doc_id, execution_options={"include_deleted": True}
             )
             if document is None:
-                handler.conclude_request(404, {}, "Document not found")
+                handler.conclude_request(404, {}, smsg.DOCUMENT_NOT_FOUND)
                 return
 
             if document.status != EntityStatus.DELETED:
@@ -1026,7 +1008,7 @@ class RequestPurgeDocumentHandler(RequestHandler):
                 return
 
             if not document.check_access_requirements(user, "write"):
-                handler.conclude_request(403, {}, "Access denied to the document")
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                 return
 
             document.delete_all_revisions(do_commit=False)
@@ -1076,11 +1058,11 @@ class RequestRestoreDocumentHandler(RequestHandler):
             )
 
             if not document or document.status != EntityStatus.DELETED:
-                handler.conclude_request(404, {}, "Deleted document not found")
+                handler.conclude_request(404, {}, smsg.DELETED_DOCUMENT_NOT_FOUND)
                 return 404, doc_id, handler.username
 
             if not document.check_access_requirements(user, "write"):
-                handler.conclude_request(403, {}, "Access denied to the document")
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                 return 403, doc_id, handler.username
 
             if target_folder_provided:
@@ -1095,22 +1077,18 @@ class RequestRestoreDocumentHandler(RequestHandler):
             if db_folder_id is None:
                 root_obj = session.get(Folder, ROOT_DIRECTORY_ID)
                 if root_obj and not root_obj.check_access_requirements(user, "write"):
-                    handler.conclude_request(
-                        403, {}, "Access denied to the root directory"
-                    )
+                    handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                     return 403, ROOT_DIRECTORY_ID, handler.username
             else:
                 target_folder = session.get(
                     Folder, db_folder_id, execution_options={"include_deleted": True}
                 )
                 if not target_folder:
-                    handler.conclude_request(404, {}, "Target folder not found")
+                    handler.conclude_request(404, {}, smsg.TARGET_DIRECTORY_NOT_FOUND)
                     return 404, db_folder_id, handler.username
 
                 if not target_folder.check_access_requirements(user, "write"):
-                    handler.conclude_request(
-                        403, {}, "Access denied to the target folder"
-                    )
+                    handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                     return 403, db_folder_id, handler.username
 
                 if target_folder.status != EntityStatus.OK:

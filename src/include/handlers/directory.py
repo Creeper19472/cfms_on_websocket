@@ -164,7 +164,7 @@ class RequestGetDirectoryInfoHandler(RequestHandler):
         directory_id: str = handler.data["directory_id"]
 
         if not directory_id:
-            handler.conclude_request(400, {}, "Directory ID is required")
+            handler.conclude_request(400, {}, smsg.DIRECTORY_ID_REQUIRED)
             return
 
         with Session() as session:
@@ -178,7 +178,7 @@ class RequestGetDirectoryInfoHandler(RequestHandler):
                 return 404, directory_id, handler.username
 
             if not directory.check_access_requirements(user, access_type="read"):
-                handler.conclude_request(403, {}, "Permission denied")
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                 return 403, directory_id, handler.username
 
             info_code = 0
@@ -228,14 +228,14 @@ class RequestGetDirectoryAccessRulesHandler(RequestHandler):
             directory = session.get(Folder, directory_id)
 
             if not directory:
-                handler.conclude_request(404, {}, "Document not found")
+                handler.conclude_request(404, {}, smsg.DIRECTORY_NOT_FOUND)
                 return 404, directory_id, handler.username
 
             if (
                 not directory.check_access_requirements(user, access_type="read")
                 or Permissions.VIEW_ACCESS_RULES not in user.all_permissions
             ):
-                handler.conclude_request(403, {}, "Permission denied")
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                 return 403, directory_id, handler.username
 
             # generate access_rules
@@ -315,9 +315,7 @@ class RequestCreateDirectoryHandler(RequestHandler):
                     handler.conclude_request(404, {}, smsg.DIRECTORY_NOT_FOUND)
                     return 404, parent_id, handler.username
                 if not parent.check_access_requirements(this_user, "write"):
-                    handler.conclude_request(
-                        403, {}, "Access denied for parent directory"
-                    )
+                    handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                     return 403, parent_id, handler.username
             else:
                 root_folder = session.get(Folder, ROOT_DIRECTORY_ID)
@@ -432,25 +430,13 @@ class RequestDeleteDirectoryHandler(RequestHandler):
             this_user = User.get_existing(session, handler.username)
             folder = session.get(Folder, folder_id)
             if not folder:
-                handler.conclude_request(
-                    **{
-                        "code": 404,
-                        "message": "Directory not found",
-                        "data": {},
-                    }
-                )
+                handler.conclude_request(404, {}, smsg.DIRECTORY_NOT_FOUND)
                 return 404, folder_id, handler.username
             if (
                 Permissions.DELETE_DIRECTORY not in this_user.all_permissions
                 or not folder.check_access_requirements(this_user, "write")
             ):
-                handler.conclude_request(
-                    **{
-                        "code": 403,
-                        "message": "Access denied",
-                        "data": {},
-                    }
-                )
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                 return 403, folder_id, handler.username
 
             operation_id = f"OP_DEL_{secrets.token_hex(8)}_{int(time.time())}"
@@ -566,13 +552,7 @@ class RequestRenameDirectoryHandler(RequestHandler):
                 Permissions.RENAME_DIRECTORY not in this_user.all_permissions
                 or not folder.check_access_requirements(this_user, "write")
             ):
-                handler.conclude_request(
-                    **{
-                        "code": 403,
-                        "message": "Access denied",
-                        "data": {},
-                    }
-                )
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                 return 403, folder_id, handler.username
 
             if folder.name == new_name:
@@ -823,13 +803,7 @@ class RequestSetDirectoryRulesHandler(RequestHandler):
         inherit_parent: bool = handler.data.get("inherit_parent", True)
 
         if not handler.username:
-            handler.conclude_request(
-                **{
-                    "code": 401,
-                    "message": "Authentication is required",
-                    "data": {},
-                }
-            )
+            handler.conclude_request(401, {}, smsg.AUTHENTICATION_REQUIRED)
             return 401, directory_id
 
         with Session() as session:
@@ -838,15 +812,15 @@ class RequestSetDirectoryRulesHandler(RequestHandler):
             directory = session.get(Folder, directory_id)
 
             if not directory:
-                handler.conclude_request(404, {}, "Directory not found")
+                handler.conclude_request(404, {}, smsg.DIRECTORY_NOT_FOUND)
                 return 404, directory_id, handler.username
 
             if Permissions.SET_ACCESS_RULES not in user.all_permissions:
-                handler.conclude_request(403, {}, "Access denied to set access rules")
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED_SET_ACCESS_RULES)
                 return 403, directory_id, handler.username
 
             if not directory.check_access_requirements(user, access_type="manage"):
-                handler.conclude_request(403, {}, "Access denied to the directory")
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                 return 403, directory_id, handler.username
 
             try:
@@ -892,16 +866,14 @@ class RequestPurgeDirectoryHandler(RequestHandler):
         folder_id = handler.data["folder_id"]
 
         if folder_id == ROOT_DIRECTORY_ID:
-            handler.conclude_request(403, {}, "Cannot purge the root directory")
+            handler.conclude_request(403, {}, smsg.CANNOT_PURGE_ROOT_DIRECTORY)
             return 403, folder_id, handler.username
 
         with Session() as session:
             user = User.get_existing(session, handler.username)
 
             if Permissions.PURGE not in user.all_permissions:
-                handler.conclude_request(
-                    403, {}, "No permission to permanently purge data"
-                )
+                handler.conclude_request(403, {}, smsg.PERMISSION_DENIED)
                 return 403, folder_id, handler.username
 
             folder = session.get(
@@ -909,7 +881,7 @@ class RequestPurgeDirectoryHandler(RequestHandler):
             )
 
             if not folder:
-                handler.conclude_request(404, {}, "Directory not found")
+                handler.conclude_request(404, {}, smsg.DIRECTORY_NOT_FOUND)
                 return 404, folder_id, handler.username
 
             if folder.status != EntityStatus.DELETED:
@@ -919,7 +891,7 @@ class RequestPurgeDirectoryHandler(RequestHandler):
                 return 400, folder_id, handler.username
 
             if not folder.check_access_requirements(user, "write"):
-                handler.conclude_request(403, {}, "Access denied to the directory")
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                 return 403, folder_id, handler.username
 
             try:
@@ -992,14 +964,14 @@ class RequestRestoreDirectoryHandler(RequestHandler):
         new_name = handler.data.get("new_name")
 
         if folder_id == ROOT_DIRECTORY_ID:
-            handler.conclude_request(400, {}, "Cannot restore root directory")
+            handler.conclude_request(400, {}, smsg.CANNOT_RESTORE_ROOT_DIRECTORY)
             return 400, folder_id, handler.username
 
         with Session() as session:
             user = User.get_existing(session, handler.username)
 
             if Permissions.RESTORE not in user.all_permissions:
-                handler.conclude_request(403, {}, "No permission to restore data")
+                handler.conclude_request(403, {}, smsg.PERMISSION_DENIED)
                 return 403, folder_id, handler.username
 
             folder = session.get(
@@ -1007,13 +979,11 @@ class RequestRestoreDirectoryHandler(RequestHandler):
             )
 
             if not folder or folder.status != EntityStatus.DELETED:
-                handler.conclude_request(404, {}, "Deleted directory not found")
+                handler.conclude_request(404, {}, smsg.DELETED_DIRECTORY_NOT_FOUND)
                 return 404, folder_id, handler.username
 
             if not folder.check_access_requirements(user, "write"):
-                handler.conclude_request(
-                    403, {}, "Access denied to directory being restored"
-                )
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                 return 403, folder_id, handler.username
 
             if target_parent_provided:
@@ -1028,20 +998,18 @@ class RequestRestoreDirectoryHandler(RequestHandler):
             if db_parent_id is None:
                 root_obj = session.get(Folder, ROOT_DIRECTORY_ID)
                 if root_obj and not root_obj.check_access_requirements(user, "write"):
-                    handler.conclude_request(403, {}, "Access denied to root directory")
+                    handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                     return 403, ROOT_DIRECTORY_ID, handler.username
             else:
                 target_parent = session.get(
                     Folder, db_parent_id, execution_options={"include_deleted": True}
                 )
                 if not target_parent or target_parent.status != EntityStatus.OK:
-                    handler.conclude_request(409, {}, "Target directory is not active")
+                    handler.conclude_request(409, {}, smsg.TARGET_DIRECTORY_NOT_ACTIVE)
                     return 409, db_parent_id, handler.username
 
                 if not target_parent.check_access_requirements(user, "write"):
-                    handler.conclude_request(
-                        403, {}, "Access denied to target directory"
-                    )
+                    handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
                     return 403, db_parent_id, handler.username
 
             existing_conflict = (
@@ -1138,13 +1106,16 @@ class RequestListDeletedItemsHandler(RequestHandler):
                 execution_options={"include_deleted": True},
             )
 
-            # FIXME: Unify the access requirement check response
-            if not parent_folder or (
+            if not parent_folder:
+                handler.conclude_request(404, {}, smsg.DIRECTORY_NOT_FOUND)
+                return 404, parent_id, handler.username
+
+            if (
                 Permissions.SUPER_LIST_DIRECTORY not in user.all_permissions
                 and not parent_folder.check_access_requirements(user, "read")
             ):
-                handler.conclude_request(404, {}, "Directory not found")
-                return 404, parent_id, handler.username
+                handler.conclude_request(403, {}, smsg.ACCESS_DENIED)
+                return 403, parent_id, handler.username
 
             deleted_folders = (
                 session.query(Folder)

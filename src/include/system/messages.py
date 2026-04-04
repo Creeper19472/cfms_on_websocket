@@ -9,19 +9,35 @@ SUCCESS = _("Success")
 SUBJECT_DIRECTORY_NOT_FOUND = _("Subject directory not found")
 
 DIRECTORY_NOT_FOUND = _("Directory not found")
+DOCUMENT_NOT_FOUND = _("Document not found")
+FOLDER_NOT_FOUND = _("Folder not found")
+DELETED_DIRECTORY_NOT_FOUND = _("Deleted directory not found")
+DELETED_DOCUMENT_NOT_FOUND = _("Deleted document not found")
+TASK_NOT_FOUND = _("Task not found")
 TARGET_OBJECT_NOT_FOUND = _("Target object not found")
 TARGET_DIRECTORY_NOT_FOUND = _("Target directory not found")
 TARGET_DOCUMENT_NOT_FOUND = _("Target document not found")
 
+DIRECTORY_ID_REQUIRED = _("Directory ID is required")
+DOCUMENT_ID_REQUIRED = _("Document ID is required")
+DOCUMENT_TITLE_REQUIRED = _("Document title is required")
+
 MISSING_USERNAME = _("Username is missing")
 MISSING_USERNAME_OR_TOKEN = _("Username or token is missing")
 INVALID_USER_OR_TOKEN = _("Invalid user or token")
+AUTHENTICATION_REQUIRED = _("Authentication is required")
 
 ACCESS_DENIED = _("Access denied")
 ACCESS_DENIED_MOVE_DOCUMENT = _("Access denied to move document")
 ACCESS_DENIED_MOVE_DIRECTORY = _("Access denied to move directory")
 ACCESS_DENIED_WRITE_DIRECTORY = _("Access denied to write directory")
+ACCESS_DENIED_SET_ACCESS_RULES = _("Access denied to set access rules")
 PERMISSION_DENIED = _("Permission denied")
+
+CANNOT_PURGE_ROOT_DIRECTORY = _("Cannot purge the root directory")
+CANNOT_RESTORE_ROOT_DIRECTORY = _("Cannot restore root directory")
+CANNOT_MOVE_TO_SAME_FOLDER = _("Cannot move to the same folder")
+TARGET_DIRECTORY_NOT_ACTIVE = _("Target directory is not active")
 
 CANNOT_MOVE_DIRECTORY_INTO_SUBDIRECTORY = _(
     "Cannot move a directory into its own subdirectory"
