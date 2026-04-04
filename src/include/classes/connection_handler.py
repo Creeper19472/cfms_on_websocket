@@ -77,6 +77,16 @@ class ConnectionHandler:
         self.nonce: str = self.request.get("nonce", "")
         self.request_timestamp: float = self.request.get("timestamp", 0.0)
 
+    def deny_permission(self) -> None:
+        from include.system import messages as smsg
+
+        self.conclude_request(403, {}, smsg.PERMISSION_DENIED)
+
+    def deny_access(self) -> None:
+        from include.system import messages as smsg
+
+        self.conclude_request(403, {}, smsg.ACCESS_DENIED)
+
     def conclude_request(
         self, code: int, data: Optional[dict] = None, message: str = ""
     ) -> None:
