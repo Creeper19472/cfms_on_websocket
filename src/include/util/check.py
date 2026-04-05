@@ -17,34 +17,24 @@ def get_target_folder_and_check_write(
     Returns (folder_object, error_code, error_message).
     If valid, error_code is 0.
     """
-    if target_folder_id:
-        target_folder = (
-            session.query(Folder)
-            .with_for_update()
-            .filter_by(id=target_folder_id)
-            .first()
-        )
-        if not target_folder or target_folder.id == ROOT_DIRECTORY_ID:
-            return None, 404, smsg.TARGET_DIRECTORY_NOT_FOUND
+    if not target_folder_id:
+        target_folder_id = ROOT_DIRECTORY_ID
 
-        if not target_folder.check_access_requirements(user, "write"):
-            return None, 403, smsg.ACCESS_DENIED_WRITE_DIRECTORY
+    target_folder = (
+        session.query(Folder).with_for_update().filter_by(id=target_folder_id).first()
+    )
+    if not target_folder:
+        return None, 404, smsg.TARGET_DIRECTORY_NOT_FOUND
 
-        return target_folder, 0, ""
-    else:
-        root_folder = (
-            session.query(Folder)
-            .with_for_update()
-            .filter_by(id=ROOT_DIRECTORY_ID)
-            .first()
-        )
+    if not target_folder.check_access_requirements(user, "write"):
         if (
-            root_folder is not None
-            and not root_folder.check_access_requirements(user, "write")
-            and super_permission not in user.all_permissions
+            target_folder_id == ROOT_DIRECTORY_ID
+            and super_permission in user.all_permissions
         ):
-            return None, 403, smsg.ACCESS_DENIED_WRITE_DIRECTORY
-        return None, 0, ""
+            return target_folder, 0, ""
+        return None, 403, smsg.ACCESS_DENIED_WRITE_DIRECTORY
+
+    return target_folder, 0, ""
 
 
 def handle_name_duplicate(
@@ -59,20 +49,19 @@ def handle_name_duplicate(
     if global_config["document"]["allow_name_duplicate"]:
         return False, 0, {}, ""
 
-    normalized_folder_id = (
-        folder_id if folder_id and folder_id != ROOT_DIRECTORY_ID else None
-    )
+    if not folder_id:
+        folder_id = ROOT_DIRECTORY_ID
 
     existing_doc = (
         session.query(Document)
         .with_for_update()
-        .filter_by(folder_id=normalized_folder_id, title=title)
+        .filter_by(folder_id=folder_id, title=title)
         .first()
     )
     existing_folder = (
         session.query(Folder)
         .with_for_update()
-        .filter_by(parent_id=normalized_folder_id, name=title)
+        .filter_by(parent_id=folder_id, name=title)
         .first()
     )
 

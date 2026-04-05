@@ -170,7 +170,9 @@ def server_init():
         init_file = File(id="init", path="./content/hello", active=True)
         session.add(init_file)
 
-        init_document = Document(id="hello", title="Hello World")
+        init_document = Document(
+            id="hello", title="Hello World", folder_id=ROOT_DIRECTORY_ID
+        )
         init_document_revision = DocumentRevision(file_id=init_file.id)
         init_document.revisions.append(init_document_revision)
         init_document.current_revision = init_document_revision

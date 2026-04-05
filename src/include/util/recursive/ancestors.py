@@ -128,9 +128,7 @@ def search_documents_with_access(
         return [], [], {}
 
     # Step 2：收集起点 folder_id（文档的直接父文件夹，去重）
-    seed_folder_ids = list(
-        {doc.folder_id for doc in documents if doc.folder_id is not None}
-    )
+    seed_folder_ids = list({doc.folder_id for doc in documents if doc.folder_id})
 
     # Step 3-5：交给公共函数处理
     ancestor_folders, oae_by_target = _fetch_ancestors_and_oae(
@@ -173,9 +171,7 @@ def search_folders_with_access(
 
     # Step 2：收集起点 parent_id（命中文件夹的直接父级，去重）
     #         注意：命中的文件夹本身已加载，起点从它们的 parent_id 开始向上
-    seed_folder_ids = list(
-        {f.parent_id for f in matched_folders if f.parent_id is not None}
-    )
+    seed_folder_ids = list({f.parent_id for f in matched_folders if f.parent_id})
 
     matched_ids = {f.id for f in matched_folders}
 

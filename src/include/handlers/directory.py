@@ -56,39 +56,20 @@ class RequestListDirectoryHandler(RequestHandler):
 
             # Determine parent folder and fetch children/documents
             if not folder_id:
-                parent = None
-                # NOTE: Root-level folders have parent_id=None, not parent_id=ROOT_DIRECTORY_ID.
-                # The sentinel record exists only for access control purposes; it does not
-                # participate in the parent/child hierarchy of ordinary folders.
-                children = (
-                    session.query(Folder)
-                    .filter(Folder.parent_id.is_(None), Folder.id != ROOT_DIRECTORY_ID)
-                    .all()
-                )
-                documents = (
-                    session.query(Document).filter(Document.folder_id.is_(None)).all()
-                )
-                root_folder = session.get(Folder, ROOT_DIRECTORY_ID)
-                has_permission = (
-                    Permissions.SUPER_LIST_DIRECTORY in this_user.all_permissions
-                    or (
-                        root_folder is not None
-                        and root_folder.check_access_requirements(this_user, "read")
-                    )
-                )
-            else:
-                folder = session.get(Folder, folder_id)
-                if not folder or folder.id == ROOT_DIRECTORY_ID:
-                    handler.conclude_request(404, {}, smsg.DIRECTORY_NOT_FOUND)
-                    return 404, folder_id, handler.username
+                folder_id = ROOT_DIRECTORY_ID
 
-                has_permission = (
-                    Permissions.SUPER_LIST_DIRECTORY in this_user.all_permissions
-                    or folder.check_access_requirements(this_user, "read")
-                )
-                parent = folder.parent
-                children = folder.children
-                documents = folder.documents
+            folder = session.get(Folder, folder_id)
+            if not folder:
+                handler.conclude_request(404, {}, smsg.DIRECTORY_NOT_FOUND)
+                return 404, folder_id, handler.username
+
+            has_permission = (
+                Permissions.SUPER_LIST_DIRECTORY in this_user.all_permissions
+                or folder.check_access_requirements(this_user, "read")
+            )
+            parent = folder.parent
+            children = folder.children
+            documents = folder.documents
 
             if not has_permission:
                 handler.conclude_access_denial()
@@ -98,10 +79,8 @@ class RequestListDirectoryHandler(RequestHandler):
 
             if parent:
                 parent_id = parent.id
-            elif not folder_id:
-                parent_id = None
             else:
-                parent_id = "/"
+                parent_id = None
 
             response = {
                 "code": 200,
@@ -175,7 +154,7 @@ class RequestGetDirectoryInfoHandler(RequestHandler):
 
             directory = session.get(Folder, directory_id)
 
-            if not directory or directory.id == ROOT_DIRECTORY_ID:
+            if not directory:
                 handler.conclude_request(404, {}, smsg.DIRECTORY_NOT_FOUND)
                 return 404, directory_id, handler.username
 
@@ -297,9 +276,8 @@ class RequestCreateDirectoryHandler(RequestHandler):
         exists_ok = data.get("exists_ok", False)
         inherit_parent = data.get("inherit_parent", True)
 
-        if parent_id == ROOT_DIRECTORY_ID:
-            handler.conclude_request(404, {}, smsg.DIRECTORY_NOT_FOUND)
-            return
+        if not parent_id:
+            parent_id = ROOT_DIRECTORY_ID
 
         with Session() as session:
             this_user = User.get_existing(session, handler.username)
@@ -310,37 +288,20 @@ class RequestCreateDirectoryHandler(RequestHandler):
                 )
                 return 403, parent_id, handler.username
 
-            parent = None
-            if parent_id:
-                parent = (
-                    session.query(Folder)
-                    .with_for_update()
-                    .filter_by(id=parent_id)
-                    .first()
-                )
-                if not parent:
-                    handler.conclude_request(404, {}, smsg.DIRECTORY_NOT_FOUND)
-                    return 404, parent_id, handler.username
-                if not parent.check_access_requirements(this_user, "write"):
-                    handler.conclude_access_denial()
-                    return 403, parent_id, handler.username
-            else:
-                root_folder = (
-                    session.query(Folder)
-                    .with_for_update()
-                    .filter_by(id=ROOT_DIRECTORY_ID)
-                    .first()
-                )
-                has_root_write = (
-                    root_folder.check_access_requirements(this_user, "write")
-                    if root_folder
-                    else True
-                )
+            parent = (
+                session.query(Folder).with_for_update().filter_by(id=parent_id).first()
+            )
+            if not parent:
+                handler.conclude_request(404, {}, smsg.DIRECTORY_NOT_FOUND)
+                return 404, parent_id, handler.username
+            if not parent.check_access_requirements(this_user, "write"):
                 if (
-                    not has_root_write
-                    and Permissions.SUPER_CREATE_DIRECTORY
-                    not in this_user.all_permissions
+                    parent_id == ROOT_DIRECTORY_ID
+                    and Permissions.SUPER_CREATE_DIRECTORY in this_user.all_permissions
                 ):
+                    # Allow super creation in root directory if global permission is given
+                    pass
+                else:
                     handler.conclude_access_denial()
                     return 403, parent_id, handler.username
 
@@ -635,6 +596,9 @@ class RequestMoveDirectoryHandler(RequestHandler):
         folder_id: str = handler.data["folder_id"]
         target_folder_id: Optional[str] = handler.data.get("target_folder_id")
 
+        if not target_folder_id:
+            target_folder_id = ROOT_DIRECTORY_ID
+
         if folder_id == ROOT_DIRECTORY_ID:
             handler.conclude_request(404, {}, smsg.DIRECTORY_NOT_FOUND)
             return 404, folder_id, handler.username
@@ -662,56 +626,40 @@ class RequestMoveDirectoryHandler(RequestHandler):
                 handler.conclude_request(403, {}, smsg.ACCESS_DENIED_MOVE_DIRECTORY)
                 return 403, folder_id, handler.username
 
-            if target_folder_id:
-                target_folder = (
-                    session.query(Folder)
-                    .with_for_update()
-                    .filter_by(id=target_folder_id)
-                    .first()
+            target_folder = (
+                session.query(Folder)
+                .with_for_update()
+                .filter_by(id=target_folder_id)
+                .first()
+            )
+            if not target_folder:
+                handler.conclude_request(
+                    **{
+                        "code": 404,
+                        "message": smsg.TARGET_DIRECTORY_NOT_FOUND,
+                        "data": {},
+                    }
                 )
-                if not target_folder:
-                    handler.conclude_request(
-                        **{
-                            "code": 404,
-                            "message": smsg.TARGET_DIRECTORY_NOT_FOUND,
-                            "data": {},
-                        }
-                    )
-                    return 404, folder_id, handler.username
+                return 404, folder_id, handler.username
 
-                if not target_folder.check_access_requirements(
-                    user, "write"
-                ):  # 对于目标文件夹，移动可视为一种写操作
-                    handler.conclude_request(
-                        403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY
-                    )
-                    return 403, folder_id, handler.username
-
-                # Check if target folder is a descendant of the folder being moved
-                if target_folder.id == folder.id or target_folder.is_descendant_of(
-                    folder
-                ):
-                    handler.conclude_request(
-                        400, {}, smsg.CANNOT_MOVE_DIRECTORY_INTO_SUBDIRECTORY
-                    )
-                    return 400, folder_id, handler.username
-            else:
-                target_folder = None
-                root_folder = (
-                    session.query(Folder)
-                    .with_for_update()
-                    .filter_by(id=ROOT_DIRECTORY_ID)
-                    .first()
-                )
+            if not target_folder.check_access_requirements(user, "write"):
                 if (
-                    root_folder is not None
-                    and not root_folder.check_access_requirements(user, "write")
-                    and Permissions.SUPER_CREATE_DIRECTORY not in user.all_permissions
+                    target_folder_id == ROOT_DIRECTORY_ID
+                    and Permissions.SUPER_CREATE_DIRECTORY in user.all_permissions
                 ):
+                    pass
+                else:
                     handler.conclude_request(
                         403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY
                     )
                     return 403, folder_id, handler.username
+
+            # Check if target folder is a descendant of the folder being moved
+            if target_folder.id == folder.id or target_folder.is_descendant_of(folder):
+                handler.conclude_request(
+                    400, {}, smsg.CANNOT_MOVE_DIRECTORY_INTO_SUBDIRECTORY
+                )
+                return 400, folder_id, handler.username
 
             has_conflict, err_code, err_data, err_msg = handle_name_duplicate(
                 session, user, target_folder_id, folder.name
@@ -952,39 +900,26 @@ class RequestRestoreDirectoryHandler(RequestHandler):
                 return 403, folder_id, handler.username
 
             if target_parent_provided:
-                db_parent_id = (
-                    None if target_parent_id == ROOT_DIRECTORY_ID else target_parent_id
-                )
+                db_parent_id = target_parent_id or ROOT_DIRECTORY_ID
             else:
-                db_parent_id = folder.parent_id
+                db_parent_id = folder.parent_id or ROOT_DIRECTORY_ID
 
             final_name = new_name if new_name else folder.name
 
-            if db_parent_id is None:
-                root_obj = (
-                    session.query(Folder)
-                    .with_for_update()
-                    .filter_by(id=ROOT_DIRECTORY_ID)
-                    .first()
-                )
-                if root_obj and not root_obj.check_access_requirements(user, "write"):
-                    handler.conclude_access_denial()
-                    return 403, ROOT_DIRECTORY_ID, handler.username
-            else:
-                target_parent = (
-                    session.query(Folder)
-                    .execution_options(include_deleted=True)
-                    .with_for_update()
-                    .filter_by(id=db_parent_id)
-                    .first()
-                )
-                if not target_parent or target_parent.status != EntityStatus.OK:
-                    handler.conclude_request(409, {}, smsg.TARGET_DIRECTORY_NOT_ACTIVE)
-                    return 409, db_parent_id, handler.username
+            target_parent = (
+                session.query(Folder)
+                .execution_options(include_deleted=True)
+                .with_for_update()
+                .filter_by(id=db_parent_id)
+                .first()
+            )
+            if not target_parent or target_parent.status != EntityStatus.OK:
+                handler.conclude_request(409, {}, smsg.TARGET_DIRECTORY_NOT_ACTIVE)
+                return 409, db_parent_id, handler.username
 
-                if not target_parent.check_access_requirements(user, "write"):
-                    handler.conclude_access_denial()
-                    return 403, db_parent_id, handler.username
+            if not target_parent.check_access_requirements(user, "write"):
+                handler.conclude_access_denial()
+                return 403, db_parent_id, handler.username
 
             existing_conflict = (
                 session.query(Folder)
@@ -1074,11 +1009,11 @@ class RequestListDeletedItemsHandler(RequestHandler):
                 handler.conclude_permission_denial()
                 return 403, parent_id, handler.username
 
-            db_parent_id = None if parent_id == ROOT_DIRECTORY_ID else parent_id
+            db_parent_id = parent_id
 
             parent_folder = session.get(
                 Folder,
-                db_parent_id or ROOT_DIRECTORY_ID,
+                db_parent_id,
                 execution_options={"include_deleted": True},
             )
 

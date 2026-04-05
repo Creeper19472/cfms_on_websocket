@@ -148,6 +148,7 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
             bufsize=1,  # Line buffered
             cwd=os.path.join(os.getcwd(), "src"),
         )

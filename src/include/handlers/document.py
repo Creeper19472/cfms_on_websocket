@@ -259,7 +259,7 @@ class RequestCreateDocumentHandler(RequestHandler):
     require_auth = True
 
     def handle(self, handler: ConnectionHandler):
-        folder_id = handler.data.get("folder_id") or None
+        folder_id = handler.data.get("folder_id") or ROOT_DIRECTORY_ID
         title = (handler.data.get("title") or "").strip()
         access_rules = handler.data.get("access_rules") or {}
         inherit_parent = handler.data.get("inherit_parent", True)
@@ -487,13 +487,8 @@ class RequestRenameDocumentHandler(RequestHandler):
                 handler.conclude_request(404, {}, smsg.DOCUMENT_NOT_FOUND)
                 return 404, document_id, handler.username
 
-            parent_id = document.folder_id
-            if parent_id:
-                session.query(Folder).with_for_update().filter_by(id=parent_id).first()
-            else:
-                session.query(Folder).with_for_update().filter_by(
-                    id=ROOT_DIRECTORY_ID
-                ).first()
+            parent_id = document.folder_id or ROOT_DIRECTORY_ID
+            session.query(Folder).with_for_update().filter_by(id=parent_id).first()
 
             if (
                 Permissions.RENAME_DOCUMENT not in this_user.all_permissions
@@ -717,6 +712,9 @@ class RequestMoveDocumentHandler(RequestHandler):
         document_id: str = handler.data["document_id"]
         target_folder_id: Optional[str] = handler.data.get("target_folder_id")
 
+        if not target_folder_id:
+            target_folder_id = ROOT_DIRECTORY_ID
+
         with Session() as session:
             user = User.get_existing(session, handler.username)
 
@@ -763,53 +761,34 @@ class RequestMoveDocumentHandler(RequestHandler):
                     handler.username,
                 )
 
-            if target_folder_id:
-                target_folder = (
-                    session.query(Folder)
-                    .with_for_update()
-                    .filter_by(id=target_folder_id)
-                    .first()
+            target_folder = (
+                session.query(Folder)
+                .with_for_update()
+                .filter_by(id=target_folder_id)
+                .first()
+            )
+            if not target_folder:
+                handler.conclude_request(
+                    **{
+                        "code": 404,
+                        "message": smsg.TARGET_DIRECTORY_NOT_FOUND,
+                        "data": {},
+                    }
                 )
-                if not target_folder or target_folder.id == ROOT_DIRECTORY_ID:
-                    handler.conclude_request(
-                        **{
-                            "code": 404,
-                            "message": smsg.TARGET_DIRECTORY_NOT_FOUND,
-                            "data": {},
-                        }
-                    )
-                    return (
-                        404,
-                        document_id,
-                        {"target_folder_id": target_folder_id},
-                        handler.username,
-                    )
+                return (
+                    404,
+                    document_id,
+                    {"target_folder_id": target_folder_id},
+                    handler.username,
+                )
 
-                if not target_folder.check_access_requirements(
-                    user, "write"
-                ):  # 对于目标文件夹，移动可视为一种写操作
-                    handler.conclude_request(
-                        403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY
-                    )
-                    return (
-                        403,
-                        document_id,
-                        {"target_folder_id": target_folder_id},
-                        handler.username,
-                    )
-            else:
-                target_folder = None
-                root_folder = (
-                    session.query(Folder)
-                    .with_for_update()
-                    .filter_by(id=ROOT_DIRECTORY_ID)
-                    .first()
-                )
+            if not target_folder.check_access_requirements(user, "write"):
                 if (
-                    root_folder is not None
-                    and not root_folder.check_access_requirements(user, "write")
-                    and Permissions.SUPER_CREATE_DOCUMENT not in user.all_permissions
+                    target_folder_id == ROOT_DIRECTORY_ID
+                    and Permissions.SUPER_CREATE_DOCUMENT in user.all_permissions
                 ):
+                    pass
+                else:
                     handler.conclude_request(
                         403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY
                     )
@@ -945,38 +924,30 @@ class RequestRestoreDocumentHandler(RequestHandler):
                 return 403, doc_id, handler.username
 
             if target_folder_provided:
-                db_folder_id = (
-                    None if target_folder_id == ROOT_DIRECTORY_ID else target_folder_id
-                )
+                db_folder_id = target_folder_id or ROOT_DIRECTORY_ID
             else:
-                db_folder_id = document.folder_id
+                db_folder_id = document.folder_id or ROOT_DIRECTORY_ID
 
             final_title = new_title if new_title else document.title
 
-            if db_folder_id is None:
-                root_obj = session.get(Folder, ROOT_DIRECTORY_ID)
-                if root_obj and not root_obj.check_access_requirements(user, "write"):
-                    handler.conclude_access_denial()
-                    return 403, ROOT_DIRECTORY_ID, handler.username
-            else:
-                target_folder = session.get(
-                    Folder, db_folder_id, execution_options={"include_deleted": True}
+            target_folder = session.get(
+                Folder, db_folder_id, execution_options={"include_deleted": True}
+            )
+            if not target_folder:
+                handler.conclude_request(404, {}, smsg.TARGET_DIRECTORY_NOT_FOUND)
+                return 404, db_folder_id, handler.username
+
+            if not target_folder.check_access_requirements(user, "write"):
+                handler.conclude_access_denial()
+                return 403, db_folder_id, handler.username
+
+            if target_folder.status != EntityStatus.OK:
+                handler.conclude_request(
+                    409,
+                    {"folder_id": db_folder_id},
+                    "Cannot restore: Target folder is deleted. Restore it first.",
                 )
-                if not target_folder:
-                    handler.conclude_request(404, {}, smsg.TARGET_DIRECTORY_NOT_FOUND)
-                    return 404, db_folder_id, handler.username
-
-                if not target_folder.check_access_requirements(user, "write"):
-                    handler.conclude_access_denial()
-                    return 403, db_folder_id, handler.username
-
-                if target_folder.status != EntityStatus.OK:
-                    handler.conclude_request(
-                        409,
-                        {"folder_id": db_folder_id},
-                        "Cannot restore: Target folder is deleted. Restore it first.",
-                    )
-                    return 409, doc_id, handler.username
+                return 409, doc_id, handler.username
 
             existing_conflict = (
                 session.query(Document)
