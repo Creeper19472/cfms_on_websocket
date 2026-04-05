@@ -1,8 +1,9 @@
+import collections
 import ipaddress
 import threading
 import time
 from datetime import datetime, timedelta
-from typing import Optional, Union
+from typing import Union
 
 from loguru import logger as log
 
@@ -19,7 +20,9 @@ class LoginGuard:
     attacks by tracking failed attempts and temporarily blocking identifiers.
     """
 
-    _mem_cache: dict[str, float] = {}  # { identifier: locked_until_timestamp }
+    _mem_cache: collections.OrderedDict[tuple[str, str], float] = (
+        collections.OrderedDict()
+    )  # { (username, ip_address): locked_until_timestamp }
     _cache_lock = threading.Lock()
     _MAX_CACHE_SIZE: int = 10_000
 
@@ -49,13 +52,6 @@ class LoginGuard:
             logger.info(f"Loaded {len(networks)} banned subnet(s) from database.")
 
     @classmethod
-    def _extract_ip(cls, identifier: str) -> Optional[str]:
-        parts = identifier.split("|", 2)
-        if len(parts) >= 2:
-            return parts[1] or None
-        return None
-
-    @classmethod
     def _is_ip_banned_by_subnet(cls, ip_str: str) -> bool:
         try:
             addr = ipaddress.ip_address(ip_str)
@@ -77,15 +73,11 @@ class LoginGuard:
         for key in expired_keys:
             cls._mem_cache.pop(key, None)
 
-        if len(cls._mem_cache) > cls._MAX_CACHE_SIZE:
-            sorted_items = sorted(cls._mem_cache.items(), key=lambda item: item[1])
-            for key, _expiry in sorted_items:
-                if len(cls._mem_cache) <= cls._MAX_CACHE_SIZE:
-                    break
-                cls._mem_cache.pop(key, None)
+        while len(cls._mem_cache) > cls._MAX_CACHE_SIZE:
+            cls._mem_cache.popitem(last=False)
 
     @classmethod
-    def check_access(cls, identifier: str) -> bool:
+    def check_access(cls, username: str, ip_address: str) -> bool:
         """
         Check if the given identifier is currently blocked.
         """
@@ -97,41 +89,49 @@ class LoginGuard:
             cls.reload_networks()
 
         # Layer 1: CIDR / administratively banned subnet
-        ip_str = cls._extract_ip(identifier)
-        if ip_str and cls._is_ip_banned_by_subnet(ip_str):
+        if ip_address and cls._is_ip_banned_by_subnet(ip_address):
             return False
 
         # Layer 2: in-memory cache
+        key = (username, ip_address)
         now_ts = time.time()
         with cls._cache_lock:
             cls._prune_cache(now_ts)
-            expiry = cls._mem_cache.get(identifier)
+            expiry = cls._mem_cache.get(key)
             if expiry:
                 if now_ts < expiry:
+                    cls._mem_cache.move_to_end(key)
                     return False
                 else:
-                    del cls._mem_cache[identifier]
+                    del cls._mem_cache[key]
 
         # Layer 3: database
         with Session() as session:
-            record = session.get(LoginSecurity, identifier)
+            record = session.get(LoginSecurity, key)
             if record is not None and record.is_locked():
                 if record.locked_until is not None:
                     with cls._cache_lock:
-                        cls._mem_cache[identifier] = record.locked_until.timestamp()
+                        cls._mem_cache[key] = record.locked_until.timestamp()
                     return False
         return True
 
     @classmethod
     def report_failure(
-        cls, identifier: str, max_attempts: int = 5, lock_minutes: int = 15
+        cls,
+        username: str,
+        ip_address: str,
+        max_attempts: int = 5,
+        lock_minutes: int = 15,
     ):
+        key = (username, ip_address)
         with Session() as session:
-            record = session.get(LoginSecurity, identifier)
+            record = session.get(LoginSecurity, key)
             now = datetime.now()
 
             if not record:
-                record = LoginSecurity(identifier=identifier, failed_attempts=1)
+                record = LoginSecurity(
+                    username=username, ip_address=ip_address, failed_attempts=1
+                )
                 session.add(record)
             else:
                 if record.last_attempt < now - timedelta(hours=1):
@@ -146,20 +146,21 @@ class LoginGuard:
                 lock_ts = lock_time.timestamp()
                 with cls._cache_lock:
                     cls._prune_cache(time.time())
-                    cls._mem_cache[identifier] = lock_ts
+                    cls._mem_cache[key] = lock_ts
                 logger.warning(
-                    f"Security: identifier '{identifier}' locked until {lock_time}"
+                    f"Security: identifier '{username}|{ip_address}' locked until {lock_time}"
                 )
 
             session.commit()
 
     @classmethod
-    def report_success(cls, identifier: str):
+    def report_success(cls, username: str, ip_address: str):
+        key = (username, ip_address)
         with Session() as session:
-            record = session.get(LoginSecurity, identifier)
+            record = session.get(LoginSecurity, key)
             if record:
                 session.delete(record)
                 session.commit()
 
             with cls._cache_lock:
-                cls._mem_cache.pop(identifier, None)
+                cls._mem_cache.pop(key, None)
