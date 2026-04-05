@@ -72,10 +72,14 @@ def handle_name_duplicate(
                 if existing_doc.check_access_requirements(user, "read")
                 else None
             )
+            payload = {"type": "document", "id": resp_id}
+            if resp_id is not None:
+                payload["duplicate_id"] = resp_id
+
             return (
                 True,
                 409,
-                {"type": "document", "id": resp_id},
+                payload,
                 smsg.DOCUMENT_NAME_DUPLICATE,
             )
         else:
@@ -97,14 +101,14 @@ def handle_name_duplicate(
                     if existing_doc.check_access_requirements(user, "read")
                     else None
                 )
+                payload = {"type": "document", "id": resp_id}
+                if resp_id is not None:
+                    payload["duplicate_id"] = resp_id
+
                 return (
                     True,
                     409,
-                    {
-                        "type": "document",
-                        "id": resp_id,
-                        "duplicate_id": existing_doc.id,
-                    },
+                    payload,
                     getattr(
                         smsg,
                         "DENIED_FOR_DOC_NAME_DUPLICATE",
@@ -118,10 +122,14 @@ def handle_name_duplicate(
             if existing_folder.check_access_requirements(user, "read")
             else None
         )
+        payload = {"type": "directory", "id": resp_id, "entity": existing_folder}
+        if resp_id is not None:
+            payload["duplicate_id"] = resp_id
+
         return (
             True,
             409,
-            {"type": "directory", "id": resp_id, "entity": existing_folder},
+            payload,
             smsg.DIRECTORY_NAME_DUPLICATE,
         )
 
