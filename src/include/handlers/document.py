@@ -14,6 +14,7 @@ __all__ = [
 import datetime
 import secrets
 import time
+from typing import Optional
 
 import jsonschema
 
@@ -714,7 +715,7 @@ class RequestMoveDocumentHandler(RequestHandler):
     def handle(self, handler: ConnectionHandler):
 
         document_id: str = handler.data["document_id"]
-        target_folder_id: str = handler.data.get("target_folder_id", "")
+        target_folder_id: Optional[str] = handler.data.get("target_folder_id")
 
         with Session() as session:
             user = User.get_existing(session, handler.username)
@@ -908,7 +909,7 @@ class RequestRestoreDocumentHandler(RequestHandler):
         "type": "object",
         "properties": {
             "document_id": {"type": "string", "minLength": 1},
-            "target_folder_id": {"type": ["string", "null"], "minLength": 1},
+            "target_folder_id": {"anyOf": [{"type": "string"}, {"type": "null"}]},
             "new_title": {"type": "string", "minLength": 1},
         },
         "required": ["document_id"],
@@ -921,7 +922,7 @@ class RequestRestoreDocumentHandler(RequestHandler):
         doc_id = handler.data["document_id"]
 
         target_folder_provided = "target_folder_id" in handler.data
-        target_folder_id = handler.data.get("target_folder_id")
+        target_folder_id: Optional[str] = handler.data.get("target_folder_id")
         new_title = handler.data.get("new_title")
 
         with Session() as session:
