@@ -32,6 +32,10 @@ from include.database.models.entity import (
     NoActiveRevisionsError,
 )
 from include.database.models.file import File, FileTask
+from include.handlers.common import (
+    get_target_folder_and_check_write,
+    handle_name_duplicate,
+)
 from include.system.messages import Messages as smsg
 from include.util.rule.applying import apply_access_rules
 
@@ -271,114 +275,24 @@ class RequestCreateDocumentHandler(RequestHandler):
                 handler.conclude_permission_denial()
                 return 403, folder_id, {"title": title}, handler.username
 
-            if folder_id:
-                folder = (
-                    session.query(Folder)
-                    .with_for_update()
-                    .filter_by(id=folder_id)
-                    .first()
-                )
-                if not folder or folder.id == ROOT_DIRECTORY_ID:
-                    handler.conclude_request(404, {}, smsg.FOLDER_NOT_FOUND)
-                    return 404, folder_id, {"title": title}, handler.username
+            _folder, err_code, err_msg = get_target_folder_and_check_write(
+                session, user, folder_id, Permissions.SUPER_CREATE_DOCUMENT
+            )
+            if err_code != 0:
+                handler.conclude_request(err_code, {}, err_msg)
+                return err_code, folder_id, {"title": title}, handler.username
 
-                if (
-                    not folder.check_access_requirements(user, access_type="write")
-                    and Permissions.SUPER_CREATE_DOCUMENT not in user.all_permissions
-                ):
-                    handler.conclude_access_denial()
-                    return 403, folder_id, {"title": title}, handler.username
-            else:
-                root_folder = (
-                    session.query(Folder)
-                    .with_for_update()
-                    .filter_by(id=ROOT_DIRECTORY_ID)
-                    .first()
+            has_conflict, err_code, err_data, err_msg = handle_name_duplicate(
+                session, user, folder_id, title
+            )
+            if has_conflict:
+                handler.conclude_request(err_code, err_data, err_msg)
+                return (
+                    err_code,
+                    folder_id,
+                    {"title": title, "duplicate_id": err_data.get("duplicate_id")},
+                    handler.username,
                 )
-                if (
-                    root_folder is not None
-                    and not root_folder.check_access_requirements(
-                        user, access_type="write"
-                    )
-                    and Permissions.SUPER_CREATE_DOCUMENT not in user.all_permissions
-                ):
-                    handler.conclude_access_denial()
-                    return 403, folder_id, {"title": title}, handler.username
-
-            if not global_config["document"]["allow_name_duplicate"]:
-                existing_doc = (
-                    session.query(Document)
-                    .with_for_update()
-                    .filter_by(folder_id=folder_id, title=title)
-                    .first()
-                )
-
-                if existing_doc:
-                    if existing_doc.active:
-                        resp_id = (
-                            existing_doc.id
-                            if existing_doc.check_access_requirements(user, "read")
-                            else None
-                        )
-                        handler.conclude_request(
-                            409,
-                            {"type": "document", "id": resp_id},
-                            smsg.DOCUMENT_NAME_DUPLICATE,
-                        )
-                        return
-                    else:
-                        if existing_doc.check_access_requirements(user, "write"):
-                            try:
-                                existing_doc.delete_all_revisions()
-                            except PermissionError:
-                                handler.conclude_request(
-                                    500,
-                                    {},
-                                    "Failed to delete revisions. Perhaps a file task is in progress?",
-                                )
-                                return (
-                                    500,
-                                    folder_id,
-                                    {"title": title},
-                                    handler.username,
-                                )
-                            session.delete(existing_doc)
-                        else:
-                            resp_id = (
-                                existing_doc.id
-                                if existing_doc.check_access_requirements(user, "read")
-                                else None
-                            )
-                            handler.conclude_request(
-                                409,
-                                {"type": "document", "id": resp_id},
-                                smsg.DENIED_FOR_DOC_NAME_DUPLICATE,
-                            )
-                            return (
-                                409,
-                                folder_id,
-                                {"title": title, "duplicate_id": existing_doc.id},
-                                handler.username,
-                            )
-                else:
-                    existing_folder = (
-                        session.query(Folder)
-                        .with_for_update()
-                        .filter_by(parent_id=folder_id, name=title)
-                        .first()
-                    )
-                    if existing_folder:
-                        resp_id = (
-                            existing_folder.id
-                            if existing_folder.check_access_requirements(user, "read")
-                            else None
-                        )
-                        handler.conclude_request(
-                            409,
-                            {"type": "directory", "id": resp_id},
-                            smsg.DIRECTORY_NAME_DUPLICATE,
-                        )
-                        return
 
             today = datetime.date.today()
             file_id = secrets.token_hex(32)
