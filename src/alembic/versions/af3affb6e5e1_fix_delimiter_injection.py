@@ -20,6 +20,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
+    op.execute("DELETE FROM login_security")
     with op.batch_alter_table('login_security', schema=None) as batch_op:
         batch_op.add_column(sa.Column('username', sa.String(length=255), nullable=False))
         batch_op.add_column(sa.Column('ip_address', sa.String(length=45), nullable=False))
@@ -31,6 +32,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Downgrade schema."""
+    op.execute("DELETE FROM login_security")
     with op.batch_alter_table('login_security', schema=None) as batch_op:
         batch_op.add_column(sa.Column('identifier', sa.VARCHAR(length=128), nullable=False))
         
