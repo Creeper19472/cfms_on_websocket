@@ -52,7 +52,7 @@ class RequestLoginHandler(RequestHandler):
             LoginGuard.report_failure(ip_id, max_attempts=20)
             return respond(code, message)
 
-        if not LoginGuard.check_access(user_id):
+        if not LoginGuard.check_access(user_id) or not LoginGuard.check_access(ip_id):
             return respond(429, "Too many login attempts. Please try again later.")
 
         cfg = global_config["security"]
