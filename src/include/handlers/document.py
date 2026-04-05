@@ -21,7 +21,6 @@ from include.classes.connection_handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
 from include.classes.enum.status import EntityStatus
 from include.classes.request_handler import RequestHandler
-from include.conf_loader import global_config
 from include.constants import FILE_TASK_DEFAULT_DURATION_SECONDS, ROOT_DIRECTORY_ID
 from include.database.handler import Session
 from include.database.models.classic import User
@@ -32,11 +31,11 @@ from include.database.models.entity import (
     NoActiveRevisionsError,
 )
 from include.database.models.file import File, FileTask
-from include.handlers.common import (
+from include.system.messages import Messages as smsg
+from include.util.check import (
     get_target_folder_and_check_write,
     handle_name_duplicate,
 )
-from include.system.messages import Messages as smsg
 from include.util.rule.applying import apply_access_rules
 
 
@@ -512,56 +511,23 @@ class RequestRenameDocumentHandler(RequestHandler):
                 )
                 return
 
-            if not global_config["document"]["allow_name_duplicate"]:
-                # 检查是否有同名文件或文件夹
-
-                # 检查同一 folder_id 下是否有与目标名同名文件
-                existing_doc = (
-                    session.query(Document)
-                    .with_for_update()
-                    .filter_by(
-                        folder_id=(document.folder_id if document.folder_id else None),
-                        title=new_title,
+            has_conflict, err_code, err_data, err_msg = handle_name_duplicate(
+                session, this_user, document.folder_id, new_title
+            )
+            if has_conflict:
+                err_data_filtered = {k: v for k, v in err_data.items() if k != "entity"}
+                handler.conclude_request(err_code, err_data_filtered, err_msg)
+                if "duplicate_id" in err_data_filtered:
+                    return (
+                        err_code,
+                        document.folder_id,
+                        {
+                            "title": document.title,
+                            "duplicate_id": err_data_filtered["duplicate_id"],
+                        },
+                        handler.username,
                     )
-                    .first()
-                )
-                # 检查同一 folder_id 下是否有同名文件夹
-                existing_folder = (
-                    session.query(Folder)
-                    .with_for_update()
-                    .filter_by(
-                        parent_id=(document.folder_id if document.folder_id else None),
-                        name=new_title,
-                    )
-                    .first()
-                )
-
-                if existing_doc:
-                    if existing_doc.active:
-                        handler.conclude_request(400, {}, smsg.DOCUMENT_NAME_DUPLICATE)
-                        return
-                    else:
-                        # 如果该文档尚未被激活，则先尝试删除未激活的文档
-                        if existing_doc.check_access_requirements(
-                            this_user, "write"
-                        ):  # 如果有权删除
-                            existing_doc.delete_all_revisions()
-                            session.delete(existing_doc)
-                            session.commit()
-                        else:
-                            handler.conclude_access_denial()
-                            return (
-                                403,
-                                document.folder_id,
-                                {
-                                    "title": document.title,
-                                    "duplicate_id": existing_doc.id,
-                                },
-                                handler.username,
-                            )
-                elif existing_folder:
-                    handler.conclude_request(400, {}, smsg.DIRECTORY_NAME_DUPLICATE)
-                    return
+                return err_code, document.folder_id, handler.username
 
             document.title = new_title
             session.commit()
@@ -853,56 +819,23 @@ class RequestMoveDocumentHandler(RequestHandler):
                         handler.username,
                     )
 
-            if not global_config["document"]["allow_name_duplicate"]:
-                # 检查是否有同名文件或文件夹
-
-                # 检查同一 folder_id 下是否有同名文件
-                existing_doc = (
-                    session.query(Document)
-                    .with_for_update()
-                    .filter_by(
-                        folder_id=target_folder_id,
-                        title=document.title,
+            has_conflict, err_code, err_data, err_msg = handle_name_duplicate(
+                session, user, target_folder_id, document.title
+            )
+            if has_conflict:
+                err_data_filtered = {k: v for k, v in err_data.items() if k != "entity"}
+                handler.conclude_request(err_code, err_data_filtered, err_msg)
+                if "duplicate_id" in err_data_filtered:
+                    return (
+                        err_code,
+                        document.folder_id,
+                        {
+                            "title": document.title,
+                            "duplicate_id": err_data_filtered["duplicate_id"],
+                        },
+                        handler.username,
                     )
-                    .first()
-                )
-                # 检查同一 folder_id 下是否有同名文件夹
-                existing_folder = (
-                    session.query(Folder)
-                    .with_for_update()
-                    .filter_by(
-                        parent_id=target_folder_id,
-                        name=document.title,
-                    )
-                    .first()
-                )
-
-                if existing_doc:
-                    if existing_doc.active:
-                        handler.conclude_request(400, {}, smsg.DOCUMENT_NAME_DUPLICATE)
-                        return
-                    else:
-                        # 如果该文档尚未被激活，则先尝试删除未激活的文档
-                        if existing_doc.check_access_requirements(
-                            user, "write"
-                        ):  # 如果有权删除
-                            existing_doc.delete_all_revisions()
-                            session.delete(existing_doc)
-                            session.commit()
-                        else:
-                            handler.conclude_access_denial()
-                            return (
-                                403,
-                                document.folder_id,
-                                {
-                                    "title": document.title,
-                                    "duplicate_id": existing_doc.id,
-                                },
-                                handler.username,
-                            )
-                elif existing_folder:
-                    handler.conclude_request(400, {}, smsg.DIRECTORY_NAME_DUPLICATE)
-                    return
+                return err_code, document.folder_id, handler.username
 
             document.folder = target_folder
 

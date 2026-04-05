@@ -365,7 +365,7 @@ class Document(BaseObject):
     id: Mapped[str] = mapped_column(
         VARCHAR(255), primary_key=True, default=lambda: secrets.token_hex(32)
     )
-    title: Mapped[Optional[str]] = mapped_column(
+    title: Mapped[str] = mapped_column(
         VARCHAR(255), nullable=False, default="Untitled Document", index=True
     )  # 文档名称
     created_time: Mapped[float] = mapped_column(

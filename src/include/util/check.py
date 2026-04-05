@@ -132,7 +132,7 @@ def handle_name_duplicate(
         return (
             True,
             409,
-            {"type": "directory", "id": resp_id},
+            {"type": "directory", "id": resp_id, "entity": existing_folder},
             smsg.DIRECTORY_NAME_DUPLICATE,
         )
 
