@@ -308,6 +308,7 @@ class RequestCreateDocumentHandler(RequestHandler):
             if not global_config["document"]["allow_name_duplicate"]:
                 existing_doc = (
                     session.query(Document)
+                    .with_for_update()
                     .filter_by(folder_id=folder_id, title=title)
                     .first()
                 )
@@ -362,6 +363,7 @@ class RequestCreateDocumentHandler(RequestHandler):
                 else:
                     existing_folder = (
                         session.query(Folder)
+                        .with_for_update()
                         .filter_by(parent_id=folder_id, name=title)
                         .first()
                     )
