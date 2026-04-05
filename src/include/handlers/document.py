@@ -602,6 +602,7 @@ class RequestRenameDocumentHandler(RequestHandler):
                 # 检查同一 folder_id 下是否有与目标名同名文件
                 existing_doc = (
                     session.query(Document)
+                    .with_for_update()
                     .filter_by(
                         folder_id=(document.folder_id if document.folder_id else None),
                         title=new_title,
@@ -611,6 +612,7 @@ class RequestRenameDocumentHandler(RequestHandler):
                 # 检查同一 folder_id 下是否有同名文件夹
                 existing_folder = (
                     session.query(Folder)
+                    .with_for_update()
                     .filter_by(
                         parent_id=(document.folder_id if document.folder_id else None),
                         name=new_title,
@@ -941,6 +943,7 @@ class RequestMoveDocumentHandler(RequestHandler):
                 # 检查同一 folder_id 下是否有同名文件
                 existing_doc = (
                     session.query(Document)
+                    .with_for_update()
                     .filter_by(
                         folder_id=target_folder_id,
                         title=document.title,
@@ -950,6 +953,7 @@ class RequestMoveDocumentHandler(RequestHandler):
                 # 检查同一 folder_id 下是否有同名文件夹
                 existing_folder = (
                     session.query(Folder)
+                    .with_for_update()
                     .filter_by(
                         parent_id=target_folder_id,
                         name=document.title,
@@ -1126,6 +1130,7 @@ class RequestRestoreDocumentHandler(RequestHandler):
 
             existing_conflict = (
                 session.query(Document)
+                .with_for_update()
                 .filter(
                     Document.folder_id == db_folder_id,
                     Document.title == final_title,
@@ -1133,6 +1138,7 @@ class RequestRestoreDocumentHandler(RequestHandler):
                 )
                 .first()
                 or session.query(Folder)
+                .with_for_update()
                 .filter(
                     Folder.parent_id == db_folder_id,
                     Folder.name == final_title,

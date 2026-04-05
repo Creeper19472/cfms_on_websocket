@@ -345,6 +345,7 @@ class RequestCreateDirectoryHandler(RequestHandler):
             if not global_config["document"]["allow_name_duplicate"]:
                 existing_doc = (
                     session.query(Document)
+                    .with_for_update()
                     .filter_by(folder_id=parent_id if parent_id else None, title=name)
                     .first()
                 )
@@ -358,6 +359,7 @@ class RequestCreateDirectoryHandler(RequestHandler):
 
                 existing_folder = (
                     session.query(Folder)
+                    .with_for_update()
                     .filter_by(parent_id=parent_id if parent_id else None, name=name)
                     .first()
                 )
@@ -586,6 +588,7 @@ class RequestRenameDirectoryHandler(RequestHandler):
             if not global_config["document"]["allow_name_duplicate"]:
                 existing_folder = (
                     session.query(Folder)
+                    .with_for_update()
                     .filter_by(
                         parent_id=folder.parent_id if folder.parent_id else None,
                         name=new_name,
@@ -594,6 +597,7 @@ class RequestRenameDirectoryHandler(RequestHandler):
                 )
                 existing_document = (
                     session.query(Document)
+                    .with_for_update()
                     .filter_by(
                         folder_id=folder.parent_id if folder.parent_id else None,
                         title=new_name,
@@ -745,6 +749,7 @@ class RequestMoveDirectoryHandler(RequestHandler):
             if not global_config["document"]["allow_name_duplicate"]:
                 existing_folder = (
                     session.query(Folder)
+                    .with_for_update()
                     .filter_by(
                         parent_id=target_folder_id,
                         name=folder.name,
@@ -753,6 +758,7 @@ class RequestMoveDirectoryHandler(RequestHandler):
                 )
                 existing_document = (
                     session.query(Document)
+                    .with_for_update()
                     .filter_by(
                         folder_id=target_folder_id,
                         title=folder.name,
@@ -1049,6 +1055,7 @@ class RequestRestoreDirectoryHandler(RequestHandler):
 
             existing_conflict = (
                 session.query(Folder)
+                .with_for_update()
                 .filter(
                     Folder.parent_id == db_parent_id,
                     Folder.name == final_name,
@@ -1056,6 +1063,7 @@ class RequestRestoreDirectoryHandler(RequestHandler):
                 )
                 .first()
                 or session.query(Document)
+                .with_for_update()
                 .filter(
                     Document.folder_id == db_parent_id,
                     Document.title == final_name,
