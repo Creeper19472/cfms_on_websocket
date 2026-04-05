@@ -41,7 +41,7 @@ def _get_file_references(engine: Engine) -> list[tuple[Table, str]]:
 
     refs: list[tuple[Table, str]] = []
     files_table_name = "files"
-    for table in meta.sorted_tables:
+    for table in meta.tables.values():
         for col in table.columns:
             for fk in col.foreign_keys:
                 if fk.column.table.name != files_table_name:

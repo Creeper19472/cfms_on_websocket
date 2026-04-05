@@ -607,7 +607,7 @@ class AuditEntry(Base):  # 审计条目
     result: Mapped[int] = mapped_column(Integer, nullable=False)
     remote_address: Mapped[Optional[str]] = mapped_column(VARCHAR(64), nullable=True)
     logged_time: Mapped[Optional[float]] = mapped_column(
-        Float, nullable=False, default=time.time
+        Float, nullable=False, default=time.time, index=True
     )
 
 
@@ -621,11 +621,15 @@ class ObjectAccessEntry(Base):
 
     # User / UserGroup
     entity_type: Mapped[str] = mapped_column(VARCHAR(16), nullable=False)
-    entity_identifier: Mapped[str] = mapped_column(VARCHAR(255), nullable=False)
+    entity_identifier: Mapped[str] = mapped_column(
+        VARCHAR(255), nullable=False, index=True
+    )
 
     # Document / Folder
     target_type: Mapped[str] = mapped_column(VARCHAR(16), nullable=False)
-    target_identifier: Mapped[str] = mapped_column(VARCHAR(255), nullable=False)
+    target_identifier: Mapped[str] = mapped_column(
+        VARCHAR(255), nullable=False, index=True
+    )
 
     # read, write, move
     access_type: Mapped[str] = mapped_column(VARCHAR(16), nullable=False)

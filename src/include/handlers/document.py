@@ -14,6 +14,7 @@ __all__ = [
 import datetime
 import secrets
 import time
+from typing import Optional
 
 import jsonschema
 
@@ -21,7 +22,6 @@ from include.classes.connection_handler import ConnectionHandler
 from include.classes.enum.permissions import Permissions
 from include.classes.enum.status import EntityStatus
 from include.classes.request_handler import RequestHandler
-from include.conf_loader import global_config
 from include.constants import FILE_TASK_DEFAULT_DURATION_SECONDS, ROOT_DIRECTORY_ID
 from include.database.handler import Session
 from include.database.models.classic import User
@@ -33,6 +33,10 @@ from include.database.models.entity import (
 )
 from include.database.models.file import File, FileTask
 from include.system.messages import Messages as smsg
+from include.util.check import (
+    get_target_folder_and_check_write,
+    handle_name_duplicate,
+)
 from include.util.rule.applying import apply_access_rules
 
 
@@ -255,7 +259,7 @@ class RequestCreateDocumentHandler(RequestHandler):
     require_auth = True
 
     def handle(self, handler: ConnectionHandler):
-        folder_id = handler.data.get("folder_id") or None
+        folder_id = handler.data.get("folder_id") or ROOT_DIRECTORY_ID
         title = (handler.data.get("title") or "").strip()
         access_rules = handler.data.get("access_rules") or {}
         inherit_parent = handler.data.get("inherit_parent", True)
@@ -271,102 +275,24 @@ class RequestCreateDocumentHandler(RequestHandler):
                 handler.conclude_permission_denial()
                 return 403, folder_id, {"title": title}, handler.username
 
-            if folder_id:
-                folder = session.get(Folder, folder_id)
-                if not folder or folder.id == ROOT_DIRECTORY_ID:
-                    handler.conclude_request(404, {}, smsg.FOLDER_NOT_FOUND)
-                    return 404, folder_id, {"title": title}, handler.username
+            _folder, err_code, err_msg = get_target_folder_and_check_write(
+                session, user, folder_id, Permissions.SUPER_CREATE_DOCUMENT
+            )
+            if err_code != 0:
+                handler.conclude_request(err_code, {}, err_msg)
+                return err_code, folder_id, {"title": title}, handler.username
 
-                if (
-                    not folder.check_access_requirements(user, access_type="write")
-                    and Permissions.SUPER_CREATE_DOCUMENT not in user.all_permissions
-                ):
-                    handler.conclude_access_denial()
-                    return 403, folder_id, {"title": title}, handler.username
-            else:
-                root_folder = session.get(Folder, ROOT_DIRECTORY_ID)
-                if (
-                    root_folder is not None
-                    and not root_folder.check_access_requirements(
-                        user, access_type="write"
-                    )
-                    and Permissions.SUPER_CREATE_DOCUMENT not in user.all_permissions
-                ):
-                    handler.conclude_access_denial()
-                    return 403, folder_id, {"title": title}, handler.username
-
-            if not global_config["document"]["allow_name_duplicate"]:
-                existing_doc = (
-                    session.query(Document)
-                    .filter_by(folder_id=folder_id, title=title)
-                    .first()
+            has_conflict, err_code, err_data, err_msg = handle_name_duplicate(
+                session, user, folder_id, title
+            )
+            if has_conflict:
+                handler.conclude_request(err_code, err_data, err_msg)
+                return (
+                    err_code,
+                    folder_id,
+                    {"title": title, "duplicate_id": err_data.get("duplicate_id")},
+                    handler.username,
                 )
-
-                if existing_doc:
-                    if existing_doc.active:
-                        resp_id = (
-                            existing_doc.id
-                            if existing_doc.check_access_requirements(user, "read")
-                            else None
-                        )
-                        handler.conclude_request(
-                            409,
-                            {"type": "document", "id": resp_id},
-                            smsg.DOCUMENT_NAME_DUPLICATE,
-                        )
-                        return
-                    else:
-                        if existing_doc.check_access_requirements(user, "write"):
-                            try:
-                                existing_doc.delete_all_revisions()
-                            except PermissionError:
-                                handler.conclude_request(
-                                    500,
-                                    {},
-                                    "Failed to delete revisions. Perhaps a file task is in progress?",
-                                )
-                                return (
-                                    500,
-                                    folder_id,
-                                    {"title": title},
-                                    handler.username,
-                                )
-                            session.delete(existing_doc)
-                        else:
-                            resp_id = (
-                                existing_doc.id
-                                if existing_doc.check_access_requirements(user, "read")
-                                else None
-                            )
-                            handler.conclude_request(
-                                409,
-                                {"type": "document", "id": resp_id},
-                                smsg.DENIED_FOR_DOC_NAME_DUPLICATE,
-                            )
-                            return (
-                                409,
-                                folder_id,
-                                {"title": title, "duplicate_id": existing_doc.id},
-                                handler.username,
-                            )
-                else:
-                    existing_folder = (
-                        session.query(Folder)
-                        .filter_by(parent_id=folder_id, name=title)
-                        .first()
-                    )
-                    if existing_folder:
-                        resp_id = (
-                            existing_folder.id
-                            if existing_folder.check_access_requirements(user, "read")
-                            else None
-                        )
-                        handler.conclude_request(
-                            409,
-                            {"type": "directory", "id": resp_id},
-                            smsg.DIRECTORY_NAME_DUPLICATE,
-                        )
-                        return
 
             today = datetime.date.today()
             file_id = secrets.token_hex(32)
@@ -560,6 +486,10 @@ class RequestRenameDocumentHandler(RequestHandler):
             if not document:
                 handler.conclude_request(404, {}, smsg.DOCUMENT_NOT_FOUND)
                 return 404, document_id, handler.username
+
+            parent_id = document.folder_id or ROOT_DIRECTORY_ID
+            session.query(Folder).with_for_update().filter_by(id=parent_id).first()
+
             if (
                 Permissions.RENAME_DOCUMENT not in this_user.all_permissions
                 or not document.check_access_requirements(this_user, "write")
@@ -577,54 +507,23 @@ class RequestRenameDocumentHandler(RequestHandler):
                 )
                 return
 
-            if not global_config["document"]["allow_name_duplicate"]:
-                # 检查是否有同名文件或文件夹
-
-                # 检查同一 folder_id 下是否有与目标名同名文件
-                existing_doc = (
-                    session.query(Document)
-                    .filter_by(
-                        folder_id=(document.folder_id if document.folder_id else None),
-                        title=new_title,
+            has_conflict, err_code, err_data, err_msg = handle_name_duplicate(
+                session, this_user, document.folder_id, new_title
+            )
+            if has_conflict:
+                err_data_filtered = {k: v for k, v in err_data.items() if k != "entity"}
+                handler.conclude_request(err_code, err_data_filtered, err_msg)
+                if "duplicate_id" in err_data_filtered:
+                    return (
+                        err_code,
+                        document.folder_id,
+                        {
+                            "title": document.title,
+                            "duplicate_id": err_data_filtered["duplicate_id"],
+                        },
+                        handler.username,
                     )
-                    .first()
-                )
-                # 检查同一 folder_id 下是否有同名文件夹
-                existing_folder = (
-                    session.query(Folder)
-                    .filter_by(
-                        parent_id=(document.folder_id if document.folder_id else None),
-                        name=new_title,
-                    )
-                    .first()
-                )
-
-                if existing_doc:
-                    if existing_doc.active:
-                        handler.conclude_request(400, {}, smsg.DOCUMENT_NAME_DUPLICATE)
-                        return
-                    else:
-                        # 如果该文档尚未被激活，则先尝试删除未激活的文档
-                        if existing_doc.check_access_requirements(
-                            this_user, "write"
-                        ):  # 如果有权删除
-                            existing_doc.delete_all_revisions()
-                            session.delete(existing_doc)
-                            session.commit()
-                        else:
-                            handler.conclude_access_denial()
-                            return (
-                                403,
-                                document.folder_id,
-                                {
-                                    "title": document.title,
-                                    "duplicate_id": existing_doc.id,
-                                },
-                                handler.username,
-                            )
-                elif existing_folder:
-                    handler.conclude_request(400, {}, smsg.DIRECTORY_NAME_DUPLICATE)
-                    return
+                return err_code, document.folder_id, handler.username
 
             document.title = new_title
             session.commit()
@@ -811,7 +710,10 @@ class RequestMoveDocumentHandler(RequestHandler):
     def handle(self, handler: ConnectionHandler):
 
         document_id: str = handler.data["document_id"]
-        target_folder_id: str = handler.data.get("target_folder_id", "")
+        target_folder_id: Optional[str] = handler.data.get("target_folder_id")
+
+        if not target_folder_id:
+            target_folder_id = ROOT_DIRECTORY_ID
 
         with Session() as session:
             user = User.get_existing(session, handler.username)
@@ -859,93 +761,34 @@ class RequestMoveDocumentHandler(RequestHandler):
                     handler.username,
                 )
 
-            if not global_config["document"]["allow_name_duplicate"]:
-                # 检查是否有同名文件或文件夹
-
-                # 检查同一 folder_id 下是否有同名文件
-                existing_doc = (
-                    session.query(Document)
-                    .filter_by(
-                        folder_id=target_folder_id,
-                        title=document.title,
-                    )
-                    .first()
+            target_folder = (
+                session.query(Folder)
+                .with_for_update()
+                .filter_by(id=target_folder_id)
+                .first()
+            )
+            if not target_folder:
+                handler.conclude_request(
+                    **{
+                        "code": 404,
+                        "message": smsg.TARGET_DIRECTORY_NOT_FOUND,
+                        "data": {},
+                    }
                 )
-                # 检查同一 folder_id 下是否有同名文件夹
-                existing_folder = (
-                    session.query(Folder)
-                    .filter_by(
-                        parent_id=target_folder_id,
-                        name=document.title,
-                    )
-                    .first()
+                return (
+                    404,
+                    document_id,
+                    {"target_folder_id": target_folder_id},
+                    handler.username,
                 )
 
-                if existing_doc:
-                    if existing_doc.active:
-                        handler.conclude_request(400, {}, smsg.DOCUMENT_NAME_DUPLICATE)
-                        return
-                    else:
-                        # 如果该文档尚未被激活，则先尝试删除未激活的文档
-                        if existing_doc.check_access_requirements(
-                            user, "write"
-                        ):  # 如果有权删除
-                            existing_doc.delete_all_revisions()
-                            session.delete(existing_doc)
-                            session.commit()
-                        else:
-                            handler.conclude_access_denial()
-                            return (
-                                403,
-                                document.folder_id,
-                                {
-                                    "title": document.title,
-                                    "duplicate_id": existing_doc.id,
-                                },
-                                handler.username,
-                            )
-                elif existing_folder:
-                    handler.conclude_request(400, {}, smsg.DIRECTORY_NAME_DUPLICATE)
-                    return
-
-            if target_folder_id:
-                target_folder = session.get(Folder, target_folder_id)
-                if not target_folder or target_folder.id == ROOT_DIRECTORY_ID:
-                    handler.conclude_request(
-                        **{
-                            "code": 404,
-                            "message": smsg.TARGET_DIRECTORY_NOT_FOUND,
-                            "data": {},
-                        }
-                    )
-                    return (
-                        404,
-                        document_id,
-                        {"target_folder_id": target_folder_id},
-                        handler.username,
-                    )
-
-                if not target_folder.check_access_requirements(
-                    user, "write"
-                ):  # 对于目标文件夹，移动可视为一种写操作
-                    handler.conclude_request(
-                        403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY
-                    )
-                    return (
-                        403,
-                        document_id,
-                        {"target_folder_id": target_folder_id},
-                        handler.username,
-                    )
-
-                document.folder = target_folder
-            else:
-                root_folder = session.get(Folder, ROOT_DIRECTORY_ID)
+            if not target_folder.check_access_requirements(user, "write"):
                 if (
-                    root_folder is not None
-                    and not root_folder.check_access_requirements(user, "write")
-                    and Permissions.SUPER_CREATE_DOCUMENT not in user.all_permissions
+                    target_folder_id == ROOT_DIRECTORY_ID
+                    and Permissions.SUPER_CREATE_DOCUMENT in user.all_permissions
                 ):
+                    pass
+                else:
                     handler.conclude_request(
                         403, {}, smsg.ACCESS_DENIED_WRITE_DIRECTORY
                     )
@@ -955,7 +798,26 @@ class RequestMoveDocumentHandler(RequestHandler):
                         {"target_folder_id": target_folder_id},
                         handler.username,
                     )
-                document.folder = None
+
+            has_conflict, err_code, err_data, err_msg = handle_name_duplicate(
+                session, user, target_folder_id, document.title
+            )
+            if has_conflict:
+                err_data_filtered = {k: v for k, v in err_data.items() if k != "entity"}
+                handler.conclude_request(err_code, err_data_filtered, err_msg)
+                if "duplicate_id" in err_data_filtered:
+                    return (
+                        err_code,
+                        document.folder_id,
+                        {
+                            "title": document.title,
+                            "duplicate_id": err_data_filtered["duplicate_id"],
+                        },
+                        handler.username,
+                    )
+                return err_code, document.folder_id, handler.username
+
+            document.folder = target_folder
 
             session.commit()
 
@@ -1026,7 +888,7 @@ class RequestRestoreDocumentHandler(RequestHandler):
         "type": "object",
         "properties": {
             "document_id": {"type": "string", "minLength": 1},
-            "target_folder_id": {"type": ["string", "null"], "minLength": 1},
+            "target_folder_id": {"anyOf": [{"type": "string"}, {"type": "null"}]},
             "new_title": {"type": "string", "minLength": 1},
         },
         "required": ["document_id"],
@@ -1039,7 +901,7 @@ class RequestRestoreDocumentHandler(RequestHandler):
         doc_id = handler.data["document_id"]
 
         target_folder_provided = "target_folder_id" in handler.data
-        target_folder_id = handler.data.get("target_folder_id")
+        target_folder_id: Optional[str] = handler.data.get("target_folder_id")
         new_title = handler.data.get("new_title")
 
         with Session() as session:
@@ -1062,41 +924,34 @@ class RequestRestoreDocumentHandler(RequestHandler):
                 return 403, doc_id, handler.username
 
             if target_folder_provided:
-                db_folder_id = (
-                    None if target_folder_id == ROOT_DIRECTORY_ID else target_folder_id
-                )
+                db_folder_id = target_folder_id or ROOT_DIRECTORY_ID
             else:
-                db_folder_id = document.folder_id
+                db_folder_id = document.folder_id or ROOT_DIRECTORY_ID
 
             final_title = new_title if new_title else document.title
 
-            if db_folder_id is None:
-                root_obj = session.get(Folder, ROOT_DIRECTORY_ID)
-                if root_obj and not root_obj.check_access_requirements(user, "write"):
-                    handler.conclude_access_denial()
-                    return 403, ROOT_DIRECTORY_ID, handler.username
-            else:
-                target_folder = session.get(
-                    Folder, db_folder_id, execution_options={"include_deleted": True}
+            target_folder = session.get(
+                Folder, db_folder_id, execution_options={"include_deleted": True}
+            )
+            if not target_folder:
+                handler.conclude_request(404, {}, smsg.TARGET_DIRECTORY_NOT_FOUND)
+                return 404, db_folder_id, handler.username
+
+            if not target_folder.check_access_requirements(user, "write"):
+                handler.conclude_access_denial()
+                return 403, db_folder_id, handler.username
+
+            if target_folder.status != EntityStatus.OK:
+                handler.conclude_request(
+                    409,
+                    {"folder_id": db_folder_id},
+                    "Cannot restore: Target folder is deleted. Restore it first.",
                 )
-                if not target_folder:
-                    handler.conclude_request(404, {}, smsg.TARGET_DIRECTORY_NOT_FOUND)
-                    return 404, db_folder_id, handler.username
-
-                if not target_folder.check_access_requirements(user, "write"):
-                    handler.conclude_access_denial()
-                    return 403, db_folder_id, handler.username
-
-                if target_folder.status != EntityStatus.OK:
-                    handler.conclude_request(
-                        409,
-                        {"folder_id": db_folder_id},
-                        "Cannot restore: Target folder is deleted. Restore it first.",
-                    )
-                    return 409, doc_id, handler.username
+                return 409, doc_id, handler.username
 
             existing_conflict = (
                 session.query(Document)
+                .with_for_update()
                 .filter(
                     Document.folder_id == db_folder_id,
                     Document.title == final_title,
@@ -1104,6 +959,7 @@ class RequestRestoreDocumentHandler(RequestHandler):
                 )
                 .first()
                 or session.query(Folder)
+                .with_for_update()
                 .filter(
                     Folder.parent_id == db_folder_id,
                     Folder.name == final_title,
