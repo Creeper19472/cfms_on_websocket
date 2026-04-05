@@ -22,19 +22,9 @@ def upgrade() -> None:
     """Upgrade schema."""
     op.execute("UPDATE folders SET parent_id = '/' WHERE parent_id IS NULL AND id != '/'")
     op.execute("UPDATE documents SET folder_id = '/' WHERE folder_id IS NULL AND id != '/'")
-    # Set default title for any null titles before altering column
-    op.execute("UPDATE documents SET title = 'Untitled Document' WHERE title IS NULL")
-    with op.batch_alter_table('documents', schema=None) as batch_op:
-        batch_op.alter_column('title',
-               existing_type=sa.VARCHAR(length=255),
-               nullable=False)
 
 
 def downgrade() -> None:
     """Downgrade schema."""
-    with op.batch_alter_table('documents', schema=None) as batch_op:
-        batch_op.alter_column('title',
-               existing_type=sa.VARCHAR(length=255),
-               nullable=True)
     op.execute("UPDATE folders SET parent_id = NULL WHERE parent_id = '/' AND id != '/'")
     op.execute("UPDATE documents SET folder_id = NULL WHERE folder_id = '/' AND id != '/'")
