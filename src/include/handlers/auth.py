@@ -79,7 +79,6 @@ class RequestLoginHandler(RequestHandler):
                 return fail(401, "Invalid credentials")
 
             LoginGuard.report_success(ip, username)
-            LoginGuard.report_success(ip)
 
             try:
                 check_passwd_requirements(
