@@ -40,19 +40,18 @@ class RequestLoginHandler(RequestHandler):
         totp_token: str = handler.data.get("2fa_token", "")
 
         ip = get_client_ip(handler.stream.connection._ws)
-        ip_id = f"ip_limit|{ip}"
-        user_id = f"user_limit|{ip}|{username}"
 
         def respond(code: int, message: str, data: Optional[dict[str, Any]] = None):
             handler.conclude_request(code=code, data=data or {}, message=message)
             return code, username
 
         def fail(code: int, message: str):
-            LoginGuard.report_failure(user_id, max_attempts=5)
-            LoginGuard.report_failure(ip_id, max_attempts=20)
+            # Throttle by both IP+username and IP-only
+            LoginGuard.report_failure(ip, username, max_attempts=5, ip_max_attempts=20)
             return respond(code, message)
 
-        if not LoginGuard.check_access(user_id):
+        # Check access: both by IP+username and IP-only are checked simultaneously
+        if not LoginGuard.check_access(ip, username):
             return respond(429, "Too many login attempts. Please try again later.")
 
         cfg = global_config["security"]
@@ -79,8 +78,7 @@ class RequestLoginHandler(RequestHandler):
             if not token:
                 return fail(401, "Invalid credentials")
 
-            LoginGuard.report_success(user_id)
-            LoginGuard.report_success(ip_id)
+            LoginGuard.report_success(ip, username)
 
             try:
                 check_passwd_requirements(
