@@ -12,7 +12,8 @@ def global_process_request(
 ) -> Response | None:
     ip = get_client_ip(connection)
 
-    if not LoginGuard.check_access("ip_limit", ip):
+    # IP-only check
+    if not LoginGuard.check_access(ip):
         response_headers = Headers()
         response_headers["Content-Type"] = "text/plain"
         return Response(

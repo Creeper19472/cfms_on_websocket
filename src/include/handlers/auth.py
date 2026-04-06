@@ -46,14 +46,14 @@ class RequestLoginHandler(RequestHandler):
             return code, username
 
         def fail(code: int, message: str):
-            LoginGuard.report_failure(username, ip, max_attempts=5)
-            # track the IP
-            LoginGuard.report_failure("ip_limit", ip, max_attempts=20)
+            # Throttle by IP + username
+            LoginGuard.report_failure(ip, username, max_attempts=5)
+            # Throttle by IP only
+            LoginGuard.report_failure(ip, ip_max_attempts=20)
             return respond(code, message)
 
-        if not LoginGuard.check_access(username, ip) or not LoginGuard.check_access(
-            "ip_limit", ip
-        ):
+        # Check access: first by IP+username, then by IP-only
+        if not LoginGuard.check_access(ip, username) or not LoginGuard.check_access(ip):
             return respond(429, "Too many login attempts. Please try again later.")
 
         cfg = global_config["security"]
@@ -80,8 +80,8 @@ class RequestLoginHandler(RequestHandler):
             if not token:
                 return fail(401, "Invalid credentials")
 
-            LoginGuard.report_success(username, ip)
-            LoginGuard.report_success("ip_limit", ip)
+            LoginGuard.report_success(ip, username)
+            LoginGuard.report_success(ip)
 
             try:
                 check_passwd_requirements(

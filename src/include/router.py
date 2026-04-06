@@ -281,7 +281,8 @@ def handle_request(stream: Stream):
 
     ip = get_client_ip(stream.connection._ws)
 
-    if not LoginGuard.check_access("ip_limit", ip):
+    # Check IP-only access before proceeding
+    if not LoginGuard.check_access(ip):
         response = {
             "code": 403,
             "message": "Your IP has been temporarily blocked due to suspicious activity. Please try again later.",
