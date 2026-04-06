@@ -46,14 +46,12 @@ class RequestLoginHandler(RequestHandler):
             return code, username
 
         def fail(code: int, message: str):
-            # Throttle by IP + username
-            LoginGuard.report_failure(ip, username, max_attempts=5)
-            # Throttle by IP only
-            LoginGuard.report_failure(ip, ip_max_attempts=20)
+            # Throttle by both IP+username and IP-only
+            LoginGuard.report_failure(ip, username, max_attempts=5, ip_max_attempts=20)
             return respond(code, message)
 
-        # Check access: first by IP+username, then by IP-only
-        if not LoginGuard.check_access(ip, username) or not LoginGuard.check_access(ip):
+        # Check access: both by IP+username and IP-only are checked simultaneously
+        if not LoginGuard.check_access(ip, username):
             return respond(429, "Too many login attempts. Please try again later.")
 
         cfg = global_config["security"]
