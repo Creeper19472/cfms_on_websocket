@@ -34,6 +34,7 @@ def upgrade() -> None:
         batch_op.add_column(sa.Column('ip_address', sa.String(length=45), nullable=False))
         batch_op.create_index(batch_op.f('ix_login_security_ip_address'), ['ip_address'], unique=False)
         batch_op.drop_column('identifier')
+        batch_op.create_primary_key('pk_login_security', ['username', 'ip_address'])
 
     # ### end Alembic commands ###
 
