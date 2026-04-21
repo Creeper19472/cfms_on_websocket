@@ -103,6 +103,9 @@ def server_init():
     # Create database tables before inserting data
     Base.metadata.create_all(engine)
 
+    # Ensure the root folder exists before seeding any objects that reference it.
+    ensure_root_folder()
+
     from include.util.group import create_group
 
     create_group(
@@ -272,8 +275,6 @@ def server_init():
 
     with open(ROOT_ABSPATH / "init", "w") as f:
         f.write("This file indicates that the database has been initialized.\n")
-
-    ensure_root_folder()
 
 
 def prepare_handlers():

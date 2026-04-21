@@ -53,7 +53,7 @@ port = 3306
 username = ""
 password = ""
 # 如果使用 MySQL 数据库，指定数据库名称
-db_name = "app_db"
+name = "app_db"
 # 如果使用 MySQL 数据库，指定字符集
 charset = "utf8mb4"
 options = "" # Not implemented yet
