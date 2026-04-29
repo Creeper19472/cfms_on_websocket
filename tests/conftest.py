@@ -143,6 +143,8 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
     # Start the server
     print("\n[TEST SETUP] Starting CFMS server...", file=sys.stderr)
     try:
+        env = os.environ.copy()
+        env["PYTHONIOENCODING"] = "utf-8"
         process = subprocess.Popen(
             [sys.executable, "main.py"],
             stdout=subprocess.PIPE,
@@ -151,6 +153,7 @@ def server_process() -> Generator[subprocess.Popen, None, None]:
             encoding="utf-8",
             bufsize=1,  # Line buffered
             cwd=os.path.join(os.getcwd(), "src"),
+            env=env,
         )
     except Exception as e:
         pytest.fail(f"Failed to start server process: {e}")

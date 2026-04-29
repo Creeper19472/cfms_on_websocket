@@ -100,7 +100,7 @@ from include.handlers.two_factor import (
 )
 from include.nonce_store import nonce_store
 from include.shared import clients, clients_lock, lockdown_enabled
-from include.system.ext_manager import pm
+from include.system.extmgr import pm
 from include.util.address import get_client_ip
 from include.util.audit import log_audit
 from include.util.cert import get_client_cert_subject
