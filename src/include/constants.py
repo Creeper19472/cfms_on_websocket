@@ -22,7 +22,7 @@ from pathlib import Path
 from include.classes.version import Version
 
 CORE_VERSION = Version("0.2.0.260429_alpha")
-PROTOCOL_VERSION = 11
+PROTOCOL_VERSION = 12
 
 ROOT_ABSPATH = Path(__file__).resolve().parent.parent
 
