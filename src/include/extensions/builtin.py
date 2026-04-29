@@ -69,7 +69,7 @@ class RequestShutdownHandler(RequestHandler):
         # Shutdown the server
         handler.conclude_request(200, {}, "Server is shutting down")
         logger.info("Server is shutting down")
-        threading.Thread(target=os._exit(0), daemon=True).start()
+        threading.Thread(target=os._exit, args=(0,), daemon=True).start()
 
 
 @hookimpl
