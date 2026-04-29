@@ -1,3 +1,5 @@
+__all__ = ["LoginThrottle", "TrafficThrottle"]
+
 from datetime import datetime
 from typing import Optional
 
@@ -7,8 +9,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 from include.database.handler import Base
 
 
-class LoginSecurity(Base):
-    __tablename__ = "login_security"
+class LoginThrottle(Base):
+    __tablename__ = "login_throttles"
 
     username: Mapped[str] = mapped_column(String(255), primary_key=True)
     ip_address: Mapped[str] = mapped_column(String(45), primary_key=True, index=True)
@@ -33,8 +35,8 @@ class LoginSecurity(Base):
         return ("user_ip", username, ip_address)
 
 
-class IPLoginSecurity(Base):
-    __tablename__ = "ip_login_security"
+class TrafficThrottle(Base):
+    __tablename__ = "traffic_throttles"
 
     ip_address: Mapped[str] = mapped_column(String(45), primary_key=True)
 

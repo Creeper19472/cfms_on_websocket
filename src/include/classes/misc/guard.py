@@ -9,7 +9,7 @@ from loguru import logger as log
 
 from include.database.handler import Session
 from include.database.models.security.banned_subnet import BannedSubnet
-from include.database.models.security.login import IPLoginSecurity, LoginSecurity
+from include.database.models.security.login import LoginThrottle, TrafficThrottle
 
 logger = log.bind(name="login_guard")
 
@@ -66,11 +66,11 @@ class LoginGuard:
         keys_to_check = []
         if ip_address:
             keys_to_check.append(
-                (IPLoginSecurity, IPLoginSecurity.make_cache_key(ip_address))
+                (TrafficThrottle, TrafficThrottle.make_cache_key(ip_address))
             )
         if username and ip_address:
             keys_to_check.append(
-                (LoginSecurity, LoginSecurity.make_cache_key(username, ip_address))
+                (LoginThrottle, LoginThrottle.make_cache_key(username, ip_address))
             )
 
         now_ts = time.time()
@@ -87,7 +87,7 @@ class LoginGuard:
 
         with Session() as session:
             for model_cls, key in keys_to_check:
-                if model_cls == IPLoginSecurity:
+                if model_cls == TrafficThrottle:
                     record = model_cls.get_record(session, ip_address)
                 else:
                     record = model_cls.get_record(session, username, ip_address)
@@ -113,10 +113,10 @@ class LoginGuard:
         with Session() as session:
             # 1. Update IP Security
             if ip_address:
-                ip_key = IPLoginSecurity.make_cache_key(ip_address)
-                ip_record = IPLoginSecurity.get_record(session, ip_address)
+                ip_key = TrafficThrottle.make_cache_key(ip_address)
+                ip_record = TrafficThrottle.get_record(session, ip_address)
                 if not ip_record:
-                    ip_record = IPLoginSecurity(
+                    ip_record = TrafficThrottle(
                         ip_address=ip_address, failed_attempts=1
                     )
                     session.add(ip_record)
@@ -139,10 +139,10 @@ class LoginGuard:
 
             # 2. Update User+IP Security
             if username and ip_address:
-                u_key = LoginSecurity.make_cache_key(username, ip_address)
-                u_record = LoginSecurity.get_record(session, username, ip_address)
+                u_key = LoginThrottle.make_cache_key(username, ip_address)
+                u_record = LoginThrottle.get_record(session, username, ip_address)
                 if not u_record:
-                    u_record = LoginSecurity(
+                    u_record = LoginThrottle(
                         username=username, ip_address=ip_address, failed_attempts=1
                     )
                     session.add(u_record)
@@ -171,16 +171,16 @@ class LoginGuard:
             keys_to_clear = []
 
             if ip_address:
-                ip_key = IPLoginSecurity.make_cache_key(ip_address)
+                ip_key = TrafficThrottle.make_cache_key(ip_address)
                 keys_to_clear.append(ip_key)
-                ip_record = IPLoginSecurity.get_record(session, ip_address)
+                ip_record = TrafficThrottle.get_record(session, ip_address)
                 if ip_record:
                     session.delete(ip_record)
 
             if username and ip_address:
-                u_key = LoginSecurity.make_cache_key(username, ip_address)
+                u_key = LoginThrottle.make_cache_key(username, ip_address)
                 keys_to_clear.append(u_key)
-                u_record = LoginSecurity.get_record(session, username, ip_address)
+                u_record = LoginThrottle.get_record(session, username, ip_address)
                 if u_record:
                     session.delete(u_record)
 
