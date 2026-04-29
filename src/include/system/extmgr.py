@@ -144,7 +144,7 @@ def load_extensions_from_directory(extension_dir: str | Path):
 
         if ext_name in loaded_extensions:
             logger.warning(
-                f"Extension '{ext_name}' is already loaded. Skipping duplicate: {filename}"
+                f"Skipping: Found a duplicate {filename} for extension '{ext_name}'"
             )
             continue
 
