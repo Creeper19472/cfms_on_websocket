@@ -2,6 +2,7 @@ __all__ = ["pm", "load_extensions_from_directory"]
 
 import importlib.util
 import os
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, Optional, Set, Type, Union
 
@@ -121,11 +122,14 @@ def load_extensions_from_directory(extension_dir: str | Path):
         )
         return
 
+    loaded_extensions = set()
+
     for filename in sorted(os.listdir(extension_dir)):
         if filename.startswith(("_", ".")):
             continue
 
         ext_path = os.path.join(extension_dir, filename)
+        is_package = False
 
         if os.path.isfile(ext_path) and filename.endswith(".py"):
             ext_name = filename[:-3]  # remove .py extension
@@ -134,7 +138,14 @@ def load_extensions_from_directory(extension_dir: str | Path):
             ext_path = os.path.join(ext_path, "_extension.py")
             if not os.path.isfile(ext_path):
                 continue
+            is_package = True
         else:
+            continue
+
+        if ext_name in loaded_extensions:
+            logger.warning(
+                f"Extension '{ext_name}' is already loaded. Skipping duplicate: {filename}"
+            )
             continue
 
         try:
@@ -143,10 +154,22 @@ def load_extensions_from_directory(extension_dir: str | Path):
                 logger.error(f"Failed to load spec for extension: {ext_name}")
                 continue
 
-            module = importlib.util.module_from_spec(spec)
+            if is_package:
+                spec.submodule_search_locations = [
+                    os.path.join(extension_dir, filename)
+                ]
 
-            spec.loader.exec_module(module)
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[ext_name] = module
+
+            try:
+                spec.loader.exec_module(module)
+            except Exception:
+                del sys.modules[ext_name]
+                raise
+
             pm.register(module, name=ext_name)
+            loaded_extensions.add(ext_name)
 
             logger.info(f"Loaded extension: {ext_name}")
 
