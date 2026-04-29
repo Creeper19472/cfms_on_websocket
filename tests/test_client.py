@@ -813,7 +813,7 @@ class CFMSTestClient:
     #         1. Requests file metadata (SHA-256 hash, file size, chunk info) from the server.
     #         2. Sends readiness acknowledgment to the server.
     #         3. Receives encrypted file chunks, saves them temporarily.
-    #         4. Receives AES key and IV, decrypts all chunks, and writes the output file.
+    #         4. Receives AES key and tag, decrypts all chunks, verifies tag, and writes the output file.
     #         5. Deletes temporary chunk files.
     #         6. Verifies the file size and SHA-256 hash.
     #         7. Removes the output file if verification fails.
@@ -869,7 +869,7 @@ class CFMSTestClient:
     #     try:
 
     #         received_chunks = 0
-    #         iv: bytes = b""
+    #         nonce: bytes = b""
 
     #         while received_chunks + 1 <= total_chunks:
     #             # Receive encrypted data from the server
@@ -882,7 +882,7 @@ class CFMSTestClient:
 
     #             index = data_json["data"].get("index")
     #             if index == 0:
-    #                 iv = base64.b64decode(data_json["data"].get("iv"))
+    #                 nonce = base64.b64decode(data_json["data"].get("nonce"))
     #             chunk_hash = data_json["data"].get("hash")  # provided but unused
     #             chunk_data = base64.b64decode(data_json["data"].get("chunk"))
     #             chunk_file_path = os.path.join(downloading_path, str(index))
@@ -904,10 +904,11 @@ class CFMSTestClient:
     #         decrypted_data_json: dict = orjson.loads(decrypted_data)
 
     #         aes_key = base64.b64decode(decrypted_data_json["data"].get("key"))
+    #         tag = base64.b64decode(decrypted_data_json["data"].get("tag"))
 
     #         # Decrypt chunks
     #         decrypted_chunks = 1
-    #         cipher = AES.new(aes_key, AES.MODE_CFB, iv=iv)  # Initialize cipher
+    #         cipher = AES.new(aes_key, AES.MODE_GCM, nonce=nonce)  # Initialize cipher
 
     #         async with aiofiles.open(file_path, "wb") as out_file:
     #             while decrypted_chunks <= total_chunks:
@@ -924,6 +925,10 @@ class CFMSTestClient:
 
     #                 # os.remove(chunk_file_path)
     #                 decrypted_chunks += 1
+    #         try:
+    #             cipher.verify(tag)
+    #         except ValueError:
+    #             raise ValueError("MAC tag verification failed!")
 
     #         # Delete temporary folder
     #         yield 2,
