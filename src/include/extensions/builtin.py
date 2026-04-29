@@ -15,7 +15,7 @@ from include.database.handler import Session
 from include.database.models.classic import User
 from include.database.models.file import File
 from include.shared import lockdown_enabled
-from include.system.ext_manager import hookimpl
+from include.system.extmgr import hookimpl
 from include.system.messages import Messages as smsg
 from include.util.count import _get_file_references
 

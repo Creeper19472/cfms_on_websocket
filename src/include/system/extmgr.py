@@ -122,25 +122,36 @@ def load_extensions_from_directory(extension_dir: str | Path):
         return
 
     for filename in sorted(os.listdir(extension_dir)):
-        if filename.endswith(".py") and not filename.startswith(("_", ".")):
+        if filename.startswith(("_", ".")):
+            continue
+
+        ext_path = os.path.join(extension_dir, filename)
+
+        if os.path.isfile(ext_path) and filename.endswith(".py"):
             ext_name = filename[:-3]  # remove .py extension
-            ext_path = os.path.join(extension_dir, filename)
+        elif os.path.isdir(ext_path):
+            ext_name = filename
+            ext_path = os.path.join(ext_path, "_extension.py")
+            if not os.path.isfile(ext_path):
+                continue
+        else:
+            continue
 
-            try:
-                spec = importlib.util.spec_from_file_location(ext_name, ext_path)
-                if spec is None or spec.loader is None:
-                    logger.error(f"Failed to load spec for extension: {ext_name}")
-                    continue
+        try:
+            spec = importlib.util.spec_from_file_location(ext_name, ext_path)
+            if spec is None or spec.loader is None:
+                logger.error(f"Failed to load spec for extension: {ext_name}")
+                continue
 
-                module = importlib.util.module_from_spec(spec)
+            module = importlib.util.module_from_spec(spec)
 
-                spec.loader.exec_module(module)
-                pm.register(module, name=ext_name)
+            spec.loader.exec_module(module)
+            pm.register(module, name=ext_name)
 
-                logger.info(f"Loaded extension: {ext_name}")
+            logger.info(f"Loaded extension: {ext_name}")
 
-            except Exception as e:
-                logger.exception(f"Failed to load extension '{ext_name}': {e}")
+        except Exception as e:
+            logger.exception(f"Failed to load extension '{ext_name}': {e}")
 
 
 pm = pluggy.PluginManager("cfms")

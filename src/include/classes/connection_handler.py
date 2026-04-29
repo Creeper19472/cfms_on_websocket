@@ -20,7 +20,7 @@ from include.constants import FILE_TRANSFER_MAX_CHUNK_SIZE, FILE_TRANSFER_MIN_CH
 from include.database.handler import Session
 from include.database.models.file import File, FileTask
 from include.shared import clients, clients_lock
-from include.system.ext_manager import pm
+from include.system.extmgr import pm
 from include.system.messages import Messages as smsg
 from include.util.log import log_exception_with_id
 

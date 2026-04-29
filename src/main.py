@@ -46,7 +46,7 @@ from include.router import (
     handle_connection,
     whitelisted_functions,
 )
-from include.system.ext_manager import load_extensions_from_directory, pm
+from include.system.extmgr import load_extensions_from_directory, pm
 from include.util.address import is_v6_address
 from include.util.entrance import global_process_request
 from include.util.rule.applying import set_access_rules
