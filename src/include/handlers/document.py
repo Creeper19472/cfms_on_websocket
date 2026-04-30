@@ -48,7 +48,7 @@ def create_file_task(file: File, transfer_mode: int = 0):
     Returns:
         dict or None: A dictionary containing the task details:
             - task_id (int): The unique identifier of the created task.
-            - created_at (float): The timestamp when the task was created.
+            - provider (str): The file transfer provider (e.g., "native").
             - start_time (float): The start time of the task.
             - end_time (float): The end time of the task (1 hour after start).
         Returns None if the file with the given file_id does not exist.
@@ -71,6 +71,7 @@ def create_file_task(file: File, transfer_mode: int = 0):
 
         return {
             "task_id": task.id,
+            "provider": "native",  # Literal['native', ...]
             "start_time": task.start_time,
             "end_time": task.end_time,
         }
