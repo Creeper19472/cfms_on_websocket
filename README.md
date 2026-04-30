@@ -21,7 +21,7 @@ comments as the primary reference.
 
 ```bash
 # Clone repo
-git clone https://github.com/creeper19472/cfms_on_websocket.git
+git clone https://github.com/cfms-dev/cfms_on_websocket.git
 
 # Enter working dir
 cd cfms_on_websocket/src
