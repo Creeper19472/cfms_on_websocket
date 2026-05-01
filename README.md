@@ -42,6 +42,31 @@ source .venv/bin/activate
 python main.py # DO NOT use `-O`!
 ```
 
+## Database Migrations
+The structure of the database varies between different server versions. In order 
+to allow server operators to upgrade to latest versions easily, here, we use 
+Alembic to handle database migrations.
+
+**Note:** 
+1. Remember to backup your databases in advance to avoid data losses.
+
+2. Configs and generated revisions in `/src/include/alembic/versions/` of 
+Alembic is designed for sqlite databases, and we don't guarantee that other types 
+of databases can be successfully upgraded via these revisions.
+
+If you have not used Alembic yet, please run the command below **before** you 
+checkout new changes:
+
+```bash
+alembic stamp head
+```
+
+Then checkout the server version you wanted and run:
+
+```bash
+alembic upgrade head 
+``` 
+
 ## Development
 
 Consider using pre-commit to provide an automated code standardization experience.
