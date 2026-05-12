@@ -54,3 +54,6 @@ QUERY_CHUNK_SIZE = 576  # used to prevent hitting the limit of bind variables pe
 # IP addresses of trusted reverse proxies that may set X-Forwarded-For / X-Real-IP.
 # Adjust this set as needed for your deployment environment.
 TRUSTED_PROXY_IPS = frozenset({"127.0.0.1", "::1"})
+
+# Encryption Magic Constants
+ENCRYPTION_MAGIC_PREFIX = bytes.fromhex("0000000000003301")

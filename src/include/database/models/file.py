@@ -181,6 +181,20 @@ class FileTask(Base):
     )
     start_time: Mapped[float] = mapped_column(Float, nullable=False)
     end_time: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+    # Not adding a username column is by design since we take the possibility
+    # that a task ID may be forwarded to someone else by the original user.
+    #
+    # We believe that a sufficiently long random ID is sufficient to solve the
+    # problem of guessing, and that leaking the task ID to others is the user's
+    # fault, not ours.
+
+    # Encryption key will be generated when a download task is initiated for
+    # the first time.
+    encryption_key: Mapped[Optional[str]] = mapped_column(
+        VARCHAR(256), nullable=True, default=None
+    )
+
     # encryption_mode: Mapped[Optional[str]] = mapped_column(
     #     VARCHAR(32), nullable=True, default=None
     # )  # 加密模式，如 'AES', 'RSA'，未加密则为 None
