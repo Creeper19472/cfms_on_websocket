@@ -417,24 +417,58 @@ class ConnectionHandler:
                 pm.hook.ext_on_empty_file_uploaded(id=file.id, path=file.path)
                 return
 
-            self.stream.send(f"ready {chunk_size}")
+            import struct
+
+            trk_path = f"{file.path}.trk"
+            total_chunks = (file_size + chunk_size - 1) // chunk_size
+            completed_chunks = set()
+            if os.path.exists(trk_path):
+                with open(trk_path, "r") as trk_file:
+                    try:
+                        completed_chunks = set(orjson.loads(trk_file.read()))
+                    except Exception:
+                        pass
+
+            missing_chunks = [
+                i for i in range(total_chunks) if i not in completed_chunks
+            ]
+
+            ready_msg = {
+                "action": "ready",
+                "chunk_size": chunk_size,
+                "missing_chunks": missing_chunks,
+            }
+            self.stream.send(orjson.dumps(ready_msg).decode())
+
             try:
                 logger.info("Receiving file: transfer started")
                 os.makedirs(os.path.dirname(file.path), exist_ok=True)
-                with open(file.path, "wb") as f:
+                with open(file.path, "r+b" if os.path.exists(file.path) else "wb") as f:
                     try:
-                        while True:
+                        while len(completed_chunks) < total_chunks:
                             # Receive data from the client
                             data = self.stream.recv().data
-                            f.write(data)
-
-                            if not data or len(data) < chunk_size:
+                            if len(data) < 4:
                                 break
+                            chunk_index = struct.unpack("!I", data[:4])[0]
+                            chunk_data = data[4:]
+
+                            f.seek(chunk_index * chunk_size)
+                            f.write(chunk_data)
+                            completed_chunks.add(chunk_index)
+
+                            with open(trk_path, "w") as trk_file:
+                                trk_file.write(
+                                    orjson.dumps(list(completed_chunks)).decode()
+                                )
                     except (
                         websockets.ConnectionClosed,
                         websockets.exceptions.ConnectionClosedOK,
                     ):
                         raise
+
+                if os.path.exists(trk_path):
+                    os.remove(trk_path)
 
                 # 校验文件大小
                 actual_size = os.path.getsize(file.path)

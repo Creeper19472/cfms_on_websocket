@@ -772,25 +772,46 @@ class CFMSTestClient:
         else:
             raise RuntimeError("Unexpected file transfer response")
 
-        if received_response.startswith("ready"):
-            ready = True
-        elif received_response == "stop":
-            ready = False
-        else:
-            raise RuntimeError("Unexpected file transfer handshake response")
+        import json
+        import struct
+
+        try:
+            resp_json = json.loads(received_response)
+            if resp_json.get("action") == "ready":
+                ready = True
+                chunk_size = resp_json.get("chunk_size")
+                missing_chunks = resp_json.get("missing_chunks", [])
+            else:
+                raise RuntimeError("Unexpected file transfer handshake response")
+        except json.JSONDecodeError:
+            if received_response.startswith("ready"):
+                ready = True
+                chunk_size = int(received_response.split()[1])
+                missing_chunks = None
+            elif received_response == "stop":
+                ready = False
+            else:
+                raise RuntimeError("Unexpected file transfer handshake response")
 
         if ready:
             try:
-                chunk_size = int(received_response.split()[1])
-                with open(file_path, "rb") as f:
-                    while True:
-                        chunk = f.read(chunk_size)
-                        if not chunk:
-                            break
-                        await stream.send(chunk)
+                if missing_chunks is not None:
+                    with open(file_path, "rb") as f:
+                        for chunk_idx in missing_chunks:
+                            f.seek(chunk_idx * chunk_size)
+                            chunk = f.read(chunk_size)
+                            header = struct.pack("!I", chunk_idx)
+                            await stream.send(header + chunk)
+                else:
+                    with open(file_path, "rb") as f:
+                        while True:
+                            chunk = f.read(chunk_size)
+                            if not chunk:
+                                break
+                            await stream.send(chunk)
 
-                        if len(chunk) < chunk_size:
-                            break
+                            if len(chunk) < chunk_size:
+                                break
 
                 # need to wait for server confirmation
                 server_frame = await stream.recv()
