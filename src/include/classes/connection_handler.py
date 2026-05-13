@@ -212,83 +212,81 @@ class ConnectionHandler:
                 self.conclude_request(400, {}, "Client not ready for file transfer")
                 return
 
-            if file_size != 0:
-                self.logger.info(f"File transmission begin. Offset: {offset}")
-                try:
-                    aes_key = get_random_bytes(32)  # AES-256
-
-                    # Save the encryption key to the database
-                    file_task.encryption_key = base64.b64encode(aes_key).decode()
-                    session.commit()
-
-                    with open(file_path, "rb") as file:
-                        if offset > 0:
-                            file.seek(offset)
-                            chunk_index = offset // chunk_size
-                        else:
-                            chunk_index = 0
-
-                        while True:
-                            chunk = file.read(chunk_size)
-                            if not chunk:
-                                break
-
-                            nonce = ENCRYPTION_MAGIC_PREFIX + chunk_index.to_bytes(
-                                4, "big"
-                            )
-                            cipher = AES.new(
-                                aes_key, AES.MODE_GCM, nonce=nonce, mac_len=16
-                            )
-
-                            encrypted_chunk, tag = cipher.encrypt_and_digest(chunk)
-                            payload = {
-                                "action": "file_chunk",
-                                "data": {
-                                    "index": chunk_index,
-                                    "chunk": base64.b64encode(encrypted_chunk).decode(),
-                                    "tag": base64.b64encode(tag).decode(),
-                                },
-                            }
-                            self.stream.send(
-                                orjson.dumps(
-                                    payload,
-                                )
-                            )
-                            chunk_index += 1
-
-                    session.refresh(file_task)  # Refresh to get the latest status
-
-                    if file_task.status == 0:
-                        self.stream.send(
-                            orjson.dumps(
-                                {
-                                    "action": "aes_key",
-                                    "data": {
-                                        "key": base64.b64encode(aes_key).decode(),
-                                    },
-                                },
-                            )
-                        )
-                        file_task.status = 1
-                        session.commit()
-                    else:
-                        self.stream.send(
-                            orjson.dumps(
-                                {
-                                    "action": "aes_key",
-                                    "data": {
-                                        "key": None,
-                                    },
-                                },
-                            )
-                        )
-
-                except Exception as e:
-                    self.report_error(e, context=f"Error sending file {file_path}")
-                    return
-
-            else:
+            if file_size == 0:
                 self.logger.info("Empty file, no need to send")
+                return
+
+            # Get or set the AES key for this file transfer task
+            if file_task.encryption_key:
+                aes_key = base64.b64decode(file_task.encryption_key)
+            else:
+                aes_key = get_random_bytes(32)  # AES-256
+                file_task.encryption_key = base64.b64encode(aes_key).decode()
+                session.commit()
+
+            self.logger.info(f"File transmission begin. Offset: {offset}")
+            try:
+                with open(file_path, "rb") as file:
+                    if offset > 0:
+                        file.seek(offset)
+                        chunk_index = offset // chunk_size
+                    else:
+                        chunk_index = 0
+
+                    while True:
+                        chunk = file.read(chunk_size)
+                        if not chunk:
+                            break
+
+                        nonce = ENCRYPTION_MAGIC_PREFIX + chunk_index.to_bytes(4, "big")
+                        cipher = AES.new(aes_key, AES.MODE_GCM, nonce=nonce, mac_len=16)
+
+                        encrypted_chunk, tag = cipher.encrypt_and_digest(chunk)
+                        payload = {
+                            "action": "file_chunk",
+                            "data": {
+                                "index": chunk_index,
+                                "chunk": base64.b64encode(encrypted_chunk).decode(),
+                                "tag": base64.b64encode(tag).decode(),
+                            },
+                        }
+                        self.stream.send(
+                            orjson.dumps(
+                                payload,
+                            )
+                        )
+                        chunk_index += 1
+
+                session.refresh(file_task)  # Refresh to get the latest status
+
+                if file_task.status == 0:
+                    self.stream.send(
+                        orjson.dumps(
+                            {
+                                "action": "aes_key",
+                                "data": {
+                                    "key": base64.b64encode(aes_key).decode(),
+                                },
+                            },
+                        )
+                    )
+                    file_task.status = 1
+                    session.commit()
+                else:
+                    self.stream.send(
+                        orjson.dumps(
+                            {
+                                "action": "aes_key",
+                                "data": {
+                                    "key": None,
+                                },
+                            },
+                        )
+                    )
+
+            except Exception as e:
+                self.report_error(e, context=f"Error sending file {file_path}")
+                return
 
         self.logger.info(f"File {file_path} sent successfully.")
 
