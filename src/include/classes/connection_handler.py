@@ -307,6 +307,12 @@ class ConnectionHandler:
                         )
                     )
 
+            except (
+                websockets.ConnectionClosed,
+                websockets.exceptions.ConnectionClosedError,
+            ):
+                self.logger.info("File transmission aborted: Connection closed")
+                return
             except Exception as e:
                 self.report_error(e, context=f"Error sending file {file_path}")
                 return
@@ -474,12 +480,9 @@ class ConnectionHandler:
 
                 self.conclude_request(200, {}, "File received successfully")
 
-            except (
-                websockets.ConnectionClosed,
-                websockets.exceptions.ConnectionClosedError,
-                websockets.exceptions.ConnectionClosedOK,
-            ):
-                raise
+            except ConnectionError:
+                self.logger.info("File reception aborted: Connection closed")
+                return
 
             except Exception as e:
                 self.report_error(e, context=f"Error receiving file for task {task_id}")
