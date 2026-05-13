@@ -17,7 +17,6 @@ from websockets.typing import Data
 from include.classes.multiplexer import FrameType, MultiplexConnection, Stream
 from include.conf_loader import global_config
 from include.constants import (
-    ENCRYPTION_MAGIC_PREFIX,
     FILE_TRANSFER_MAX_CHUNK_SIZE,
     FILE_TRANSFER_MIN_CHUNK_SIZE,
 )
@@ -247,7 +246,10 @@ class ConnectionHandler:
                         if not chunk:
                             break
 
-                        nonce = ENCRYPTION_MAGIC_PREFIX + chunk_index.to_bytes(4, "big")
+                        # For each chunk, generate a unique nonce by combining a random
+                        # prefix with the chunk index.
+                        prefix = get_random_bytes(8)
+                        nonce = prefix + chunk_index.to_bytes(4, "big")
                         cipher = AES.new(aes_key, AES.MODE_GCM, nonce=nonce, mac_len=16)
 
                         encrypted_chunk, tag = cipher.encrypt_and_digest(chunk)
@@ -257,6 +259,7 @@ class ConnectionHandler:
                                 "index": chunk_index,
                                 "chunk": base64.b64encode(encrypted_chunk).decode(),
                                 "tag": base64.b64encode(tag).decode(),
+                                "prefix": base64.b64encode(prefix).decode(),
                             },
                         }
                         self.stream.send(

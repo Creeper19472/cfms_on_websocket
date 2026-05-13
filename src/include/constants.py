@@ -6,7 +6,6 @@ __all__ = [
     "AVAILABLE_BLOCK_TYPES",
     "DEFAULT_TOKEN_EXPIRY_SECONDS",
     "DEFAULT_SSL_CERT_VALIDITY_DAYS",
-    "ENCRYPTION_MAGIC_PREFIX",
     "FILE_TRANSFER_MAX_CHUNK_SIZE",
     "FILE_TRANSFER_MIN_CHUNK_SIZE",
     "FILE_TASK_DEFAULT_DURATION_SECONDS",
@@ -55,6 +54,3 @@ QUERY_CHUNK_SIZE = 576  # used to prevent hitting the limit of bind variables pe
 # IP addresses of trusted reverse proxies that may set X-Forwarded-For / X-Real-IP.
 # Adjust this set as needed for your deployment environment.
 TRUSTED_PROXY_IPS = frozenset({"127.0.0.1", "::1"})
-
-# Encryption Magic Constants
-ENCRYPTION_MAGIC_PREFIX = bytes.fromhex("0000000000003301")
