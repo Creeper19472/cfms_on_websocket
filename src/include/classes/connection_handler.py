@@ -233,6 +233,17 @@ class ConnectionHandler:
                 self.conclude_request(400, {}, "Invalid offset: exceeds file size")
                 return
 
+            if offset % chunk_size != 0:
+                self.logger.error(
+                    f"Invalid offset: {offset} (not aligned to chunk size: {chunk_size})"
+                )
+                self.conclude_request(
+                    400,
+                    {},
+                    "Invalid offset: must be a multiple of chunk_size or zero",
+                )
+                return
+
             try:
                 with open(file_path, "rb") as file:
                     if offset > 0:
