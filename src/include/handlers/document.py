@@ -548,6 +548,7 @@ class RequestDownloadFileHandler(RequestHandler):
         "type": "object",
         "properties": {
             "task_id": {"type": "string", "minLength": 1},
+            "offset": {"type": "integer", "minimum": 0},
         },
         "required": ["task_id"],
         "additionalProperties": False,
@@ -555,6 +556,7 @@ class RequestDownloadFileHandler(RequestHandler):
 
     def handle(self, handler: ConnectionHandler):
         task_id: str = handler.data["task_id"]
+        offset: int = handler.data.get("offset", 0)
 
         with Session() as session:
             task = session.get(FileTask, task_id)
@@ -577,7 +579,7 @@ class RequestDownloadFileHandler(RequestHandler):
                 return
 
         ### 服务器还需要发送一次响应
-        handler.send_file(task_id)
+        handler.send_file(task_id, offset)
 
 
 class RequestUploadFileHandler(RequestHandler):

@@ -16,7 +16,10 @@ from websockets.typing import Data
 
 from include.classes.multiplexer import FrameType, MultiplexConnection, Stream
 from include.conf_loader import global_config
-from include.constants import FILE_TRANSFER_MAX_CHUNK_SIZE, FILE_TRANSFER_MIN_CHUNK_SIZE
+from include.constants import (
+    FILE_TRANSFER_MAX_CHUNK_SIZE,
+    FILE_TRANSFER_MIN_CHUNK_SIZE,
+)
 from include.database.handler import Session
 from include.database.models.file import File, FileTask
 from include.shared import clients, clients_lock
@@ -132,7 +135,7 @@ class ConnectionHandler:
             )
         return log_id
 
-    def send_file(self, task_id: str) -> None:
+    def send_file(self, task_id: str, offset: int) -> None:
         """
         Sends a file associated with the given task ID to the client over a websocket connection using AES encryption.
         The method performs the following steps:
@@ -146,6 +149,7 @@ class ConnectionHandler:
         8. Handles errors and logs relevant information.
         Args:
             task_id (str): The identifier for the task whose associated file is to be sent.
+            offset (int): The byte offset from which to resume sending the file. Should be 0 for a new transfer.
         Raises:
             ValueError: If the file ID or file path cannot be found for the given task ID.
             Exception: If an error occurs during file encryption or transmission.
@@ -174,11 +178,8 @@ class ConnectionHandler:
             )
 
             file_size = os.path.getsize(file.path)
-            sha256 = calculate_sha256(file.path) if file_size else None
 
-            self.logger.info(
-                f"Calculation complete. SHA256: {sha256}, File size: {file_size}"
-            )
+            self.logger.info(f"Calculation complete. File size: {file_size}")
 
             file_path = file.path  # 防止 Session 关闭后可能出现的异常
 
@@ -191,7 +192,6 @@ class ConnectionHandler:
                     {
                         "action": "transfer_file",
                         "data": {
-                            "sha256": sha256,  # 原始文件的 SHA256 哈希值
                             "file_size": file_size,  # 原始文件的大小
                             "chunk_size": chunk_size,  # 分块大小
                             "total_chunks": total_chunks,  # 文件总分块数
@@ -211,60 +211,105 @@ class ConnectionHandler:
                 self.conclude_request(400, {}, "Client not ready for file transfer")
                 return
 
-            if file_size != 0:
-                self.logger.info("File transmission begin.")
-                try:
-                    aes_key = get_random_bytes(32)  # AES-256
-                    nonce = get_random_bytes(16)
-                    cipher = AES.new(aes_key, AES.MODE_GCM, nonce=nonce, mac_len=16)
+            if file_size == 0:
+                self.logger.info("Empty file, no need to send")
+                return
 
-                    with open(file_path, "rb") as file:
+            # Get or set the AES key for this file transfer task
+            if file_task.encryption_key:
+                aes_key = base64.b64decode(file_task.encryption_key)
+            else:
+                aes_key = get_random_bytes(32)  # AES-256
+                file_task.encryption_key = base64.b64encode(aes_key).decode()
+                session.commit()
+
+            self.logger.info(f"File transmission begin. Offset: {offset}")
+
+            # offset >= 0 is already guaranteed by JSON Schema validation
+            if offset > file_size:
+                self.logger.error(
+                    f"Invalid offset: {offset} (exceeds file size: {file_size})"
+                )
+                self.conclude_request(400, {}, "Invalid offset: exceeds file size")
+                return
+
+            if offset % chunk_size != 0:
+                self.logger.error(
+                    f"Invalid offset: {offset} (not aligned to chunk size: {chunk_size})"
+                )
+                self.conclude_request(
+                    400,
+                    {},
+                    "Invalid offset: must be a multiple of chunk_size or zero",
+                )
+                return
+
+            try:
+                with open(file_path, "rb") as file:
+                    if offset > 0:
+                        file.seek(offset)
+                        chunk_index = offset // chunk_size
+                    else:
                         chunk_index = 0
-                        while True:
-                            chunk = file.read(chunk_size)
-                            if not chunk:
-                                break
-                            chunk_hash = hashlib.sha256(chunk).hexdigest()
-                            encrypted_chunk = cipher.encrypt(chunk)
-                            payload = {
-                                "action": "file_chunk",
-                                "data": {
-                                    "index": chunk_index,
-                                    "hash": chunk_hash,
-                                    "chunk": base64.b64encode(encrypted_chunk).decode(),
-                                },
-                            }
-                            self.stream.send(
-                                orjson.dumps(
-                                    payload,
-                                )
+
+                    while True:
+                        chunk = file.read(chunk_size)
+                        if not chunk:
+                            break
+
+                        # For each chunk, generate a unique nonce by combining a random
+                        # prefix with the chunk index.
+                        prefix = get_random_bytes(8)
+                        nonce = prefix + chunk_index.to_bytes(4, "big")
+                        cipher = AES.new(aes_key, AES.MODE_GCM, nonce=nonce, mac_len=16)
+
+                        encrypted_chunk, tag = cipher.encrypt_and_digest(chunk)
+                        payload = {
+                            "action": "file_chunk",
+                            "data": {
+                                "index": chunk_index,
+                                "chunk": base64.b64encode(encrypted_chunk).decode(),
+                                "tag": base64.b64encode(tag).decode(),
+                                "prefix": base64.b64encode(prefix).decode(),
+                            },
+                        }
+                        self.stream.send(
+                            orjson.dumps(
+                                payload,
                             )
-                            chunk_index += 1
+                        )
+                        chunk_index += 1
 
-                    tag = cipher.digest()
+                session.refresh(file_task)  # Refresh to get the latest status
 
-                    # send AES key, nonce and tag to client after file transfer is complete
+                if file_task.status == 0:
                     self.stream.send(
                         orjson.dumps(
                             {
                                 "action": "aes_key",
                                 "data": {
                                     "key": base64.b64encode(aes_key).decode(),
-                                    "nonce": base64.b64encode(nonce).decode(),
-                                    "tag": base64.b64encode(tag).decode(),
                                 },
                             },
                         )
                     )
                     file_task.status = 1
                     session.commit()
+                else:
+                    self.stream.send(
+                        orjson.dumps(
+                            {
+                                "action": "aes_key",
+                                "data": {
+                                    "key": None,
+                                },
+                            },
+                        )
+                    )
 
-                except Exception as e:
-                    self.report_error(e, context=f"Error sending file {file_path}")
-                    return
-
-            else:
-                self.logger.info("Empty file, no need to send")
+            except Exception as e:
+                self.report_error(e, context=f"Error sending file {file_path}")
+                return
 
         self.logger.info(f"File {file_path} sent successfully.")
 
@@ -373,7 +418,7 @@ class ConnectionHandler:
                 with open(file.path, "wb") as f:
                     try:
                         while True:
-                            # Receive encrypted data from the client
+                            # Receive data from the client
                             data = self.stream.recv().data
                             f.write(data)
 
