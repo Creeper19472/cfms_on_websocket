@@ -2,6 +2,7 @@ import base64
 import hashlib
 import mmap
 import os
+import struct
 import time
 import traceback
 from typing import Optional
@@ -416,8 +417,6 @@ class ConnectionHandler:
 
                 pm.hook.ext_on_empty_file_uploaded(id=file.id, path=file.path)
                 return
-
-            import struct
 
             trk_path = f"{file.path}.trk"
             total_chunks = (file_size + chunk_size - 1) // chunk_size
