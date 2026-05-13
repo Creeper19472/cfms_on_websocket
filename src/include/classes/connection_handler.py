@@ -225,6 +225,15 @@ class ConnectionHandler:
                 session.commit()
 
             self.logger.info(f"File transmission begin. Offset: {offset}")
+
+            # offset >= 0 is already guaranteed by JSON Schema validation
+            if offset > file_size:
+                self.logger.error(
+                    f"Invalid offset: {offset} (exceeds file size: {file_size})"
+                )
+                self.conclude_request(400, {}, "Invalid offset: exceeds file size")
+                return
+
             try:
                 with open(file_path, "rb") as file:
                     if offset > 0:
