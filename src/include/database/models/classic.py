@@ -1,4 +1,3 @@
-import hashlib
 import secrets
 import time
 from functools import cached_property
@@ -232,10 +231,9 @@ class User(Base):
 
         # Generate 10 backup codes
         backup_codes = [secrets.token_hex(4) for _ in range(10)]
-        # Hash the backup codes before storing
-        hashed_codes = [
-            hashlib.sha256(code.encode("utf-8")).hexdigest() for code in backup_codes
-        ]
+        pepper = global_config.get("security", {}).get("pepper", "")
+        # Hash the backup codes before storing using Argon2id with pepper
+        hashed_codes = [_password_hasher.hash(code + pepper) for code in backup_codes]
         self.totp_backup_codes = orjson.dumps(hashed_codes).decode("utf-8")
 
         # TOTP is not enabled yet until validated
@@ -295,19 +293,25 @@ class User(Base):
         if self.totp_enabled and self.totp_backup_codes:
             try:
                 hashed_codes = orjson.loads(self.totp_backup_codes)
-                token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+                pepper = global_config.get("security", {}).get("pepper", "")
 
-                if token_hash in hashed_codes:
-                    # Remove the used backup code
-                    hashed_codes.remove(token_hash)
-                    self.totp_backup_codes = orjson.dumps(hashed_codes).decode("utf-8")
+                for hash_str in hashed_codes:
+                    try:
+                        if _password_hasher.verify(hash_str, token + pepper):
+                            # Verification succeeded, remove the used backup code
+                            hashed_codes.remove(hash_str)
+                            self.totp_backup_codes = orjson.dumps(hashed_codes).decode(
+                                "utf-8"
+                            )
 
-                    session = object_session(self)
-                    if session is not None:
-                        session.add(self)
-                        session.commit()
+                            session = object_session(self)
+                            if session is not None:
+                                session.add(self)
+                                session.commit()
 
-                    return True
+                            return True
+                    except VerifyMismatchError:
+                        continue
             except (orjson.JSONDecodeError, ValueError):
                 pass
 

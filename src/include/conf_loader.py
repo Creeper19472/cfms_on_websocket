@@ -28,7 +28,10 @@ if not os.path.exists("init"):
         toml_doc = parse(f.read())
 
     secret_key = secrets.token_hex(32)
-    toml_doc["server"]["secret_key"] = secret_key  # type: ignore
+    pepper = secrets.token_hex(32)
+
+    toml_doc["server"]["secret_key"] = secret_key  # pyright: ignore[reportIndexIssue]
+    toml_doc["security"]["pepper"] = pepper  # pyright: ignore[reportIndexIssue]
 
     with open("config.toml", "w", encoding="utf-8") as f:
         f.write(dumps(toml_doc))
