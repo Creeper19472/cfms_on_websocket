@@ -1,4 +1,4 @@
-## 0.2.0.260513_alpha (2026-05-17)
+## 0.2.0.260517_alpha (2026-05-17)
 
 * feat: add `clear_totp.py` for maintenance purposes ([db06f9d](https://github.com/cfms-dev/cfms_on_websocket/commit/db06f9d))
 
