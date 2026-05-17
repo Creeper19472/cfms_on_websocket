@@ -19,6 +19,7 @@ allow_name_duplicate = false
 # 但新上传的文档将会被拒绝
 
 [security]
+pepper = ""
 passwd_min_length = 8
 passwd_max_length = 32
 enable_passwd_force_expiration = true

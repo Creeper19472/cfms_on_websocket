@@ -382,6 +382,14 @@ def main():
             f"against CA path '{client_ca_path}'."
         )
 
+    if not security_cfg["pepper"]:
+        logger.warning(
+            "Setting the value for `pepper` to empty in the configuration "
+            "file can lead to potential security vulnerabilities. For "
+            "details, see: https://cheatsheetseries.owasp.org/cheatsheets/"
+            "Password_Storage_Cheat_Sheet.html#peppering"
+        )
+
     if ssl.OPENSSL_VERSION_INFO < (3, 5):
         logger.warning(
             "The version of OpenSSL bundled with Python is too low "
