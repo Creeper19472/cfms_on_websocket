@@ -20,9 +20,6 @@ if __name__ == "__main__":
 if not os.path.exists("config.toml"):
     raise FileNotFoundError("Configuration file 'config.toml' not found.")
 
-with open("config.toml", "rb") as f:
-    global_config = tomllib.load(f)
-
 if not os.path.exists("init"):
     with open("config.toml", "r", encoding="utf-8") as f:
         toml_doc = parse(f.read())
@@ -35,3 +32,6 @@ if not os.path.exists("init"):
 
     with open("config.toml", "w", encoding="utf-8") as f:
         f.write(dumps(toml_doc))
+
+with open("config.toml", "rb") as f:
+    global_config = tomllib.load(f)
