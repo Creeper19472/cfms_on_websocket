@@ -231,7 +231,7 @@ class User(Base):
 
         # Generate 10 backup codes
         backup_codes = [secrets.token_hex(4) for _ in range(10)]
-        pepper = global_config.get("security", {}).get("pepper", "")
+        pepper = global_config["security"]["pepper"]
         # Hash the backup codes before storing using Argon2id with pepper
         hashed_codes = [_password_hasher.hash(code + pepper) for code in backup_codes]
         self.totp_backup_codes = orjson.dumps(hashed_codes).decode("utf-8")
@@ -293,7 +293,7 @@ class User(Base):
         if self.totp_enabled and self.totp_backup_codes:
             try:
                 hashed_codes = orjson.loads(self.totp_backup_codes)
-                pepper = global_config.get("security", {}).get("pepper", "")
+                pepper = global_config["security"]["pepper"]
 
                 for hash_str in hashed_codes:
                     try:
