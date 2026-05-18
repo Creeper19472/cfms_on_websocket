@@ -432,7 +432,9 @@ class ConnectionHandler:
             self.stream.send(f"ready {chunk_size}")
             try:
                 logger.info("Receiving file: transfer started")
-                ProviderManager().storage.makedirs(os.path.dirname(file.path))
+                ProviderManager().storage.makedirs(
+                    os.path.dirname(file.path), exist_ok=True
+                )
                 with ProviderManager().storage.fopen(file.path, "wb") as f:
                     try:
                         while True:
