@@ -1,4 +1,8 @@
 __all__ = ["LocalEventBusProvider", "RedisEventBusProvider"]
 
 from .local import LocalEventBusProvider
-from .redis import RedisEventBusProvider
+
+try:
+    from .redis import RedisEventBusProvider
+except ImportError:
+    RedisEventBusProvider = None
