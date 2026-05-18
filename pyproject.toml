@@ -22,6 +22,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+cluster = [
+    "redis>=7.4.0",
+    "boto3>=1.43.9",
+]
 mysql = [
     "mysql-connector-python>=9.6.0",
 ]

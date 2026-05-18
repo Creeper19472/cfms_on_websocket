@@ -37,6 +37,16 @@ uv sync --upgrade
 source .venv/bin/activate
 ```
 
+## Optional Dependencies
+
+CFMS has some optional features that require additional dependencies to be 
+installed to enable them. For example, the following command will install 
+the necessary dependencies for cluster functionality and MySQL support:
+
+```bash
+uv sync --extra cluster --extra mysql
+```
+
 ## Run
 ```bash
 python main.py # DO NOT use `-O`!
