@@ -3,13 +3,14 @@ __all__ = ["RedisEventBusProvider"]
 import threading
 from typing import Callable
 
+import redis
+from loguru import logger
+
 from include.providers.base import EventBusProvider
 
 
 class RedisEventBusProvider(EventBusProvider):
     def __init__(self, host: str, port: int, password: str = "", db: int = 0):
-        import redis
-
         self._client = redis.Redis(
             host=host, port=port, password=password, db=db, decode_responses=True
         )
@@ -35,8 +36,6 @@ class RedisEventBusProvider(EventBusProvider):
         self._client.publish(channel, message)
 
     def _listen_loop(self):
-        from loguru import logger
-
         try:
             for message in self._pubsub.listen():
                 if message["type"] == "message":

@@ -41,8 +41,6 @@ from include.database.handler import Base, Session, engine
 from include.database.models.entity import Document, DocumentRevision, Folder
 from include.database.models.file import File
 from include.handlers.debugging.throw import RequestThrowExceptionHandler
-from include.providers.caching import MemoryCachingProvider, RedisCachingProvider
-from include.providers.events import LocalEventBusProvider, RedisEventBusProvider
 from include.providers.manager import ProviderManager
 from include.providers.storage import LocalStorageProvider
 from include.router import (
@@ -305,8 +303,12 @@ def initialize_providers():
     # Initialize and register caching provider
     match global_config["provider"]["caching"]:
         case "memory":
+            from include.providers.caching import MemoryCachingProvider
+
             caching_provider = MemoryCachingProvider()
         case "redis":
+            from include.providers.caching import RedisCachingProvider
+
             redis_cfg = global_config["redis"]
             caching_provider = RedisCachingProvider(
                 host=redis_cfg["host"],
@@ -324,8 +326,12 @@ def initialize_providers():
     # Initialize and register event bus provider
     match global_config["provider"]["event_bus"]:
         case "local":
+            from include.providers.events import LocalEventBusProvider
+
             event_bus_provider = LocalEventBusProvider()
         case "redis":
+            from include.providers.events import RedisEventBusProvider
+
             redis_cfg = global_config["redis"]
             event_bus_provider = RedisEventBusProvider(
                 host=redis_cfg["host"],

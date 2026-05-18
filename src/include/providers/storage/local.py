@@ -34,7 +34,7 @@ def uri_to_local_path(uri: str) -> Path:
     # Other schemes are not supported by LocalStorageProvider
     else:
         raise ValueError(
-            f"LocalStorageProvider 无法处理协议头为 '{parsed.scheme}' 的 URI: {uri}"
+            f"URI scheme '{parsed.scheme}' is not supported by LocalStorageProvider"
         )
 
 

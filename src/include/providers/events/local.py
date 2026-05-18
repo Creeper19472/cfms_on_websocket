@@ -3,6 +3,8 @@ __all__ = ["LocalEventBusProvider"]
 import threading
 from typing import Callable
 
+from loguru import logger
+
 from include.providers.base import EventBusProvider
 
 
@@ -25,6 +27,4 @@ class LocalEventBusProvider(EventBusProvider):
             try:
                 callback(message)
             except Exception as e:
-                from loguru import logger
-
                 logger.error(f"Error in pubsub callback: {e}")
