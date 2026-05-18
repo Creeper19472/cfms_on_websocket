@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from contextlib import AbstractContextManager
 from types import TracebackType
-from typing import Optional
+from typing import Any, Callable, Optional
 
 
 class Provider(ABC):
@@ -78,4 +78,45 @@ class StorageProvider(Provider):
 
     @abstractmethod
     def getsize(self, uri: str, /) -> int:
+        pass
+
+
+class EventBusProvider(Provider):
+    @abstractmethod
+    def subscribe(self, channel: str, callback: Callable[[str], None]) -> None:
+        pass
+
+    @abstractmethod
+    def publish(self, channel: str, message: str) -> None:
+        pass
+
+
+class CachingProvider(Provider):
+    @abstractmethod
+    def get(self, key: str) -> Any:
+        pass
+
+    @abstractmethod
+    def set(self, key: str, value: Any, ttl: Optional[float] = None) -> None:
+        """
+        Set a value with an optional time-to-live in seconds.
+        """
+        pass
+
+    @abstractmethod
+    def delete(self, key: str) -> None:
+        pass
+
+    @abstractmethod
+    def set_if_not_exists(
+        self, key: str, value: str, ttl: Optional[float] = None
+    ) -> bool:
+        """
+        Set a value only if the key does not exist. Returns True if set, False
+        if already exists.
+        """
+        pass
+
+    @abstractmethod
+    def exists(self, key: str) -> bool:
         pass
