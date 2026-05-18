@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import mmap
+import os
 import time
 from typing import Optional
 
@@ -432,7 +433,7 @@ class ConnectionHandler:
             try:
                 logger.info("Receiving file: transfer started")
                 ProviderManager().storage.makedirs(file.path)
-                with open(file.path, "wb") as f:
+                with ProviderManager().storage.fopen(file.path, "wb") as f:
                     try:
                         while True:
                             # Receive data from the client
@@ -448,7 +449,9 @@ class ConnectionHandler:
                         raise
 
                 # 校验文件大小
-                actual_size = ProviderManager().storage.getsize(file.path)
+                actual_size = ProviderManager().storage.getsize(
+                    os.path.dirname(file.path)
+                )
                 if file_size and actual_size != file_size:
                     self.logger.error(
                         f"File size mismatch: expected {file_size}, got {actual_size}"
