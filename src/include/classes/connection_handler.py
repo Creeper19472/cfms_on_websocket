@@ -421,8 +421,9 @@ class ConnectionHandler:
 
             if file_size == 0:  # 空文件
                 self.stream.send("stop")
-                with open(file.path, "wb") as f:
-                    f.truncate(0)
+
+                # Create an empty file and mark the task as completed
+                ProviderManager().storage.fopen(file.path, "wb").close()
                 file.active = True
                 session.commit()
 
