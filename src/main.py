@@ -293,6 +293,17 @@ def initialize_providers():
     match global_config["provider"]["storage"]:
         case "local":
             storage_provider = LocalStorageProvider()
+        case "s3":
+            from include.providers.storage.s3 import S3StorageProvider
+
+            s3_cfg = global_config["s3"]
+            storage_provider = S3StorageProvider(
+                bucket_name=s3_cfg["bucket"],
+                endpoint_url=s3_cfg["endpoint_url"],
+                aws_access_key_id=s3_cfg["access_key_id"],
+                aws_secret_access_key=s3_cfg["secret_access_key"],
+                region_name=s3_cfg["region_name"],
+            )
         case _:
             raise ValueError(
                 f"Unsupported storage provider type: {global_config['storage']['type']}"

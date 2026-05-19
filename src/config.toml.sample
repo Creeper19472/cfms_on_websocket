@@ -61,7 +61,7 @@ options = "" # Not implemented yet
 
 [provider]
 caching = "memory" # "memory" or "redis"
-storage = "local" # "local"
+storage = "local" # "local" or "s3"
 event_bus = "local" # "local" or "redis"
 
 [redis]
@@ -69,3 +69,10 @@ host = "localhost"
 port = 6379
 password = ""
 db = 0
+
+[s3]
+bucket = ""
+endpoint_url = ""
+access_key_id = ""
+secret_access_key = ""
+region_name = ""

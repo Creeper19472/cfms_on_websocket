@@ -59,7 +59,7 @@ class S3FileObject(FileObject):
             Key=self._key,
             PartNumber=self._part_number,
             UploadId=self._upload_id,
-            Body=bytes(data),
+            Body=data,
         )
         self._parts.append({"PartNumber": self._part_number, "ETag": response["ETag"]})
         self._part_number += 1
@@ -132,7 +132,12 @@ class S3StorageProvider(StorageProvider):
         region_name: str = "us-east-1",
     ):
         self._bucket_name = bucket_name
-        self._config = Config(signature_version="s3v4")
+        self._config = Config(
+            s3={
+                "signature_version": "s3v4",
+                "addressing_style": "virtual",
+            }
+        )
         self._client = boto3.client(
             "s3",
             endpoint_url=endpoint_url,
