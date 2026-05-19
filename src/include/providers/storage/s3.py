@@ -1,5 +1,6 @@
 __all__ = ["S3StorageProvider", "S3FileObject"]
 
+import hashlib
 from io import UnsupportedOperation
 from types import TracebackType
 from typing import Any
@@ -15,15 +16,14 @@ from include.providers.base import FileObject, StorageProvider
 class S3FileObject(FileObject):
     def __init__(self, client, bucket_name: str, key: str, mode: str = "rb"):
         self._client = client
+        self._hasher = hashlib.sha256()
         self._bucket_name = bucket_name
         self._key = key
         self._mode = mode
         self._closed = False
 
         if "w" in mode:
-            self._upload_id = self._client.create_multipart_upload(
-                Bucket=self._bucket_name, Key=self._key
-            )["UploadId"]
+            self._upload_id = None
             self._parts = []
             self._buffer = bytearray()
             self._part_number = 1
@@ -43,13 +43,21 @@ class S3FileObject(FileObject):
             raise ValueError("I/O operation on closed file")
 
         self._buffer.extend(data)
+        self._hasher.update(data)
         bytes_written = len(data)
 
+        chunk_size = 5 * 1024 * 1024
         # S3 multipart uploads require parts to be at least 5MB (except the last part)
-        while len(self._buffer) >= 5 * 1024 * 1024:
-            chunk = self._buffer[: 5 * 1024 * 1024]
-            self._buffer = self._buffer[5 * 1024 * 1024 :]
+        while len(self._buffer) >= chunk_size:
+            if self._upload_id is None:
+                self._upload_id = self._client.create_multipart_upload(
+                    Bucket=self._bucket_name, Key=self._key
+                )["UploadId"]
+
+            view = memoryview(self._buffer)
+            chunk = view[:chunk_size].tobytes()
             self._upload_part(chunk)
+            del self._buffer[:chunk_size]
 
         return bytes_written
 
@@ -69,16 +77,27 @@ class S3FileObject(FileObject):
             return
 
         if "w" in self._mode:
-            if len(self._buffer) > 0 or self._part_number == 1:
-                self._upload_part(self._buffer)
+            if self._upload_id is None:
+                # Never started multipart, just do a put_object
+                self._client.put_object(
+                    Bucket=self._bucket_name,
+                    Key=self._key,
+                    Body=self._buffer,
+                    ChecksumSHA256=self._hasher.hexdigest(),
+                )
                 self._buffer.clear()
+            else:
+                if len(self._buffer) > 0:
+                    self._upload_part(self._buffer)
+                    self._buffer.clear()
 
-            self._client.complete_multipart_upload(
-                Bucket=self._bucket_name,
-                Key=self._key,
-                UploadId=self._upload_id,
-                MultipartUpload={"Parts": self._parts},
-            )
+                self._client.complete_multipart_upload(
+                    Bucket=self._bucket_name,
+                    Key=self._key,
+                    UploadId=self._upload_id,
+                    MultipartUpload={"Parts": self._parts},
+                    ChecksumSHA256=self._hasher.hexdigest(),
+                )
         else:
             self._body.close()
 
@@ -111,11 +130,12 @@ class S3FileObject(FileObject):
         traceback: TracebackType | None,
     ) -> bool | None:
         if exc_type is not None and "w" in self._mode:
-            self._client.abort_multipart_upload(
-                Bucket=self._bucket_name,
-                Key=self._key,
-                UploadId=self._upload_id,
-            )
+            if self._upload_id is not None:
+                self._client.abort_multipart_upload(
+                    Bucket=self._bucket_name,
+                    Key=self._key,
+                    UploadId=self._upload_id,
+                )
             self._closed = True
             return False
 
