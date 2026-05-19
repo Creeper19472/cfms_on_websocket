@@ -1,6 +1,5 @@
 import base64
 import hashlib
-import mmap
 import os
 import time
 from typing import Optional
@@ -27,15 +26,6 @@ from include.system.messages import Messages as smsg
 from include.util.log import log_exception_with_id
 
 logger = log.bind(name="conn")
-
-
-# FIXME: This function should be updated to support remote storage
-def calculate_sha256(file_path):
-    # 使用更快的 hashlib 工具和内存映射文件
-    with open(file_path, "rb") as f:
-        # 使用内存映射文件直接映射到内存
-        mmapped_file = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
-        return hashlib.sha256(mmapped_file).hexdigest()
 
 
 # JSON Schema for the top-level request envelope.
@@ -438,10 +428,12 @@ class ConnectionHandler:
                 )
                 with ProviderManager().storage.fopen(file.path, "wb") as f:
                     try:
+                        hasher = hashlib.sha256()
                         while True:
                             # Receive data from the client
                             data = self.stream.recv().data
                             f.write(data)
+                            hasher.update(data)
 
                             if not data or len(data) < chunk_size:
                                 break
@@ -468,7 +460,7 @@ class ConnectionHandler:
 
                 # 校验sha256
                 if sha256:
-                    actual_sha256 = calculate_sha256(file.path)
+                    actual_sha256 = hasher.hexdigest()
                     if actual_sha256 != sha256:
                         self.logger.error(
                             f"SHA256 mismatch: expected {sha256}, got {actual_sha256}"

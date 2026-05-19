@@ -56,6 +56,7 @@ class S3FileObject(FileObject):
 
             view = memoryview(self._buffer)
             chunk = view[:chunk_size].tobytes()
+            view.release()
             self._upload_part(chunk)
             del self._buffer[:chunk_size]
 
@@ -68,6 +69,7 @@ class S3FileObject(FileObject):
             PartNumber=self._part_number,
             UploadId=self._upload_id,
             Body=data,
+            ChecksumSHA256=self._hasher.hexdigest(),
         )
         self._parts.append({"PartNumber": self._part_number, "ETag": response["ETag"]})
         self._part_number += 1
