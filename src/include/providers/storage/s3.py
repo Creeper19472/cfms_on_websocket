@@ -12,29 +12,96 @@ from include.providers.base import FileObject, StorageProvider
 
 
 class S3FileObject(FileObject):
-    def __init__(self, body: StreamingBody):
-        self._file = body
+    def __init__(self, client, bucket_name: str, key: str, mode: str = "rb"):
+        self._client = client
+        self._bucket_name = bucket_name
+        self._key = key
+        self._mode = mode
+        self._closed = False
+
+        if "w" in mode:
+            self._upload_id = self._client.create_multipart_upload(
+                Bucket=self._bucket_name, Key=self._key
+            )["UploadId"]
+            self._parts = []
+            self._buffer = bytearray()
+            self._part_number = 1
+        else:
+            response = self._client.get_object(Bucket=self._bucket_name, Key=self._key)
+            self._body: StreamingBody = response["Body"]
 
     def read(self, size: int = -1) -> bytes:
-        return self._file.read(size)
+        if "w" in self._mode:
+            raise NotImplementedError
+        return self._body.read(size)
 
     def write(self, data: bytes) -> int:
-        raise NotImplementedError
+        if "w" not in self._mode:
+            raise NotImplementedError
+        if self._closed:
+            raise ValueError("I/O operation on closed file.")
+
+        self._buffer.extend(data)
+        bytes_written = len(data)
+
+        # S3 multipart uploads require parts to be at least 5MB (except the last part)
+        while len(self._buffer) >= 5 * 1024 * 1024:
+            chunk = self._buffer[: 5 * 1024 * 1024]
+            self._buffer = self._buffer[5 * 1024 * 1024 :]
+            self._upload_part(chunk)
+
+        return bytes_written
+
+    def _upload_part(self, data: bytes):
+        response = self._client.upload_part(
+            Bucket=self._bucket_name,
+            Key=self._key,
+            PartNumber=self._part_number,
+            UploadId=self._upload_id,
+            Body=bytes(data),
+        )
+        self._parts.append({"PartNumber": self._part_number, "ETag": response["ETag"]})
+        self._part_number += 1
 
     def close(self) -> None:
-        self._file.close()
+        if self._closed:
+            return
+
+        if "w" in self._mode:
+            if len(self._buffer) > 0 or self._part_number == 1:
+                self._upload_part(self._buffer)
+                self._buffer.clear()
+
+            self._client.complete_multipart_upload(
+                Bucket=self._bucket_name,
+                Key=self._key,
+                UploadId=self._upload_id,
+                MultipartUpload={"Parts": self._parts},
+            )
+        else:
+            self._body.close()
+
+        self._closed = True
 
     def seekable(self) -> bool:
-        return self._file.seekable()
+        if "w" in self._mode:
+            return False
+        return self._body.seekable()
 
     def seek(self, offset: int, whence: int = 0, /) -> int:
-        return self._file.seek(offset, whence)
+        if "w" in self._mode:
+            raise NotImplementedError
+        return self._body.seek(offset, whence)
 
     def tell(self) -> int:
-        return self._file.tell()
+        if "w" in self._mode:
+            raise NotImplementedError
+        return self._body.tell()
 
     def truncate(self, size: Any = None, /) -> int:
-        return self._file.truncate(size)
+        if "w" in self._mode:
+            raise NotImplementedError
+        return self._body.truncate(size)
 
     def __exit__(
         self,
@@ -42,7 +109,16 @@ class S3FileObject(FileObject):
         exc_value: BaseException | None,
         traceback: TracebackType | None,
     ) -> bool | None:
-        self._file.close()
+        if exc_type is not None and "w" in self._mode:
+            self._client.abort_multipart_upload(
+                Bucket=self._bucket_name,
+                Key=self._key,
+                UploadId=self._upload_id,
+            )
+            self._closed = True
+            return False
+
+        self.close()
 
 
 class S3StorageProvider(StorageProvider):
@@ -65,11 +141,13 @@ class S3StorageProvider(StorageProvider):
             region_name=region_name,
         )
 
-    def fopen(self, path: str, mode: str = "rb") -> S3FileObject:
-        response = self._client.get_object(
-            Bucket=self._bucket_name, Key=path.lstrip("/")
+    def fopen(self, path: str, mode: str = "rb") -> FileObject:
+        return S3FileObject(
+            client=self._client,
+            bucket_name=self._bucket_name,
+            key=path.lstrip("/"),
+            mode=mode,
         )
-        return S3FileObject(response["Body"])
 
     def exists(self, path: str) -> bool:
         if path.endswith("/"):
