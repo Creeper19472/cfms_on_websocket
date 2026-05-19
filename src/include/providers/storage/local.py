@@ -1,41 +1,10 @@
 __all__ = ["LocalStorageProvider", "LocalFileObject"]
 
 import os
-from pathlib import Path
 from types import TracebackType
 from typing import IO, Any
-from urllib.parse import urlparse
-from urllib.request import url2pathname
 
 from include.providers.base import FileObject, StorageProvider
-
-
-def uri_to_local_path(uri: str) -> Path:
-    """
-    Convert a URI to a local filesystem path.
-
-    e.g.:
-      - file:///absolute/path/to/file.txt -> /absolute/path/to/file.txt
-      - /absolute/path/to/file.txt -> /absolute/path/to/file.txt
-      - relative/path/to/file.txt -> relative/path/to/file.txt
-    """
-    parsed = urlparse(uri)
-
-    # file://
-    if parsed.scheme == "file":
-        # use url2pathname to handle platform-specific path conversions
-        # (e.g. Windows)
-        local_str = url2pathname(parsed.path)
-        return Path(local_str)
-
-    elif parsed.scheme == "" or len(parsed.scheme) == 1:
-        return Path(uri)
-
-    # Other schemes are not supported by LocalStorageProvider
-    else:
-        raise ValueError(
-            f"URI scheme '{parsed.scheme}' is not supported by LocalStorageProvider"
-        )
 
 
 class LocalFileObject(FileObject):
