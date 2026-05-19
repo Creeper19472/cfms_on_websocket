@@ -73,24 +73,23 @@ class LocalFileObject(FileObject):
 
 
 class LocalStorageProvider(StorageProvider):
-    def fopen(self, uri: str, mode: str = "rb") -> LocalFileObject:
-        return LocalFileObject(open(uri_to_local_path(uri), mode))
+    def fopen(self, path: str, mode: str = "rb") -> LocalFileObject:
+        return LocalFileObject(open(path, mode))
 
-    def exists(self, uri: str) -> bool:
-        return os.path.exists(uri_to_local_path(uri))
+    def exists(self, path: str) -> bool:
+        return os.path.exists(path)
 
-    def remove(self, uri: str) -> bool:
-        actual = uri_to_local_path(uri)
-        if os.path.exists(actual):
-            os.remove(actual)
+    def remove(self, path: str) -> bool:
+        if os.path.exists(path):
+            os.remove(path)
             return True
         return False
 
-    def mkdir(self, uri: str, mode: int = 511) -> None:
-        os.mkdir(uri_to_local_path(uri), mode=mode)
+    def mkdir(self, path: str, mode: int = 511) -> None:
+        os.mkdir(path, mode=mode)
 
-    def makedirs(self, uri: str, mode: int = 0o777, exist_ok: bool = False) -> None:
-        os.makedirs(uri_to_local_path(uri), mode=mode, exist_ok=exist_ok)
+    def makedirs(self, name: str, mode: int = 0o777, exist_ok: bool = False) -> None:
+        os.makedirs(name, mode=mode, exist_ok=exist_ok)
 
-    def getsize(self, uri: str, /) -> int:
-        return os.path.getsize(uri_to_local_path(uri))
+    def getsize(self, filename: str, /) -> int:
+        return os.path.getsize(filename)

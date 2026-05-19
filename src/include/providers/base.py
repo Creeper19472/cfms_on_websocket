@@ -65,32 +65,38 @@ class FileObject(AbstractContextManager["FileObject"]):
 
 
 class StorageProvider(Provider):
-    """Storage provider interface for managing file-like resources."""
+    """Storage provider interface for managing file-like resources.
+
+    The storage layer is designed to be transparent to the upper
+    layers, so regardless of which provider performs the data I/O,
+    the same path format is used, which means it is treated as a
+    local path.
+    """
 
     identifier: ClassVar[str] = "storage"
 
     @abstractmethod
-    def fopen(self, uri: str, mode: str = "rb") -> FileObject:
+    def fopen(self, path: str, mode: str = "rb") -> FileObject:
         pass
 
     @abstractmethod
-    def exists(self, uri: str) -> bool:
+    def exists(self, path: str) -> bool:
         pass
 
     @abstractmethod
-    def remove(self, uri: str) -> bool:
+    def remove(self, path: str) -> bool:
         pass
 
     @abstractmethod
-    def mkdir(self, uri: str, mode: int = 0o777) -> None:
+    def mkdir(self, path: str, mode: int = 0o777) -> None:
         pass
 
     @abstractmethod
-    def makedirs(self, uri: str, mode: int = 0o777, exist_ok: bool = False) -> None:
+    def makedirs(self, name: str, mode: int = 0o777, exist_ok: bool = False) -> None:
         pass
 
     @abstractmethod
-    def getsize(self, uri: str, /) -> int:
+    def getsize(self, filename: str, /) -> int:
         pass
 
 
