@@ -298,7 +298,7 @@ def initialize_providers():
                 f"Unsupported storage provider type: {global_config['storage']['type']}"
             )
 
-    ProviderManager().register("storage", storage_provider)
+    ProviderManager().register(storage_provider)
 
     # Initialize and register caching provider
     match global_config["provider"]["caching"]:
@@ -321,7 +321,7 @@ def initialize_providers():
                 f"Unsupported caching provider type: {global_config['caching']['type']}"
             )
 
-    ProviderManager().register("caching", caching_provider)
+    ProviderManager().register(caching_provider)
 
     # Initialize and register event bus provider
     match global_config["provider"]["event_bus"]:
@@ -344,7 +344,7 @@ def initialize_providers():
                 f"Unsupported event bus provider type: {global_config['event_bus']['type']}"
             )
 
-    ProviderManager().register("event_bus", event_bus_provider)
+    ProviderManager().register(event_bus_provider)
 
 
 def prepare_handlers():

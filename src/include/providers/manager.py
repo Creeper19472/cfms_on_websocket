@@ -31,22 +31,20 @@ class ProviderManager:
         self._providers: dict[str, Provider] = {}
         self._initialized = True
 
-    def register(self, name: str, provider: Provider) -> None:
-        self._providers[name] = provider
+    def register(self, provider: Provider) -> None:
+        self._providers[provider.identifier] = provider
 
-    def get(self, name: str, /) -> Provider:
-        if name not in self._providers:
-            raise KeyError(f"Provider '{name}' is not registered.")
-        return self._providers[name]
+    def get[T: Provider](self, cls: type[T]) -> T:
+        return cast(T, self._providers[cls.identifier])
 
     @property
     def storage(self) -> StorageProvider:
-        return cast(StorageProvider, self.get("storage"))
+        return self.get(StorageProvider)
 
     @property
     def event_bus(self) -> EventBusProvider:
-        return cast(EventBusProvider, self.get("event_bus"))
+        return self.get(EventBusProvider)
 
     @property
     def caching(self) -> CachingProvider:
-        return cast(CachingProvider, self.get("caching"))
+        return self.get(CachingProvider)

@@ -1,14 +1,23 @@
 from abc import ABC, abstractmethod
 from contextlib import AbstractContextManager
 from types import TracebackType
-from typing import Any, Callable, Optional
+from typing import Any, Callable, ClassVar, Optional
 
 
 class Provider(ABC):
-    """
-    Base class for all providers.
+    """Base class for all providers.
 
     This class defines the interface that all providers must implement.
+    """
+
+    identifier: ClassVar[str]
+    """Unified identifier shared by a class of Providers.
+
+    This identifier is used to categorize providers of the same type, allowing
+    the `ProviderManager` to manage them effectively.
+
+    It should be implemented on a base class of a `Provider` class, and once
+    implemented, it should not be overridden by subclasses.
     """
 
 
@@ -56,6 +65,10 @@ class FileObject(AbstractContextManager["FileObject"]):
 
 
 class StorageProvider(Provider):
+    """Storage provider interface for managing file-like resources."""
+
+    identifier: ClassVar[str] = "storage"
+
     @abstractmethod
     def fopen(self, uri: str, mode: str = "rb") -> FileObject:
         pass
@@ -82,6 +95,10 @@ class StorageProvider(Provider):
 
 
 class EventBusProvider(Provider):
+    """Event bus provider interface for publish-subscribe messaging."""
+
+    identifier: ClassVar[str] = "event_bus"
+
     @abstractmethod
     def subscribe(self, channel: str, callback: Callable[[str], None]) -> None:
         pass
@@ -92,6 +109,10 @@ class EventBusProvider(Provider):
 
 
 class CachingProvider(Provider):
+    """Caching provider interface for key-value storage with optional TTL."""
+
+    identifier: ClassVar[str] = "caching"
+
     @abstractmethod
     def get(self, key: str) -> Any:
         pass
