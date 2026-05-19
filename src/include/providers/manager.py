@@ -31,10 +31,12 @@ class ProviderManager:
         self._providers: dict[str, Provider] = {}
         self._initialized = True
 
-    def register(self, provider: Provider) -> None:
+    def register(self, provider: Provider, /) -> None:
         self._providers[provider.identifier] = provider
 
-    def get[T: Provider](self, cls: type[T]) -> T:
+    def get[T: Provider](self, cls: type[T], /) -> T:
+        if cls.identifier not in self._providers:
+            raise ValueError(f"Provider '{cls.identifier}' is not registered.")
         return cast(T, self._providers[cls.identifier])
 
     @property
