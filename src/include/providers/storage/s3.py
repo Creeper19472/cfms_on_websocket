@@ -1,5 +1,6 @@
 __all__ = ["S3StorageProvider", "S3FileObject"]
 
+from io import UnsupportedOperation
 from types import TracebackType
 from typing import Any
 
@@ -39,7 +40,7 @@ class S3FileObject(FileObject):
         if "w" not in self._mode:
             raise NotImplementedError
         if self._closed:
-            raise ValueError("I/O operation on closed file.")
+            raise ValueError("I/O operation on closed file")
 
         self._buffer.extend(data)
         bytes_written = len(data)
@@ -162,13 +163,26 @@ class S3StorageProvider(StorageProvider):
             raise
 
     def remove(self, path: str) -> bool:
-        raise NotImplementedError
+        if path.endswith("/"):
+            raise UnsupportedOperation("Cannot call remove() on a directory")
+
+        try:
+            self._client.delete_object(Bucket=self._bucket_name, Key=path)
+            return True
+        except ClientError:
+            return False
 
     def mkdir(self, path: str, mode: int = 511) -> None:
-        raise NotImplementedError
+        return None
 
     def makedirs(self, name: str, mode: int = 0o777, exist_ok: bool = False) -> None:
-        raise NotImplementedError
+        return None
 
     def getsize(self, filename: str, /) -> int:
-        raise NotImplementedError
+        try:
+            response = self._client.head_object(Bucket=self._bucket_name, Key=filename)
+            return response["ContentLength"]
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "404":
+                raise FileNotFoundError(f"No such file: '{filename}'")
+            raise
