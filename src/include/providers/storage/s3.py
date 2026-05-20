@@ -185,7 +185,7 @@ class S3StorageProvider(StorageProvider):
             return True
 
         try:
-            self._client.head_object(Bucket=self._bucket_name, Key=path)
+            self._client.head_object(Bucket=self._bucket_name, Key=path.lstrip("/"))
             return True
         except ClientError as e:
             if e.response["Error"]["Code"] == "404":
@@ -197,7 +197,7 @@ class S3StorageProvider(StorageProvider):
             raise UnsupportedOperation("Cannot call remove() on a directory")
 
         try:
-            self._client.delete_object(Bucket=self._bucket_name, Key=path)
+            self._client.delete_object(Bucket=self._bucket_name, Key=path.lstrip("/"))
             return True
         except ClientError:
             return False
@@ -209,6 +209,8 @@ class S3StorageProvider(StorageProvider):
         return None
 
     def getsize(self, filename: str, /) -> int:
+        filename = filename.lstrip("/")
+
         try:
             response = self._client.head_object(Bucket=self._bucket_name, Key=filename)
             return response["ContentLength"]
