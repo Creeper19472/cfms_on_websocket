@@ -14,6 +14,11 @@ class RedisCachingProvider(CachingProvider):
         )
 
     def get(self, key: str) -> Any:
+        """Get a value by key.
+
+        Returns None if the key does not exist or has expired.
+        Note that this method only returns string data (if the data exists).
+        """
         return self._client.get(key)
 
     def set(

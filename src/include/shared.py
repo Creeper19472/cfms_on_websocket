@@ -15,10 +15,10 @@ clients_lock = threading.Lock()
 
 class SyncLockdownEvent:
     def is_set(self) -> bool:
-        return ProviderManager().caching.get("system:lockdown") == True
+        return ProviderManager().caching.get("system:lockdown") == "1"
 
     def set(self) -> None:
-        ProviderManager().caching.set("system:lockdown", True)
+        ProviderManager().caching.set("system:lockdown", "1")
 
     def clear(self) -> None:
         ProviderManager().caching.delete("system:lockdown")
