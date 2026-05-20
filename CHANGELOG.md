@@ -6,40 +6,6 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 <!-- insertion marker -->
-## [v0.3.0](https://github.com/cfms-dev/cfms_on_websocket/releases/tag/v0.3.0) - 2026-05-19
-
-<small>[Compare with v0.2.0](https://github.com/cfms-dev/cfms_on_websocket/compare/v0.2.0...v0.3.0)</small>
-
-### Chore
-
-- bump version ([9e51af7](https://github.com/cfms-dev/cfms_on_websocket/commit/9e51af7b8bb1ff7c73751846c5979861b1284e18) by Creeper19472).
-
-### Features
-
-- enhance configuration file with additional options and improved comments ([6b22816](https://github.com/cfms-dev/cfms_on_websocket/commit/6b2281631fd443ece25e9c2740d255c8db39f823) by Creeper19472).
-- add S3 storage provider configuration and initialization ([54b643e](https://github.com/cfms-dev/cfms_on_websocket/commit/54b643ee2e4100d0552b4590fe949e902dd6b4ed) by Creeper19472).
-- implement remove, mkdir, makedirs, and getsize methods with proper error handling ([c5bec8b](https://github.com/cfms-dev/cfms_on_websocket/commit/c5bec8b987708aa07ba4bf8fce9e240aa548cae3) by Creeper19472).
-- implement multipart upload ([535c2af](https://github.com/cfms-dev/cfms_on_websocket/commit/535c2afad925095e3c331cf03ea8e7d3e767e8f9) by Creeper19472).
-- implement S3StorageProvider ([af7a4ea](https://github.com/cfms-dev/cfms_on_websocket/commit/af7a4ea3d6e1c98dceac1c48629cc0e5a37f71a6) by Creeper19472).
-- remove unused conversion functions ([b39c080](https://github.com/cfms-dev/cfms_on_websocket/commit/b39c08012c9dceeb147d223c5c3e44ba4312b366) by Creeper19472).
-- refactor provider registration to use identifier for better management ([ff9854c](https://github.com/cfms-dev/cfms_on_websocket/commit/ff9854c2d0b88aabb6bb610a665aea099460e805) by Creeper19472).
-- Refactor provider architecture and implement caching and event bus systems ([8dbeb91](https://github.com/cfms-dev/cfms_on_websocket/commit/8dbeb91aea2df0d09ee694ba02930332c1a20bb4) by Creeper19472).
-- implement basic structures ([f07ee93](https://github.com/cfms-dev/cfms_on_websocket/commit/f07ee93492867a30f37dee28389b701a5ffaed15) by Creeper19472).
-
-### Bug Fixes
-
-- release memoryview after chunk upload and add SHA256 checksum to upload part ([a9cca70](https://github.com/cfms-dev/cfms_on_websocket/commit/a9cca7045229685f9e0161fe8d18fd931c2f6e69) by Creeper19472).
-- calculate checksum to fix XAmzContentSHA256Mismatch error ([a220005](https://github.com/cfms-dev/cfms_on_websocket/commit/a220005e467503d98313c4f5d957a67e7cc8eccd) by Creeper19472).
-- rename `uri` to better represent its expected values ([56b8765](https://github.com/cfms-dev/cfms_on_websocket/commit/56b8765a1193750b6552f04df16f1a0d9ef191f6) by Creeper19472).
-- replace `open()` with `StorageProvider().fopen()` ([3f38e22](https://github.com/cfms-dev/cfms_on_websocket/commit/3f38e22a93ccf69322d024c68605c4460bd6842c) by Creeper19472).
-- add positional-only parameters to register and get methods ([8afc2b8](https://github.com/cfms-dev/cfms_on_websocket/commit/8afc2b82d9eda526214f61e23c5299aea5db5b63) by Creeper19472).
-- ensure directory creation is safe with exist_ok=True ([4e1b23f](https://github.com/cfms-dev/cfms_on_websocket/commit/4e1b23f4d94f7fa1cca1228722352ebf01b8258c) by Creeper19472).
-- update file handling to use os.path.dirname() for directory creation ([60ffc9c](https://github.com/cfms-dev/cfms_on_websocket/commit/60ffc9ca970626e5ecdb585d331cc7a41c90249c) by Creeper19472).
-- update file handling to use ProviderManager for storage operations; use os.path.dirname() ([1ed9f0c](https://github.com/cfms-dev/cfms_on_websocket/commit/1ed9f0c207cdff5d3b17fbc192647f670ab384b7) by Creeper19472).
-- ignore ImportError when redis is not present ([93d9034](https://github.com/cfms-dev/cfms_on_websocket/commit/93d9034ffab226db7244d3de9026885734a7ba9d) by Creeper19472).
-- use Provider at runtime ([ced3c3d](https://github.com/cfms-dev/cfms_on_websocket/commit/ced3c3db657254af6f10c629da59b4913108759c) by Creeper19472).
-- only import redis when necessary ([4cc57cc](https://github.com/cfms-dev/cfms_on_websocket/commit/4cc57cc848ff153296bb2158b4dc40a44d0c13de) by Creeper19472).
-
 ## [v0.2.0](https://github.com/cfms-dev/cfms_on_websocket/releases/tag/v0.2.0) - 2026-05-17
 
 <small>[Compare with first commit](https://github.com/cfms-dev/cfms_on_websocket/compare/3ed4a3a48f9d6ff0444f1c0b560146eb5a6e98e6...v0.2.0)</small>
