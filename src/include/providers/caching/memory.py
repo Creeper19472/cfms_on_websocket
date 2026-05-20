@@ -14,20 +14,14 @@ class MemoryCachingProvider(CachingProvider):
         self._cache: collections.OrderedDict[
             str, tuple[Union[bytes, bytearray, memoryview, str, int, float], float]
         ] = collections.OrderedDict()
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     def _prune(self):
-        now = time.time()
-        expired = [k for k, v in self._cache.items() if v[1] > 0 and v[1] < now]
-        for k in expired:
-            self._cache.pop(k, None)
-
         while len(self._cache) > self._max_size:
             self._cache.popitem(last=False)
 
     def get(self, key: str) -> Any:
         with self._lock:
-            self._prune()
             val = self._cache.get(key)
             if val is None:
                 return None
@@ -50,6 +44,7 @@ class MemoryCachingProvider(CachingProvider):
                 return
             expire_at = time.time() + ttl if ttl else 0.0
             self._cache[key] = (value, expire_at)
+            self._cache.move_to_end(key)
             self._prune()
 
     def delete(self, key: str) -> None:
