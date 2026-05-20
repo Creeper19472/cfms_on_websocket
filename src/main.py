@@ -41,12 +41,15 @@ from include.database.handler import Base, Session, engine
 from include.database.models.entity import Document, DocumentRevision, Folder
 from include.database.models.file import File
 from include.handlers.debugging.throw import RequestThrowExceptionHandler
+from include.providers.manager import ProviderManager
+from include.providers.storage import LocalStorageProvider
 from include.router import (
     available_functions,
     handle_connection,
     whitelisted_functions,
 )
 from include.system.extmgr import load_extensions_from_directory, pm
+from include.system.listeners import on_global_broadcast
 from include.util.address import is_v6_address
 from include.util.entrance import global_process_request
 from include.util.rule.applying import set_access_rules
@@ -167,9 +170,19 @@ def server_init():
         ],
     )
 
+    # Initialize providers
+    initialize_providers()
+
+    # Add sample file and document
+    sample_file_path = "content/hello"
+
+    with open(sample_file_path, "rb") as source:
+        with ProviderManager().storage.fopen(sample_file_path, "wb") as f:
+            f.write(source.read())
+
     with Session() as session:
         # not using `ROOT_ABSPATH` here to allow easy migration
-        init_file = File(id="init", path="./content/hello", active=True)
+        init_file = File(id="init", path=sample_file_path, active=True)
         session.add(init_file)
 
         init_document = Document(
@@ -275,6 +288,84 @@ def server_init():
 
     with open(ROOT_ABSPATH / "init", "w") as f:
         f.write("This file indicates that the database has been initialized.\n")
+
+
+def initialize_providers():
+    """
+    Initializes and registers the necessary providers for the application.
+
+    This function creates instances of the required providers (e.g., storage,
+    caching, event bus) and registers them with the ProviderManager for later
+    use throughout the application.
+    """
+
+    # Initialize and register storage provider
+    match global_config["provider"]["storage"]:
+        case "local":
+            storage_provider = LocalStorageProvider()
+        case "s3":
+            from include.providers.storage.s3 import S3StorageProvider
+
+            s3_cfg = global_config["s3"]
+            storage_provider = S3StorageProvider(
+                bucket_name=s3_cfg["bucket"],
+                endpoint_url=s3_cfg["endpoint_url"],
+                aws_access_key_id=s3_cfg["access_key_id"],
+                aws_secret_access_key=s3_cfg["secret_access_key"],
+                region_name=s3_cfg["region_name"],
+            )
+        case _:
+            raise ValueError(
+                f"Unsupported storage provider type: {global_config['provider']['storage']}"
+            )
+
+    ProviderManager().register(storage_provider)
+
+    # Initialize and register caching provider
+    match global_config["provider"]["caching"]:
+        case "memory":
+            from include.providers.caching import MemoryCachingProvider
+
+            caching_provider = MemoryCachingProvider()
+        case "redis":
+            from include.providers.caching import RedisCachingProvider
+
+            redis_cfg = global_config["redis"]
+            caching_provider = RedisCachingProvider(
+                host=redis_cfg["host"],
+                port=redis_cfg["port"],
+                password=redis_cfg.get("password", ""),
+                db=redis_cfg.get("db", 0),
+            )
+        case _:
+            raise ValueError(
+                f"Unsupported caching provider type: {global_config['caching']['type']}"
+            )
+
+    ProviderManager().register(caching_provider)
+
+    # Initialize and register event bus provider
+    match global_config["provider"]["event_bus"]:
+        case "local":
+            from include.providers.events import LocalEventBusProvider
+
+            event_bus_provider = LocalEventBusProvider()
+        case "redis":
+            from include.providers.events import RedisEventBusProvider
+
+            redis_cfg = global_config["redis"]
+            event_bus_provider = RedisEventBusProvider(
+                host=redis_cfg["host"],
+                port=redis_cfg["port"],
+                password=redis_cfg.get("password", ""),
+                db=redis_cfg.get("db", 0),
+            )
+        case _:
+            raise ValueError(
+                f"Unsupported event bus provider type: {global_config['event_bus']['type']}"
+            )
+
+    ProviderManager().register(event_bus_provider)
 
 
 def prepare_handlers():
@@ -405,6 +496,12 @@ def main():
 
     # Ensure the root folder record exists (handles upgrades from older versions)
     ensure_root_folder()
+
+    # Initialize Providers
+    initialize_providers()
+
+    # Register global broadcast handler
+    ProviderManager().event_bus.subscribe("system:broadcast", on_global_broadcast)
 
     # Register plugins after database initialization
     load_extensions_from_directory(ROOT_ABSPATH / "include" / "extensions")

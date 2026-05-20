@@ -1,9 +1,7 @@
 import base64
 import hashlib
-import mmap
 import os
 import time
-import traceback
 from typing import Optional
 
 import jsonschema
@@ -14,7 +12,7 @@ from Crypto.Random import get_random_bytes
 from loguru import logger as log
 from websockets.typing import Data
 
-from include.classes.multiplexer import FrameType, MultiplexConnection, Stream
+from include.classes.multiplexer import FrameType, Stream
 from include.conf_loader import global_config
 from include.constants import (
     FILE_TRANSFER_MAX_CHUNK_SIZE,
@@ -22,20 +20,12 @@ from include.constants import (
 )
 from include.database.handler import Session
 from include.database.models.file import File, FileTask
-from include.shared import clients, clients_lock
+from include.providers.manager import ProviderManager
 from include.system.extmgr import pm
 from include.system.messages import Messages as smsg
 from include.util.log import log_exception_with_id
 
 logger = log.bind(name="conn")
-
-
-def calculate_sha256(file_path):
-    # 使用更快的 hashlib 工具和内存映射文件
-    with open(file_path, "rb") as f:
-        # 使用内存映射文件直接映射到内存
-        mmapped_file = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
-        return hashlib.sha256(mmapped_file).hexdigest()
 
 
 # JSON Schema for the top-level request envelope.
@@ -177,7 +167,7 @@ class ConnectionHandler:
                 f"Task {file_task.id}: preparing to send file (id: {file_task.file_id})."
             )
 
-            file_size = os.path.getsize(file.path)
+            file_size = ProviderManager().storage.getsize(file.path)
 
             self.logger.info(f"Calculation complete. File size: {file_size}")
 
@@ -245,10 +235,22 @@ class ConnectionHandler:
                 return
 
             try:
-                with open(file_path, "rb") as file:
+                with ProviderManager().storage.fopen(file_path) as file:
                     if offset > 0:
+                        if not file.seekable():
+                            self.logger.error(
+                                f"File is not seekable, cannot resume from offset: {offset}"
+                            )
+                            self.conclude_request(
+                                400,
+                                {},
+                                "File is not seekable, cannot resume from non-zero offset",
+                            )
+                            return
+
                         file.seek(offset)
                         chunk_index = offset // chunk_size
+
                     else:
                         chunk_index = 0
 
@@ -409,8 +411,9 @@ class ConnectionHandler:
 
             if file_size == 0:  # 空文件
                 self.stream.send("stop")
-                with open(file.path, "wb") as f:
-                    f.truncate(0)
+
+                # Create an empty file and mark the task as completed
+                ProviderManager().storage.fopen(file.path, "wb").close()
                 file.active = True
                 session.commit()
 
@@ -420,13 +423,17 @@ class ConnectionHandler:
             self.stream.send(f"ready {chunk_size}")
             try:
                 logger.info("Receiving file: transfer started")
-                os.makedirs(os.path.dirname(file.path), exist_ok=True)
-                with open(file.path, "wb") as f:
+                ProviderManager().storage.makedirs(
+                    os.path.dirname(file.path), exist_ok=True
+                )
+                with ProviderManager().storage.fopen(file.path, "wb") as f:
                     try:
+                        hasher = hashlib.sha256()
                         while True:
                             # Receive data from the client
                             data = self.stream.recv().data
                             f.write(data)
+                            hasher.update(data)
 
                             if not data or len(data) < chunk_size:
                                 break
@@ -437,12 +444,12 @@ class ConnectionHandler:
                         raise
 
                 # 校验文件大小
-                actual_size = os.path.getsize(file.path)
+                actual_size = ProviderManager().storage.getsize(file.path)
                 if file_size and actual_size != file_size:
                     self.logger.error(
                         f"File size mismatch: expected {file_size}, got {actual_size}"
                     )
-                    os.remove(file.path)
+                    ProviderManager().storage.remove(file.path)
 
                     self.conclude_request(
                         400,
@@ -453,12 +460,12 @@ class ConnectionHandler:
 
                 # 校验sha256
                 if sha256:
-                    actual_sha256 = calculate_sha256(file.path)
+                    actual_sha256 = hasher.hexdigest()
                     if actual_sha256 != sha256:
                         self.logger.error(
                             f"SHA256 mismatch: expected {sha256}, got {actual_sha256}"
                         )
-                        os.remove(file.path)
+                        ProviderManager().storage.remove(file.path)
 
                         self.conclude_request(
                             400,
@@ -493,47 +500,9 @@ class ConnectionHandler:
         message: Data,
         raise_exceptions: bool = False,
     ):
-        """
-        Adopted from websockets.asyncio.server.broadcast().
-        """
-        with clients_lock:
-            connections: set[MultiplexConnection] = clients.copy()
-
-        if isinstance(message, str):
-            message = message.encode()
-        elif isinstance(message, (bytes, bytearray, memoryview)):
-            pass
-        else:
+        if isinstance(message, (bytes, bytearray, memoryview)):
+            message = bytes(message).decode("utf-8")
+        elif not isinstance(message, str):
             raise TypeError("data must be str or bytes")
 
-        exceptions: list[Exception] = []
-
-        for connection in connections:
-            exception: Exception
-
-            if connection._ws.protocol.state is not websockets.protocol.OPEN:
-                continue
-
-            try:
-                # Call connection.protocol.send_text or send_binary.
-                # Either way, message is already converted to bytes.
-                # getattr(connection.protocol, send_method)(message)
-                stream = connection.create_stream()
-                stream.send(message, frame_type=FrameType.CONCLUSION)
-            except Exception as write_exception:
-                if raise_exceptions:
-                    exception = RuntimeError("failed to write message")
-                    exception.__cause__ = write_exception
-                    exceptions.append(exception)
-                else:
-                    connection._ws.logger.warning(
-                        "skipped broadcast: failed to write message: %s",
-                        traceback.format_exception_only(
-                            # Remove first argument when dropping Python 3.9.
-                            type(write_exception),
-                            write_exception,
-                        )[0].strip(),
-                    )
-
-        if raise_exceptions and exceptions:
-            raise ExceptionGroup("skipped broadcast", exceptions)
+        ProviderManager().event_bus.publish("system:broadcast", message)

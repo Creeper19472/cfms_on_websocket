@@ -1,60 +1,111 @@
+# Enable debug mode for verbose logging and additional debugging features
 debug = false
 
 [server]
+# Name of the server
 name = "CFMS WebSocket Server"
+# Host address to bind the server to
 host = "localhost"
+# Port to listen on
 port = 5104
+# Enable dual-stack IPv6 (bind to both IPv4 and IPv6 if host allows)
 dualstack_ipv6 = true
+# Secret key used for cryptographic operations (e.g., session cookies/tokens)
 secret_key = ""
+# Path to the SSL/TLS private key file
 ssl_keyfile = "./content/ssl/key.pem"
+# Path to the SSL/TLS certificate file
 ssl_certfile = "./content/ssl/cert.pem"
 
+# File chunk size for uploads (default is 2MB)
 file_chunk_size = 2097152 # 2MB
-# 过高的分块大小可能因客户端的配置而导致传输失败
+# Setting the chunk size too high may cause transfer failures depending on client configuration
 
 [document]
+# Whether to allow multiple documents with the same name in the same directory.
+# 
+# If set to false after previously being true, existing duplicate documents will be kept,
+# but new uploads with duplicate names will be rejected.
 allow_name_duplicate = false
-# 是否允许同目录下的文档名称重复
-# 如果在允许重复后又设置为禁止重复，原有的重复文档将被保留
-# 但新上传的文档将会被拒绝
 
 [security]
+# Pepper used for password hashing
 pepper = ""
+# Minimum required length for passwords
 passwd_min_length = 8
+# Maximum allowed length for passwords
 passwd_max_length = 32
+# Enable forced password expiration policy
 enable_passwd_force_expiration = true
-# 启用密码强制过期策略
+# Enable mandatory password changes for non-compliant passwords.
+# Users with passwords that do not meet the security requirements will be forced to change them upon logging in.
 require_passwd_enforcement_changes = true
-# 启用不合规密码强制更改策略
-# 使用不合规的密码的用户在登录时将被强制要求修改密码
+# Number of days after which a password expires
 passwd_expire_after_days = 365
+# Required character sets in passwords (e.g., ["uppercase", "lowercase", "digits", "special"])
 passwd_must_contain = []
 
+# Whether to require clients to provide a certificate for authentication.
+# If enabled, the server will verify if the client certificate is trusted.
 require_client_cert = false
-# 是否要求客户端提供证书进行身份验证
-# 若启用，则服务器将验证客户端证书是否可信。
+
+# Path to the trusted CA certificate store for client certificates. 
+# Must point to a directory, and certificates within must follow OpenSSL naming conventions.
+# Only takes effect when require_client_cert is true.
 client_cert_ca_path = "./content/ssl/client/"
-# 可信的客户端证书库路径。必须指向一个目录，且目录下的证书文件应符合 OpenSSL 的命名规范。
-# 仅在 require_client_cert 为 true 时生效
 
 [access]
+# Enable recursive access checks.
+# When enabled, access rules will be checked for the requested object itself, 
+# as well as all parent directories up to the root.
+# This may cause significant performance issues if the hierarchy is too deep. 
+# Alternatively, you can disable this and ensure access rules are set correctly on every directory.
 enable_access_recursive_check = true
-# 启用访问递归检查。启用时，对于每个被请求的对象，不仅检查它本身具有的访问规则，也检查到达其所在位置需要经过的所有目录所具有的访问规则。
-# 这在层级过深时可能导致显著的性能问题。另一种选择是禁用此选项，但确保在每个目录上都正确设置访问规则。
 
 [database]
+# Database type to use ("sqlite" or "mysql")
 type = "sqlite"
 
-# 如果使用 SQLite 数据库，指定数据库文件名
+# Specify the database file name if using SQLite
 file = "app.db"
 
-# 如果使用 MySQL 数据库，指定连接信息
+# Specify connection properties if using MySQL
 host = "localhost"
 port = 3306
 username = ""
 password = ""
-# 如果使用 MySQL 数据库，指定数据库名称
+# Specify the database name if using MySQL
 name = "app_db"
-# 如果使用 MySQL 数据库，指定字符集
+# Specify the character set if using MySQL
 charset = "utf8mb4"
 options = "" # Not implemented yet
+
+[provider]
+# Caching provider ("memory" or "redis")
+caching = "memory" # "memory" or "redis"
+# Storage provider ("local" or "s3")
+storage = "local" # "local" or "s3"
+# Event bus provider ("local" or "redis")
+event_bus = "local" # "local" or "redis"
+
+[redis]
+# Redis server host
+host = "localhost"
+# Redis server port
+port = 6379
+# Redis server password (leave empty if not required)
+password = ""
+# Redis database index
+db = 0
+
+[s3]
+# S3 bucket name
+bucket = ""
+# Custom S3 endpoint URL (optional, useful for MinIO, R2, etc.)
+endpoint_url = ""
+# S3 Access Key ID
+access_key_id = ""
+# S3 Secret Access Key
+secret_access_key = ""
+# S3 region name (e.g., "us-east-1")
+region_name = ""

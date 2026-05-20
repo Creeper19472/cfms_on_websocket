@@ -1,4 +1,7 @@
-import collections
+"""
+Login Guard system. Protects from brute force attacks.
+"""
+
 import ipaddress
 import threading
 import time
@@ -10,16 +13,15 @@ from loguru import logger as log
 from include.database.handler import Session
 from include.database.models.security.banned_subnet import BannedSubnet
 from include.database.models.security.login import LoginThrottle, TrafficThrottle
+from include.providers.manager import ProviderManager
 
 logger = log.bind(name="login_guard")
 
 
 class LoginGuard:
-    _mem_cache: collections.OrderedDict[tuple, float] = collections.OrderedDict()
-    _cache_lock = threading.Lock()
-    _MAX_CACHE_SIZE: int = 10_000
     _banned_networks: list[Union[ipaddress.IPv4Network, ipaddress.IPv6Network]] = []
     _networks_loaded: bool = False
+    _network_lock = threading.Lock()
 
     @classmethod
     def reload_networks(cls) -> None:
@@ -33,7 +35,7 @@ class LoginGuard:
                     logger.warning(
                         f"Ignoring invalid subnet in database: {row.subnet!r}"
                     )
-        with cls._cache_lock:
+        with cls._network_lock:
             cls._banned_networks = networks
             cls._networks_loaded = True
             logger.info(f"Loaded {len(networks)} banned subnet(s) from database.")
@@ -44,17 +46,9 @@ class LoginGuard:
             addr = ipaddress.ip_address(ip_str)
         except ValueError:
             return False
-        with cls._cache_lock:
+        with cls._network_lock:
             networks = cls._banned_networks
         return any(addr in network for network in networks)
-
-    @classmethod
-    def _prune_cache(cls, now_ts: float) -> None:
-        expired_keys = [k for k, expiry in cls._mem_cache.items() if expiry <= now_ts]
-        for k in expired_keys:
-            cls._mem_cache.pop(k, None)
-        while len(cls._mem_cache) > cls._MAX_CACHE_SIZE:
-            cls._mem_cache.popitem(last=False)
 
     @classmethod
     def check_access(cls, ip_address: str, username: Optional[str] = None) -> bool:
@@ -74,16 +68,17 @@ class LoginGuard:
             )
 
         now_ts = time.time()
-        with cls._cache_lock:
-            cls._prune_cache(now_ts)
-            for model_cls, key in keys_to_check:
-                expiry = cls._mem_cache.get(key)
-                if expiry:
-                    if now_ts < expiry:
-                        cls._mem_cache.move_to_end(key)
-                        return False
-                    else:
-                        del cls._mem_cache[key]
+        cache = ProviderManager().caching
+
+        for model_cls, key in keys_to_check:
+            cache_key = f"guard:{key}"
+            expiry_str = cache.get(cache_key)
+            if expiry_str:
+                expiry = float(expiry_str)
+                if now_ts < expiry:
+                    return False
+                else:
+                    cache.delete(cache_key)
 
         with Session() as session:
             for model_cls, key in keys_to_check:
@@ -94,8 +89,14 @@ class LoginGuard:
 
                 if record is not None and record.is_locked():
                     if record.locked_until is not None:
-                        with cls._cache_lock:
-                            cls._mem_cache[key] = record.locked_until.timestamp()
+                        cache_key = f"guard:{key}"
+                        ttl = max(
+                            0, (record.locked_until - datetime.now()).total_seconds()
+                        )
+                        if ttl > 0:
+                            cache.set(
+                                cache_key, str(record.locked_until.timestamp()), ttl=ttl
+                            )
                         return False
         return True
 
@@ -110,8 +111,9 @@ class LoginGuard:
         ip_lock_minutes: int = 15,
     ):
         now = datetime.now()
+        cache = ProviderManager().caching
+
         with Session() as session:
-            # 1. Update IP Security
             if ip_address:
                 ip_key = TrafficThrottle.make_cache_key(ip_address)
                 ip_record = TrafficThrottle.get_record(session, ip_address)
@@ -130,14 +132,14 @@ class LoginGuard:
                 if ip_record.failed_attempts >= ip_max_attempts:
                     lock_time = now + timedelta(minutes=ip_lock_minutes)
                     ip_record.locked_until = lock_time
-                    with cls._cache_lock:
-                        cls._prune_cache(time.time())
-                        cls._mem_cache[ip_key] = lock_time.timestamp()
+                    cache_key = f"guard:{ip_key}"
+                    cache.set(
+                        cache_key, str(lock_time.timestamp()), ttl=ip_lock_minutes * 60
+                    )
                     logger.warning(
                         f"Security: IP '{ip_address}' locked until {lock_time}"
                     )
 
-            # 2. Update User+IP Security
             if username and ip_address:
                 u_key = LoginThrottle.make_cache_key(username, ip_address)
                 u_record = LoginThrottle.get_record(session, username, ip_address)
@@ -156,9 +158,10 @@ class LoginGuard:
                 if u_record.failed_attempts >= max_attempts:
                     lock_time = now + timedelta(minutes=lock_minutes)
                     u_record.locked_until = lock_time
-                    with cls._cache_lock:
-                        cls._prune_cache(time.time())
-                        cls._mem_cache[u_key] = lock_time.timestamp()
+                    cache_key = f"guard:{u_key}"
+                    cache.set(
+                        cache_key, str(lock_time.timestamp()), ttl=lock_minutes * 60
+                    )
                     logger.warning(
                         f"Security: User '{username}' on IP '{ip_address}' locked until {lock_time}"
                     )
@@ -186,6 +189,5 @@ class LoginGuard:
 
             session.commit()
 
-            with cls._cache_lock:
-                for k in keys_to_clear:
-                    cls._mem_cache.pop(k, None)
+            for k in keys_to_clear:
+                ProviderManager().caching.delete(f"guard:{k}")
