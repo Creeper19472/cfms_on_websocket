@@ -170,9 +170,19 @@ def server_init():
         ],
     )
 
+    # Initialize providers
+    initialize_providers()
+
+    # Add sample file and document
+    sample_file_path = "content/hello"
+
+    with open(sample_file_path, "rb") as source:
+        with ProviderManager().storage.fopen(sample_file_path, "wb") as f:
+            f.write(source.read())
+
     with Session() as session:
         # not using `ROOT_ABSPATH` here to allow easy migration
-        init_file = File(id="init", path="./content/hello", active=True)
+        init_file = File(id="init", path=sample_file_path, active=True)
         session.add(init_file)
 
         init_document = Document(
