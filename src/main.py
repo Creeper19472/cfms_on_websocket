@@ -316,7 +316,7 @@ def initialize_providers():
             )
         case _:
             raise ValueError(
-                f"Unsupported storage provider type: {global_config['storage']['type']}"
+                f"Unsupported storage provider type: {global_config['provider']['storage']}"
             )
 
     ProviderManager().register(storage_provider)
