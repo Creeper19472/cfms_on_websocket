@@ -501,7 +501,7 @@ class ConnectionHandler:
         raise_exceptions: bool = False,
     ):
         if isinstance(message, (bytes, bytearray, memoryview)):
-            message = str(message, encoding="utf-8")
+            message = bytes(message).decode("utf-8")
         elif not isinstance(message, str):
             raise TypeError("data must be str or bytes")
 
