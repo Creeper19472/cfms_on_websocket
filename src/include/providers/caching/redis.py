@@ -1,6 +1,6 @@
 __all__ = ["RedisCachingProvider"]
 
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 import redis
 
@@ -22,7 +22,11 @@ class RedisCachingProvider(CachingProvider):
         return self._client.get(key)
 
     def set(
-        self, key: str, value: str, ttl: Optional[float] = None, nx: bool = False
+        self,
+        key: str,
+        value: Union[bytes, bytearray, memoryview, str, int, float],
+        ttl: Optional[float] = None,
+        nx: bool = False,
     ) -> None:
         # Use millisecond precision when possible to avoid losing fractional seconds
         px = int(ttl * 1000) if ttl is not None else None

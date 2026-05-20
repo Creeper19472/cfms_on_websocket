@@ -3,7 +3,7 @@ __all__ = ["MemoryCachingProvider"]
 import collections
 import threading
 import time
-from typing import Optional
+from typing import Any, Optional, Union
 
 from include.providers.base import CachingProvider
 
@@ -11,9 +11,9 @@ from include.providers.base import CachingProvider
 class MemoryCachingProvider(CachingProvider):
     def __init__(self, max_size: int = 10000):
         self._max_size = max_size
-        self._cache: collections.OrderedDict[str, tuple[str, float]] = (
-            collections.OrderedDict()
-        )
+        self._cache: collections.OrderedDict[
+            str, tuple[Union[bytes, bytearray, memoryview, str, int, float], float]
+        ] = collections.OrderedDict()
         self._lock = threading.Lock()
 
     def _prune(self):
@@ -25,7 +25,7 @@ class MemoryCachingProvider(CachingProvider):
         while len(self._cache) > self._max_size:
             self._cache.popitem(last=False)
 
-    def get(self, key: str) -> Optional[str]:
+    def get(self, key: str) -> Any:
         with self._lock:
             self._prune()
             val = self._cache.get(key)
@@ -39,7 +39,11 @@ class MemoryCachingProvider(CachingProvider):
             return val[0]
 
     def set(
-        self, key: str, value: str, ttl: Optional[float] = None, nx: bool = False
+        self,
+        key: str,
+        value: Union[bytes, bytearray, memoryview, str, int, float],
+        ttl: Optional[float] = None,
+        nx: bool = False,
     ) -> None:
         with self._lock:
             if nx and self.exists(key):
