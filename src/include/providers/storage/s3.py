@@ -1,5 +1,6 @@
 __all__ = ["S3StorageProvider", "S3FileObject"]
 
+import base64
 import hashlib
 from io import UnsupportedOperation
 from types import TracebackType
@@ -63,13 +64,14 @@ class S3FileObject(FileObject):
         return bytes_written
 
     def _upload_part(self, data: bytes):
+        checksum = base64.b64encode(hashlib.sha256(data).digest()).decode()
         response = self._client.upload_part(
             Bucket=self._bucket_name,
             Key=self._key,
             PartNumber=self._part_number,
             UploadId=self._upload_id,
             Body=data,
-            ChecksumSHA256=self._hasher.hexdigest(),
+            ChecksumSHA256=checksum,
         )
         self._parts.append({"PartNumber": self._part_number, "ETag": response["ETag"]})
         self._part_number += 1
@@ -79,13 +81,14 @@ class S3FileObject(FileObject):
             return
 
         if "w" in self._mode:
+            overall_checksum = base64.b64encode(self._hasher.digest()).decode()
             if self._upload_id is None:
                 # Never started multipart, just do a put_object
                 self._client.put_object(
                     Bucket=self._bucket_name,
                     Key=self._key,
                     Body=self._buffer,
-                    ChecksumSHA256=self._hasher.hexdigest(),
+                    ChecksumSHA256=overall_checksum,
                 )
                 self._buffer.clear()
             else:
@@ -98,7 +101,7 @@ class S3FileObject(FileObject):
                     Key=self._key,
                     UploadId=self._upload_id,
                     MultipartUpload={"Parts": self._parts},
-                    ChecksumSHA256=self._hasher.hexdigest(),
+                    ChecksumSHA256=overall_checksum,
                 )
         else:
             self._body.close()
