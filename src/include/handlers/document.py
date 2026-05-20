@@ -301,7 +301,7 @@ class RequestCreateDocumentHandler(RequestHandler):
 
             new_file = File(
                 id=file_id,
-                path=f"./content/files/{today.year}/{today.month}/{real_filename}",
+                path=f"content/files/{today.year}/{today.month}/{real_filename}",
             )
             new_document = Document(
                 id=secrets.token_hex(32),
@@ -380,7 +380,7 @@ class RequestUploadDocumentHandler(RequestHandler):
 
                 new_file = File(
                     id=file_id,
-                    path=f"./content/files/{today.year}/{today.month}/{real_filename}",
+                    path=f"content/files/{today.year}/{today.month}/{real_filename}",
                 )
 
                 try:
