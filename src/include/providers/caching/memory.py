@@ -38,8 +38,12 @@ class MemoryCachingProvider(CachingProvider):
             self._cache.move_to_end(key)
             return val[0]
 
-    def set(self, key: str, value: str, ttl: Optional[float] = None) -> None:
+    def set(
+        self, key: str, value: str, ttl: Optional[float] = None, nx: bool = False
+    ) -> None:
         with self._lock:
+            if nx and self.exists(key):
+                return
             expire_at = time.time() + ttl if ttl else 0.0
             self._cache[key] = (value, expire_at)
             self._prune()
@@ -47,19 +51,6 @@ class MemoryCachingProvider(CachingProvider):
     def delete(self, key: str) -> None:
         with self._lock:
             self._cache.pop(key, None)
-
-    def set_if_not_exists(
-        self, key: str, value: str, ttl: Optional[float] = None
-    ) -> bool:
-        with self._lock:
-            self._prune()
-            val = self._cache.get(key)
-            if val is not None and not (val[1] > 0 and val[1] < time.time()):
-                return False
-
-            expire_at = time.time() + ttl if ttl else 0.0
-            self._cache[key] = (value, expire_at)
-            return True
 
     def exists(self, key: str) -> bool:
         with self._lock:

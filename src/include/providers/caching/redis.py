@@ -16,20 +16,15 @@ class RedisCachingProvider(CachingProvider):
     def get(self, key: str) -> Any:
         return self._client.get(key)
 
-    def set(self, key: str, value: str, ttl: Optional[float] = None) -> None:
-        if ttl:
-            self._client.setex(key, int(ttl), value)
-        else:
-            self._client.set(key, value)
+    def set(
+        self, key: str, value: str, ttl: Optional[float] = None, nx: bool = False
+    ) -> None:
+        # Use millisecond precision when possible to avoid losing fractional seconds
+        px = int(ttl * 1000) if ttl is not None else None
+        self._client.set(key, value, px=px, nx=nx)
 
     def delete(self, key: str) -> None:
         self._client.delete(key)
-
-    def set_if_not_exists(
-        self, key: str, value: str, ttl: Optional[float] = None
-    ) -> bool:
-        res = self._client.set(key, value, ex=int(ttl) if ttl else None, nx=True)
-        return bool(res)
 
     def exists(self, key: str) -> bool:
         return bool(self._client.exists(key))
