@@ -27,10 +27,11 @@ class RedisCachingProvider(CachingProvider):
         value: Union[bytes, bytearray, memoryview, str, int, float],
         ttl: Optional[float] = None,
         nx: bool = False,
-    ) -> None:
+    ) -> bool:
         # Use millisecond precision when possible to avoid losing fractional seconds
         px = int(ttl * 1000) if ttl is not None else None
-        self._client.set(key, value, px=px, nx=nx)
+        res = self._client.set(key, value, px=px, nx=nx)
+        return bool(res)
 
     def delete(self, key: str) -> None:
         self._client.delete(key)

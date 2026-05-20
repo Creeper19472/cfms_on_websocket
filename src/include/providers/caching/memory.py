@@ -38,14 +38,15 @@ class MemoryCachingProvider(CachingProvider):
         value: Union[bytes, bytearray, memoryview, str, int, float],
         ttl: Optional[float] = None,
         nx: bool = False,
-    ) -> None:
+    ) -> bool:
         with self._lock:
             if nx and self.exists(key):
-                return
+                return False
             expire_at = time.time() + ttl if ttl else 0.0
             self._cache[key] = (value, expire_at)
             self._cache.move_to_end(key)
             self._prune()
+            return True
 
     def delete(self, key: str) -> None:
         with self._lock:

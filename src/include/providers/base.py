@@ -126,10 +126,11 @@ class CachingProvider(Provider):
     @abstractmethod
     def set(
         self, key: str, value: Any, ttl: Optional[float] = None, nx: bool = False
-    ) -> None:
+    ) -> bool:
         """Set a value with an optional time-to-live in seconds.
 
         If `nx` is True, the value will only be set if the key does not already exist.
+        Returns True if the value was set, False otherwise (e.g. if nx=True and key already exists).
         """
         pass
 
