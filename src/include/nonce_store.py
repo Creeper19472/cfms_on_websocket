@@ -34,7 +34,7 @@ class NonceStore:
         ttl = self._time_window * 2
 
         key = f"nonce:{nonce}"
-        success = cache.set_if_not_exists(key, str(now), ttl=ttl)
+        success = cache.set(key, str(now), ttl=ttl, nx=True)
         if not success:
             return "Duplicate nonce detected: possible replay attack"
 
